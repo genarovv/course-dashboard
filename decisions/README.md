@@ -8,5 +8,9 @@
 Принятые ADR:
 - `ADR-001-fr5a-llm-agent-po-pravilam.md` — ядро FR-5: LLM-агент по версионированным рубрикам (2026-07-02)
 
-Ожидаемые ADR (по открытым вопросам PRD §12):
-- ADR-002 — выбор стека, архитектуры и LLM-модели ядра (после архитектурной сессии)
+Принятые ADR (частично superseded ARCHITECTURE.md v2/v3):
+- ADR-002 `ADR-002-stack-python-fastapi-sqlite.md` — стек: Python + FastAPI + SQLite (2026-07-07). Alpine.js удалён; у отвергнутых вариантов названы честные плюсы (2026-07-09).
+- ADR-003 `ADR-003-component-architecture.md` — **superseded ARCHITECTURE.md v2+** (детали слоёв живут там; актуальная — v3 от 2026-07-09).
+
+Предложенные ADR:
+- ADR-004 `ADR-004-llm-model-deepseek-v4-flash.md` — LLM-модель ядра: `deepseek-v4-flash` (решение CEO 2026-07-09). **Proposed** → Accepted после мини-эвала (golden set + 2 реальных репо).
