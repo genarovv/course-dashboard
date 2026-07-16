@@ -1,15 +1,21 @@
+"""App factory (I1, #2). ARCHITECTURE §3.1: main.py — app factory, lifespan, middleware."""
+
 from fastapi import FastAPI
 from fastapi.staticfiles import StaticFiles
-from fastapi.templating import Jinja2Templates
+from starlette.middleware.sessions import SessionMiddleware
 
 from app.config import settings
-
-app = FastAPI(title="Course Dashboard")
-
-app.mount("/static", StaticFiles(directory=settings.static_dir), name="static")
-templates = Jinja2Templates(directory=settings.template_dir)
+from app.routes import auth, dashboard, health
 
 
-@app.get("/health")
-async def health():
-    return {"status": "ok"}
+def create_app() -> FastAPI:
+    application = FastAPI(title="Course Dashboard")
+    application.add_middleware(SessionMiddleware, secret_key=settings.secret_key)
+    application.mount("/static", StaticFiles(directory=settings.static_dir), name="static")
+    application.include_router(auth.router)
+    application.include_router(dashboard.router)
+    application.include_router(health.router)
+    return application
+
+
+app = create_app()
