@@ -134,3 +134,104 @@ def test_override_soft_revoke(session, monkeypatch):
     store.update_override_revoked(session, override.id)
     session.flush()
     assert override.revoked_at is not None  # строка жива — мягкое гашение
+
+
+# ── O1: Override find-функции ───────────────────────────────────────────────
+
+
+def _make_verdict_with_override(session):
+    """Хелпер: создаёт вердикт + оверрайд, возвращает (verdict, override)."""
+    from app.models.artifact_def import ArtifactDef
+    from app.models.edge_def import EdgeDef
+    from app.models.lesson import Lesson
+
+    rubric = store.register_rubric(session, type="edge", version="1.0", text="t")
+    lesson = Lesson(number=1, title="l", date=datetime(2026, 1, 1).date())
+    session.add(lesson)
+    session.flush()
+    adef = ArtifactDef(lesson_id=lesson.id, role="prd", expected_pattern="**/prd.md")
+    session.add(adef)
+    repo = store.register_repository(session, repo_url="https://github.com/u/r", git_host=GitHost.GitHub)
+    run = store.register_sync_run(session, triggered_by=SyncTrigger.manual)
+    session.flush()
+    snapshot = store.register_snapshot(
+        session, sync_run_id=run.id, repository_id=repo.id, artifact_def_id=adef.id,
+        status="found", content_hash="h1",
+    )
+    edge = EdgeDef(source_role="prd", target_role="data_model", rubric_id=rubric.id)
+    session.add(edge)
+    session.flush()
+    verdict = store.register_verdict(
+        session, edge_def_id=edge.id, source_snapshot_id=snapshot.id, target_snapshot_id=snapshot.id,
+        source_content_hash="h1", target_content_hash="h2", rubric_id=rubric.id,
+        llm_model="m", verdict="break", confidence="high", entities_lost=1,
+    )
+    session.flush()
+    override = store.register_override(session, coherence_verdict_id=verdict.id, reason="тест")
+    session.flush()
+    return verdict, override, repo
+
+
+def test_register_override_xor(session):
+    """FR-10, И1: register_override создаёт запись с coherence_verdict_id заполнен, step_quality_card_id = None."""
+    verdict, override, _repo = _make_verdict_with_override(session)
+    assert override.coherence_verdict_id == verdict.id
+    assert override.step_quality_card_id is None
+    assert override.reason == "тест"
+    assert override.revoked_at is None
+
+
+def test_update_override_revoked_sets_timestamp(session):
+    """FR-10: update_override_revoked ставит revoked_at."""
+    _verdict, override, _repo = _make_verdict_with_override(session)
+    assert override.revoked_at is None
+    store.update_override_revoked(session, override.id)
+    session.flush()
+    assert override.revoked_at is not None
+
+
+def test_find_active_override_for_verdict(session):
+    """FR-10: находит активную, не находит снятую."""
+    verdict, override, _repo = _make_verdict_with_override(session)
+
+    found = store.find_active_override_for_verdict(session, verdict.id)
+    assert found is override
+
+    store.update_override_revoked(session, override.id)
+    session.flush()
+    assert store.find_active_override_for_verdict(session, verdict.id) is None
+
+
+def test_find_active_override_for_verdict_nonexistent(session):
+    """FR-10: несуществующий verdict_id → None."""
+    assert store.find_active_override_for_verdict(session, "nonexistent-id") is None
+
+
+def test_find_overrides_for_repository_filters(session):
+    """FR-10, FR-6: find_overrides_for_repository — фильтрует по репозиторию."""
+    verdict, override, repo = _make_verdict_with_override(session)
+
+    found = store.find_overrides_for_repository(session, repo.id)
+    assert len(found) == 1
+    assert found[0].id == override.id
+
+    store.update_override_revoked(session, override.id)
+    session.flush()
+    assert store.find_overrides_for_repository(session, repo.id) == []
+
+
+def test_find_overrides_for_repository_other_repo(session):
+    """FR-10: другой репозиторий — пустой список."""
+    _verdict, override, repo = _make_verdict_with_override(session)
+    other_repo = store.register_repository(
+        session, repo_url="https://github.com/u/other", git_host=GitHost.GitHub
+    )
+    session.flush()
+    assert store.find_overrides_for_repository(session, other_repo.id) == []
+
+
+def test_find_override_by_id(session):
+    """FR-10: оверрайд по ID."""
+    _verdict, override, _repo = _make_verdict_with_override(session)
+    assert store.find_override_by_id(session, override.id) is override
+    assert store.find_override_by_id(session, "nonexistent") is None

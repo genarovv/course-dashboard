@@ -199,3 +199,96 @@ def find_verdict_by_quadruple(session: Session, *, source_content_hash: str, tar
             CoherenceVerdict.verdict != VerdictValue.deferred,
         )
     )
+
+
+# ── FR-10: Override find_* ─────────────────────────────────────────────────
+
+
+def find_active_override_for_verdict(session: Session, verdict_id: str) -> Override | None:
+    """FR-10: активная (revoked_at IS NULL) отметка на вердикт."""
+    return session.scalar(
+        select(Override).where(
+            Override.coherence_verdict_id == verdict_id,
+            Override.revoked_at.is_(None),
+        )
+    )
+
+
+def find_overrides_for_repository(session: Session, repository_id: str) -> list[Override]:
+    """FR-10, FR-6: все активные оверрайды для репозитория (матрица — скрытые разрывы)."""
+    snap_ids = select(ArtifactSnapshot.id).where(
+        ArtifactSnapshot.repository_id == repository_id
+    ).scalar_subquery()
+    verdict_ids = select(CoherenceVerdict.id).where(
+        (CoherenceVerdict.source_snapshot_id.in_(snap_ids))
+        | (CoherenceVerdict.target_snapshot_id.in_(snap_ids))
+    ).scalar_subquery()
+    return list(
+        session.scalars(
+            select(Override).where(
+                Override.coherence_verdict_id.in_(verdict_ids),
+                Override.revoked_at.is_(None),
+            )
+        )
+    )
+
+
+def find_override_by_id(session: Session, override_id: str) -> Override | None:
+    """FR-10: оверрайд по ID (для UI — просмотр, снятие)."""
+    return session.get(Override, override_id)
+
+
+# ── МАТРИЦА: проекции для build_matrix ──────────────────────────────────────
+
+
+def find_last_snapshots(session: Session) -> list[ArtifactSnapshot]:
+    """FR-4/6/7: последние снапшоты (repository × artifact_def) — подзапрос для матрицы."""
+    from sqlalchemy import func
+
+    last_seen = (
+        select(
+            ArtifactSnapshot.repository_id,
+            ArtifactSnapshot.artifact_def_id,
+            func.max(ArtifactSnapshot.observed_at).label("max_observed"),
+        )
+        .group_by(ArtifactSnapshot.repository_id, ArtifactSnapshot.artifact_def_id)
+        .subquery()
+    )
+    return list(
+        session.scalars(
+            select(ArtifactSnapshot).join(
+                last_seen,
+                (ArtifactSnapshot.repository_id == last_seen.c.repository_id)
+                & (ArtifactSnapshot.artifact_def_id == last_seen.c.artifact_def_id)
+                & (ArtifactSnapshot.observed_at == last_seen.c.max_observed),
+            )
+        )
+    )
+
+
+def find_all_verdicts(session: Session) -> list[CoherenceVerdict]:
+    """FR-5: все вердикты — матрица фильтрует по override на уровне Python."""
+    return list(session.scalars(select(CoherenceVerdict)))
+
+
+def find_last_outcomes(session: Session) -> list[SyncRunRepository]:
+    """FR-6/7/8: последний исход обхода на каждый репозиторий (для слепых зон)."""
+    from sqlalchemy import func
+
+    last_seen = (
+        select(
+            SyncRunRepository.repository_id,
+            func.max(SyncRunRepository.checked_at).label("max_checked"),
+        )
+        .group_by(SyncRunRepository.repository_id)
+        .subquery()
+    )
+    return list(
+        session.scalars(
+            select(SyncRunRepository).join(
+                last_seen,
+                (SyncRunRepository.repository_id == last_seen.c.repository_id)
+                & (SyncRunRepository.checked_at == last_seen.c.max_checked),
+            )
+        )
+    )
