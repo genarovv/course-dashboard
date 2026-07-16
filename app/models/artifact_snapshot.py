@@ -1,7 +1,7 @@
 import uuid
 from datetime import datetime
 
-from sqlalchemy import JSON, DateTime, ForeignKey, String, UniqueConstraint
+from sqlalchemy import JSON, CheckConstraint, DateTime, ForeignKey, String, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.models import Base, EnumColumn, SnapshotStatus
@@ -9,7 +9,24 @@ from app.models import Base, EnumColumn, SnapshotStatus
 
 class ArtifactSnapshot(Base):
     __tablename__ = "artifact_snapshot"
-    __table_args__ = (UniqueConstraint("sync_run_id", "repository_id", "artifact_def_id"),)
+    __table_args__ = (
+        UniqueConstraint("sync_run_id", "repository_id", "artifact_def_id"),
+        # И8 — согласованность снапшота (те же выражения, что в миграции d408a1d4f3e7)
+        CheckConstraint(
+            "((status = 'partial') AND (partial_reason IS NOT NULL) AND (partial_reason != '[]')) OR "
+            "((status != 'partial') AND (partial_reason IS NULL OR partial_reason = '[]'))",
+            name="ck_snapshot_partial_reason",
+        ),
+        CheckConstraint(
+            "(status IN ('found', 'partial') AND content_hash IS NOT NULL) OR "
+            "(status NOT IN ('found', 'partial') AND content_hash IS NULL)",
+            name="ck_snapshot_content_hash",
+        ),
+        CheckConstraint(
+            "status != 'not_found' OR (file_path IS NULL AND source_commit_sha IS NULL)",
+            name="ck_snapshot_not_found_empty",
+        ),
+    )
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
     sync_run_id: Mapped[str] = mapped_column(String(36), ForeignKey("sync_run.id"))

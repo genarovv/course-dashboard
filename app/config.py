@@ -4,7 +4,7 @@ from pydantic_settings import BaseSettings
 
 
 class Settings(BaseSettings):
-    database_url: str = "sqlite+aiosqlite:///./course_dashboard.db"
+    database_url: str = "sqlite:///./course_dashboard.db"
     sync_token: str = ""
     deepseek_api_key: str = ""
     deepseek_model: str = "deepseek-v4-flash"

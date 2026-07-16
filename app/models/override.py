@@ -1,7 +1,7 @@
 import uuid
 from datetime import datetime
 
-from sqlalchemy import CheckConstraint, DateTime, ForeignKey, String
+from sqlalchemy import CheckConstraint, DateTime, ForeignKey, Index, String, text
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.models import Base
@@ -14,6 +14,19 @@ class Override(Base):
             "(coherence_verdict_id IS NOT NULL AND step_quality_card_id IS NULL) OR "
             "(coherence_verdict_id IS NULL AND step_quality_card_id IS NOT NULL)",
             name="ck_override_xor",
+        ),
+        # И4 — одна активная отметка на находку (те же индексы, что в миграции d408a1d4f3e7)
+        Index(
+            "idx_active_ovr_coherence",
+            "coherence_verdict_id",
+            unique=True,
+            sqlite_where=text("revoked_at IS NULL AND coherence_verdict_id IS NOT NULL"),
+        ),
+        Index(
+            "idx_active_ovr_step",
+            "step_quality_card_id",
+            unique=True,
+            sqlite_where=text("revoked_at IS NULL AND step_quality_card_id IS NOT NULL"),
         ),
     )
 

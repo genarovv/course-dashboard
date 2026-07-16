@@ -4,8 +4,11 @@ Revision ID: d408a1d4f3e7
 Revises:
 Create Date: 2026-07-14 19:38:14.816027
 """
+import os
+import uuid
 from collections.abc import Sequence
 
+import bcrypt
 import sqlalchemy as sa
 
 from alembic import op
@@ -25,6 +28,24 @@ def upgrade() -> None:
         sa.Column('password_hash', sa.String(100), nullable=False),
         sa.Column('failed_attempts', sa.Integer(), nullable=False, server_default='0'),
         sa.Column('locked_until', sa.DateTime(), nullable=True),
+    )
+
+    # И10 (single-user): сид одной строки при миграции + отсутствие роута создания
+    # пользователя (ARCHITECTURE §4). Пароль — из env CD_ADMIN_PASSWORD на момент
+    # миграции; если не задан — сентинел '!' (вход невозможен, секрета в коде нет).
+    admin_password = os.environ.get("CD_ADMIN_PASSWORD", "")
+    password_hash = (
+        bcrypt.hashpw(admin_password.encode(), bcrypt.gensalt()).decode() if admin_password else "!"
+    )
+    op.execute(
+        sa.text(
+            "INSERT INTO system_user (id, username, password_hash, failed_attempts) "
+            "VALUES (:id, :username, :password_hash, 0)"
+        ).bindparams(
+            id=str(uuid.uuid4()),
+            username=os.environ.get("CD_ADMIN_USERNAME", "admin"),
+            password_hash=password_hash,
+        )
     )
 
     # ── lesson (И10: UNIQUE number) ─────────────────────────────────────
@@ -107,7 +128,7 @@ def upgrade() -> None:
         sa.Column('outcome', sa.String(30), nullable=False),
         sa.Column('checked_at', sa.DateTime(), nullable=False, server_default=sa.func.now()),
         sa.Column('detail', sa.String(500), nullable=True),
-        sa.UniqueConstraint('sync_run_id', 'repository_id'),
+        # И11 держится на составном PK — отдельный UNIQUE избыточен
     )
 
     # ── artifact_snapshot (И8: CHECK; И9: UNIQUE triple) ────────────────
@@ -164,7 +185,7 @@ def upgrade() -> None:
         sa.Column('notes', sa.Text(), nullable=True),
     )
 
-    # И3: partial unique index — четвёрка уникальна除了 deferred
+    # И3: partial unique index — четвёрка уникальна, deferred исключён
     op.execute(
         "CREATE UNIQUE INDEX idx_quad ON coherence_verdict "
         "(source_content_hash, target_content_hash, rubric_id, llm_model) "

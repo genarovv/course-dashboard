@@ -27,6 +27,12 @@ class SnapshotStatus(StrEnum):
     not_found = "not_found"
 
 
+class PartialReason(StrEnum):
+    inexact_name = "inexact_name"
+    wrong_place = "wrong_place"
+    template_copy = "template_copy"
+
+
 class SyncTrigger(StrEnum):
     schedule = "schedule"
     manual = "manual"

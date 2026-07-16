@@ -1,7 +1,7 @@
 import uuid
 from datetime import datetime
 
-from sqlalchemy import JSON, DateTime, ForeignKey, Index, String, Text
+from sqlalchemy import JSON, DateTime, ForeignKey, Index, String, Text, text
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.models import Base, ConfidenceLevel, DeferredReason, EnumColumn, VerdictValue
@@ -17,7 +17,7 @@ class CoherenceVerdict(Base):
             "rubric_id",
             "llm_model",
             unique=True,
-            sqlite_where="verdict != 'deferred'",
+            sqlite_where=text("verdict != 'deferred'"),
         ),
     )
 

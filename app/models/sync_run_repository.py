@@ -1,6 +1,6 @@
 from datetime import datetime
 
-from sqlalchemy import DateTime, ForeignKey, String, UniqueConstraint
+from sqlalchemy import DateTime, ForeignKey, String
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.models import Base, EnumColumn, SyncOutcome
@@ -8,7 +8,7 @@ from app.models import Base, EnumColumn, SyncOutcome
 
 class SyncRunRepository(Base):
     __tablename__ = "sync_run_repository"
-    __table_args__ = (UniqueConstraint("sync_run_id", "repository_id"),)
+    # И11 (единственность охвата) держится на составном PK (sync_run_id, repository_id)
 
     sync_run_id: Mapped[str] = mapped_column(String(36), ForeignKey("sync_run.id"), primary_key=True)
     repository_id: Mapped[str] = mapped_column(String(36), ForeignKey("repository.id"), primary_key=True)
