@@ -47,6 +47,9 @@ class GitClient:
     def __init__(self, http: httpx.AsyncClient | None = None):
         self._http = http or httpx.AsyncClient(timeout=30)
 
+    async def aclose(self) -> None:
+        await self._http.aclose()
+
     async def get_tree(self, repo_url: str, git_host: str, ref: str = "main") -> list[str]:
         """Список путей файлов репозитория (рекурсивно)."""
         host, path = _parse_repo(repo_url)
@@ -56,12 +59,17 @@ class GitClient:
                 self._github_headers(),
             )
             return [e["path"] for e in data.get("tree", []) if e.get("type") == "blob"]
-        data = await self._request_json(
-            f"https://{host}/api/v4/projects/{quote(path, safe='')}/repository/tree"
-            f"?recursive=true&per_page=100&ref={quote(ref)}",
-            self._gitlab_headers(),
-        )
-        return [e["path"] for e in data if e.get("type") == "blob"]
+        paths: list[str] = []
+        page = "1"
+        while page:
+            response = await self._request(
+                f"https://{host}/api/v4/projects/{quote(path, safe='')}/repository/tree"
+                f"?recursive=true&per_page=100&ref={quote(ref)}&page={page}",
+                self._gitlab_headers(),
+            )
+            paths += [e["path"] for e in response.json() if e.get("type") == "blob"]
+            page = response.headers.get("x-next-page", "")
+        return paths
 
     async def get_file_content(self, repo_url: str, git_host: str, file_path: str, ref: str = "main") -> str:
         """Сырое содержимое файла."""
