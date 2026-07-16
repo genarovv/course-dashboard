@@ -17,7 +17,6 @@ from app.models import SyncOutcome
 from app.models.artifact_def import ArtifactDef
 from app.models.coherence_verdict import CoherenceVerdict
 from app.models.edge_def import EdgeDef
-from app.models.override import Override
 from app.models.repository import Repository
 
 
@@ -53,13 +52,6 @@ def build_matrix(session: Session) -> MatrixView:
 
     all_verdicts = store.find_all_verdicts(session)
 
-    # Активные override (revoked_at IS NULL) — set для O(1) проверки
-    active_override_ids = set(
-        session.scalars(
-            select(Override.coherence_verdict_id).where(Override.revoked_at.is_(None))
-        )
-    )
-
     # Группируем вердикты по (edge_def_id, repository_id) — берём последний
     verdicts_by_edge_repo: dict[tuple[str, str], CoherenceVerdict] = {}
     for v in all_verdicts:
@@ -79,14 +71,20 @@ def build_matrix(session: Session) -> MatrixView:
     for edge in edge_defs:
         for repo in repositories:
             verdict = verdicts_by_edge_repo.get((edge.id, repo.id))
-            is_overridden = verdict is not None and verdict.id in active_override_ids
+            has_override = (
+                verdict is not None
+                and store.find_active_override_for_verdict(
+                    session, verdict.id
+                )
+                is not None
+            )
             cells.append(
                 VerdictCell(
                     edge=edge,
                     repository=repo,
-                    verdict=verdict if not is_overridden else None,
-                    is_overridden=is_overridden,
-                    override_reason="override" if is_overridden else None,
+                    verdict=verdict if not has_override else None,
+                    is_overridden=has_override,
+                    override_reason="override" if has_override else None,
                 )
             )
 
