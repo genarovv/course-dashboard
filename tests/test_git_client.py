@@ -39,8 +39,14 @@ def test_github_tree_and_file():
 def test_gitlab_tree_and_file():
     def handler(request: httpx.Request) -> httpx.Response:
         if "/repository/tree" in request.url.path:
+            if request.url.params["page"] == "1":  # пагинация: дочитываем страницы
+                return httpx.Response(
+                    200,
+                    content=json.dumps([{"path": "prd.md", "type": "blob"}]),
+                    headers={"x-next-page": "2"},
+                )
             return httpx.Response(200, content=json.dumps([
-                {"path": "prd.md", "type": "blob"},
+                {"path": "data-model.md", "type": "blob"},
                 {"path": "docs", "type": "tree"},
             ]))
         assert "/repository/files/" in request.url.path
@@ -48,7 +54,7 @@ def test_gitlab_tree_and_file():
 
     client = _client(handler)
     tree = _run(client.get_tree("https://gitlab.com/group/sub/repo", "GitLab"))
-    assert tree == ["prd.md"]
+    assert tree == ["prd.md", "data-model.md"]
     assert _run(client.get_file_content("https://gitlab.com/group/sub/repo", "GitLab", "prd.md")) == "content"
 
 
