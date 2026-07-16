@@ -16,7 +16,7 @@ from sqlalchemy import create_engine, event, select
 from sqlalchemy.orm import Session, sessionmaker
 
 from app.config import settings
-from app.models import GitHost, SyncOutcome, SyncStatus, SyncTrigger
+from app.models import GitHost, SyncOutcome, SyncStatus, SyncTrigger, VerdictValue
 from app.models.artifact_snapshot import ArtifactSnapshot
 from app.models.coherence_verdict import CoherenceVerdict
 from app.models.git_credential import GitCredential
@@ -87,8 +87,8 @@ def register_sync_run(session: Session, *, triggered_by: SyncTrigger) -> SyncRun
     return run
 
 
-def record_sync_outcome(session: Session, *, sync_run_id: str, repository_id: str,
-                        outcome: SyncOutcome, detail: str | None = None) -> SyncRunRepository:
+def register_sync_outcome(session: Session, *, sync_run_id: str, repository_id: str,
+                          outcome: SyncOutcome, detail: str | None = None) -> SyncRunRepository:
     """FR-6/7/8: пообходный охват (append-only, И11)."""
     row = SyncRunRepository(
         sync_run_id=sync_run_id, repository_id=repository_id, outcome=outcome, detail=detail
@@ -196,6 +196,6 @@ def find_verdict_by_quadruple(session: Session, *, source_content_hash: str, tar
             CoherenceVerdict.target_content_hash == target_content_hash,
             CoherenceVerdict.rubric_id == rubric_id,
             CoherenceVerdict.llm_model == llm_model,
-            CoherenceVerdict.verdict != "deferred",
+            CoherenceVerdict.verdict != VerdictValue.deferred,
         )
     )

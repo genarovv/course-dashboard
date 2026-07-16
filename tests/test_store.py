@@ -45,7 +45,7 @@ def test_contract_register_for_journal_entities():
     names = dir(store)
     for fn in (
         "register_rubric", "register_snapshot", "register_verdict",
-        "record_sync_outcome", "register_override",
+        "register_sync_outcome", "register_override",
     ):
         assert fn in names, fn
 
@@ -69,7 +69,7 @@ def test_register_and_update_flow(session):
     assert store.find_active_repositories(session) == [repo]
     assert store.find_credential(session, GitHost.GitHub) is credential
 
-    store.record_sync_outcome(
+    store.register_sync_outcome(
         session, sync_run_id=run.id, repository_id=repo.id, outcome=SyncOutcome.ok_changed
     )
     store.update_sync_run_status(session, run.id, SyncStatus.completed)
