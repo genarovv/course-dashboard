@@ -1,0 +1,8 @@
+lessons:
+  - number: 1
+    title: "Знакомство с курсом"
+    artifacts:
+      - role: interview
+        pattern: "**/interview*.md"
+      - role: persona
+        pattern: "**/persona*.md"

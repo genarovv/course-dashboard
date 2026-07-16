@@ -1,0 +1,430 @@
+// ===== Logical Data Model — Course Dashboard =====
+// Source: PRD v2.3 + dataobjects_draft2.md
+// Entities strictly from draft 2; no new entities added.
+// v1 = FR-0..FR-5, FR-8, FR-9, FR-10; FR-11 (v2) включена в схему, за-гейчена.
+
+Table SystemUser {
+  id UUID [pk]
+  username varchar(255) [not null, unique]
+  password_hash varchar(255) [not null]
+  failed_attempts int [not null, default: 0]
+  locked_until timestamp [null]
+}
+
+Table Repository {
+  id UUID [pk]
+  repo_url varchar(2048) [not null, unique]
+  git_host varchar(16) [not null]
+  default_branch varchar(255) [not null, default: 'main']
+  added_at timestamp [not null]
+  availability varchar(16) [not null, default: 'unavailable']
+  last_ok_sync_at timestamp [null]
+}
+
+Table Lesson {
+  id UUID [pk]
+  number int [not null, unique]
+  title varchar(255) [not null]
+}
+
+Table ArtifactDef {
+  id UUID [pk]
+  lesson_id UUID [not null]
+  role varchar(32) [not null]
+  expected_pattern varchar(512) [not null]
+  template_relative_path varchar(512) [null]
+}
+
+Table EdgeDef {
+  id UUID [pk]
+  source_role varchar(32) [not null]
+  target_role varchar(32) [not null]
+  rubric_id UUID [not null]
+}
+
+Table Rubric {
+  id UUID [pk]
+  type varchar(8) [not null]
+  artifact_role varchar(32) [null]
+  version varchar(32) [not null]
+  text text [not null]
+  items json [null]
+  created_at timestamp [not null]
+}
+
+Table GitCredential {
+  id UUID [pk]
+  git_host varchar(16) [not null, unique]
+  encrypted_token varchar(512) [not null]
+  is_valid bool [not null, default: true]
+  checked_at timestamp [null]
+}
+
+Table SyncRun {
+  id UUID [pk]
+  started_at timestamp [not null]
+  completed_at timestamp [null]
+  trigger varchar(16) [not null]
+  status varchar(16) [not null]
+}
+
+Table ArtifactSnapshot {
+  id UUID [pk]
+  sync_run_id UUID [not null]
+  repository_id UUID [not null]
+  artifact_def_id UUID [not null]
+  status varchar(16) [not null]
+  partial_reason varchar(16) [null]
+  file_path varchar(2048) [null]
+  source_commit_sha varchar(64) [null]
+  content_hash varchar(64) [null]
+  observed_at timestamp [not null]
+}
+
+Table CoherenceVerdict {
+  id UUID [pk]
+  sync_run_id UUID [not null]
+  repository_id UUID [not null]
+  edge_def_id UUID [not null]
+  source_snapshot_id UUID [not null]
+  target_snapshot_id UUID [not null]
+  rubric_version varchar(32) [not null]
+  llm_model varchar(64) [not null]
+  verdict varchar(16) [not null]
+  confidence varchar(8) [not null]
+  entities_checked int [not null]
+  entities_found int [not null]
+  entities_excluded int [not null]
+  entities_lost int [not null]
+  points json [null]
+  notes text [null]
+}
+
+// v2 — заложена в схему, в код не идёт до выполнения условий входа (PRD §5.2)
+Table StepQualityCard {
+  id UUID [pk]
+  sync_run_id UUID [not null]
+  repository_id UUID [not null]
+  snapshot_id UUID [not null]
+  rubric_id UUID [not null]
+  rubric_version varchar(32) [not null]
+  llm_model varchar(64) [not null]
+  status varchar(16) [not null]
+  coverage json [null]
+  remarks json [null]
+  notes text [null]
+}
+
+// Полиморфный: ссылается на CoherenceVerdict XOR StepQualityCard.
+// В БД — две nullable FK + CHECK(одна не null); DBML не выражает XOR.
+Table Override {
+  id UUID [pk]
+  finding_type varchar(16) [not null]
+  finding_id UUID [not null]
+  reason text [not null]
+  created_at timestamp [not null]
+  revoked_at timestamp [null]
+}
+
+// ===== Relationships =====
+
+// --- Сущности конфига (референсные) ---
+
+Ref: Lesson.id < ArtifactDef.lesson_id
+  // FR-2: артефакты сгруппированы по занятиям. Без занятия артефакт не имеет позиции в матрице FR-4.
+
+Ref: Rubric.id < EdgeDef.rubric_id
+  // FR-5: каждое ребро проверяется по рубрике. Без рубрики LLM-агент не получает инструкцию.
+
+Ref: Rubric.id < StepQualityCard.rubric_id
+  // FR-11 (v2): рубрика шага назначается на артефакт; одна рубрика проверяет много документов.
+
+// --- Сущности обхода (история наблюдений) ---
+
+Ref: Repository.id < ArtifactSnapshot.repository_id
+  // FR-1: снапшот принадлежит репозиторию. Без репозитория снапшот — «ничей».
+
+Ref: ArtifactDef.id < ArtifactSnapshot.artifact_def_id
+  // FR-2: без определения артефакта снапшот не знает, что искали и найдено ли.
+
+Ref: SyncRun.id < ArtifactSnapshot.sync_run_id
+  // §13: история наблюдений. Каждый снапшот привязан к точке на оси времени (обходу).
+
+Ref: SyncRun.id < CoherenceVerdict.sync_run_id
+  // FR-5/FR-9: вердикт привязан к обходу (времени проверки) для хронологии на защите.
+
+Ref: SyncRun.id < StepQualityCard.sync_run_id
+  // FR-11 (v2): наследует паттерн FR-5.
+
+Ref: Repository.id < CoherenceVerdict.repository_id
+  // FR-5: вердикт всегда в разрезе репозитория. Без репозитория непонятно, чьи документы.
+
+Ref: Repository.id < StepQualityCard.repository_id
+  // FR-11 (v2): аналогично CoherenceVerdict.
+
+Ref: EdgeDef.id < CoherenceVerdict.edge_def_id
+  // FR-5: вердикт проверяет конкретное ребро. Без ребра непонятно, какая пара сверялась.
+
+// --- Привязка к версиям документов (FR-5: четвёрка) ---
+
+Ref: ArtifactSnapshot.id < CoherenceVerdict.source_snapshot_id
+  // FR-5: вердикт привязан к версии документа-источника (content_hash). Исключает «мигание».
+
+Ref: ArtifactSnapshot.id < CoherenceVerdict.target_snapshot_id
+  // FR-5: вердикт привязан к версии документа-приёмника.
+
+Ref: ArtifactSnapshot.id < StepQualityCard.snapshot_id
+  // FR-11 (v2): карточка качества привязана к версии проверяемого документа.
+
+// --- Override (курирование) ---
+
+Ref: CoherenceVerdict.id > Override.finding_id
+  // FR-10: override гасит конкретный вердикт (через finding_type='coherence' + finding_id).
+  // ВНИМАНИЕ: finding_id — полиморфный UUID; СУБД не проверяет ссылочную целостность.
+
+// ===== Вопросы (связи, которые нечем обосновать) =====
+
+// 1. EdgeDef.source_role / target_role → ArtifactDef.role — логическая ссылка через enum,
+//    не FK. Роль — строка, а не таблица. Если понадобится referential integrity →
+//    ввести таблицу ArtifactRole и ссылаться на неё из обоих мест.
+//
+// 2. Repository.git_host → GitCredential.git_host — логическое совпадение хоста.
+//    FK не ставится: GitCredential — учётные данные, Repository — конфигурация.
+//    JOIN по git_host — прикладной код.
+//
+// 3. Override.finding_id → CoherenceVerdict.id / StepQualityCard.id — полиморфная
+//    ссылка через один UUID + discriminator. Реляционной integrity нет.
+//    Альтернатива: две nullable FK + CHECK(coherence_verdict_id IS NOT NULL XOR
+//    step_quality_card_id IS NOT NULL) — чище для SQL, но отходит от draft 2.
+//
+// 4. CoherenceVerdict / StepQualityCard → Rubric — только через rubric_version (строка).
+//    Это денормализация для версионной привязки. Историческая версия рубрики может быть
+//    удалена из Rubric — вердикт останется без канонического текста правила.
+//    Аналитическая связь (для golden set) — через rubric_version + llm_model, не через FK.
+
+
+//
+// ===== ЧАСТЬ 2. Кратности и граничные вопросы =====
+//
+
+// 1. Lesson → ArtifactDef
+//    NOT NULL. Может ли ArtifactDef существовать без Lesson?
+//    → Нет (FR-2: «по каждому занятию — ожидаемые артефакты»; занятие — обязательная ось).
+//    Может ли у Lesson быть несколько ArtifactDef?
+//    → Да (FR-4: ~18 артефактов на ~10 занятий, несколько на занятие).
+//    Итог: Lesson 1 —* ArtifactDef. Lesson может быть 0 (если ещё не создан ни один артефакт для занятия).
+
+// 2. ArtifactDef → ArtifactSnapshot
+//    NOT NULL. Может ли ArtifactSnapshot существовать без ArtifactDef?
+//    → Нет (FR-2: без определения неизвестно, что искали; снапшот теряет смысл).
+//    Может ли у ArtifactDef быть несколько ArtifactSnapshot?
+//    → Да (по одному на <репозиторий, обход>).
+//    Итог: ArtifactDef 1 —* ArtifactSnapshot.
+
+// 3. Rubric → EdgeDef
+//    NOT NULL. Может ли EdgeDef существовать без Rubric?
+//    → Нет (FR-5: каждое ребро проверяется по рубрике; без рубрики LLM не получит инструкцию).
+//    Может ли у Rubric быть несколько EdgeDef?
+//    → Да (одна рубрика может проверять несколько рёбер, напр. «PRD→схема» и «схема→архитектура»).
+//    Итог: Rubric 1 —* EdgeDef.
+
+// 4. EdgeDef → CoherenceVerdict
+//    NOT NULL. Может ли EdgeDef существовать без CoherenceVerdict?
+//    → Да (ребро определено, но ещё ни разу не проверено; FR-5: проверка запускается при обходе).
+//    Может ли у EdgeDef быть несколько CoherenceVerdict?
+//    → Да (по одному на <репозиторий, обход> — каждый SyncRun может породить вердикт).
+//    Итог: EdgeDef 1 — 0..* CoherenceVerdict.
+
+// 5. Repository → ArtifactSnapshot
+//    NOT NULL. Может ли Repository существовать без ArtifactSnapshot?
+//    → Да (только добавлен, ещё ни разу не прошёл обход; FR-1: опоздавший добавлен, но данные читаются при следующем SyncRun).
+//    Может ли у Repository быть несколько ArtifactSnapshot?
+//    → Да (по одному на <artifact_def, sync_run>).
+//    Итог: Repository 1 — 0..* ArtifactSnapshot.
+
+// 6. Repository → CoherenceVerdict
+//    NOT NULL. Может ли Repository существовать без CoherenceVerdict?
+//    → Да (FR-5: вердикты появляются только после синка; репозиторий может быть недоступен — вердиктов нет).
+//    Может ли у Repository быть несколько CoherenceVerdict?
+//    → Да (по одному на <edge_def, sync_run>).
+//    Итог: Repository 1 — 0..* CoherenceVerdict.
+
+// 7. SyncRun → ArtifactSnapshot
+//    NOT NULL. Может ли SyncRun существовать без ArtifactSnapshot?
+//    → Да (FR-8: обход может упасть на старте — статус failed, снапшотов нет; NFR-2: частичный сбой).
+//    Может ли у SyncRun быть несколько ArtifactSnapshot?
+//    → Да (по одному на <artifact_def, repository>).
+//    Итог: SyncRun 1 — 0..* ArtifactSnapshot.
+
+// 8. SyncRun → CoherenceVerdict
+//    NOT NULL. Может ли SyncRun существовать без CoherenceVerdict?
+//    → Да (FR-5: LLM недоступна — все проверки deferred; вердикты не создаются, матрица работает).
+//    Может ли у SyncRun быть несколько CoherenceVerdict?
+//    → Да (по одному на <edge_def, repository>).
+//    Итог: SyncRun 1 — 0..* CoherenceVerdict.
+
+// 9. ArtifactSnapshot → CoherenceVerdict (источник)
+//    NOT NULL. Может ли ArtifactSnapshot существовать без того, чтобы быть источником вердикта?
+//    → Да (большинство снапшотов — просто проверка наличия; FR-4 работает и без FR-5).
+//    Может ли один ArtifactSnapshot быть источником для нескольких CoherenceVerdict?
+//    → Технически да (если на один артефакт ссылаются разные рёбра как на источник).
+//    Итог: ArtifactSnapshot 1 — 0..* CoherenceVerdict (source).
+
+// 10. ArtifactSnapshot → CoherenceVerdict (приёмник)
+//     Аналогично источнику. ArtifactSnapshot 1 — 0..* CoherenceVerdict (target).
+
+// 11. ArtifactSnapshot → StepQualityCard
+//     NOT NULL. Может ли ArtifactSnapshot существовать без StepQualityCard?
+//     → Да (FR-11 — v2; в v1 карточек качества нет).
+//     Итог (для v2): ArtifactSnapshot 1 — 0..* StepQualityCard.
+
+// 12. Rubric → StepQualityCard
+//     NOT NULL. Может ли Rubric существовать без StepQualityCard?
+//     → Да (рубрика определена, но не назначена на артефакт; FR-11 — v2).
+//     Итог (для v2): Rubric 1 — 0..* StepQualityCard.
+
+
+//
+// ===== ЧАСТЬ 3. Состояние: история vs текущее =====
+//
+
+// Поиск в PRD требований трёх типов:
+//
+// (а) Динамика во времени:
+//   • FR-7: «без новых артефактов ≥2 занятия подряд» — нужна история ArtifactSnapshot
+//     по оси времени (Lesson.number), чтобы отсчитать пропуски.
+//   • FR-5: «пока четвёрка не изменилась, вердикт не пересчитывается» — нужна версия
+//     документа (content_hash), чтобы детектить изменение.
+//   • FR-8: «актуально на ЧЧ:ММ», «идёт обход» — нужна метка времени последнего SyncRun.
+//   • FR-10: «пока пара документов не изменилась» — нужна привязка override к версии.
+//
+// (б) Доказательство прошлого:
+//   • FR-9: «хронология хранится историей наблюдений с привязкой к коммитам» —
+//     прямая инструкция на append-only модель.
+//   • FR-9: «доказательная цепочка на защите» — нужна возможность восстановить картину
+//     на любой момент времени.
+//   • FR-10: «отметка обратима» — revocation нуждается в аудите, удаление записи
+//     уничтожает доказательство.
+//   • §13: «Модель данных — история наблюдений, не текущее состояние» — архитектурное
+//     решение, пронизывающее все сущности.
+//
+// (в) Данные, которые внешняя сторона может переписать задним числом:
+//   • FR-9: «force-push не ломает хронологию» — привязка к source_commit_sha вместо
+//     позиции в истории git. Если коммит переписан, старый SHA остаётся в ArtifactSnapshot.
+//   • BR-3: студент может переименовать/переместить файл — partial_reason фиксирует
+//     неточное имя или неверный путь как исторический факт.
+//   • FR-5: модель LLM или рубрика могут измениться — rubric_version + llm_model
+//     зафиксированы в вердикте; пересчёт только при новой четвёрке.
+//
+// === Решения по каждой сущности ===
+
+// SystemUser — ТЕКУЩЕЕ СОСТОЯНИЕ (перезапись)
+//   FR-0: только текущий статус блокировки; история попыток входа не нужна.
+//   failed_attempts обнуляется при успешном входе, locked_until обновляется.
+
+// Repository — ТЕКУЩЕЕ СОСТОЯНИЕ (перезапись)
+//   repo_url, git_host, default_branch, added_at — конфиг, не меняется.
+//   availability — кэш последнего статуса; полная история доступности — через
+//   ArtifactSnapshot (присутствие/отсутствие снапшотов в разрезе SyncRun).
+//   last_ok_sync_at — кэш для «актуально на ЧЧ:ММ».
+//   Ответ на (а)-(в): история репозитория доказывается через ArtifactSnapshot.
+
+// Lesson — ТЕКУЩЕЕ СОСТОЯНИЕ (перезапись)
+//   Статический справочник. Ни один из трёх типов требований не затрагивает Lesson.
+
+// ArtifactDef — ТЕКУЩЕЕ СОСТОЯНИЕ (перезапись)
+//   Статический справочник. Если шаблон артефакта меняется — создаётся новая версия
+//   ArtifactDef (новый id), старая остаётся в снапшотах для истории (FR-9).
+
+// EdgeDef — ТЕКУЩЕЕ СОСТОЯНИЕ (перезапись)
+//   Статический справочник рёбер. Аналогично ArtifactDef: при изменении рубрики у ребра —
+//   новый EdgeDef или новая версия Rubric.
+
+// Rubric — ИСТОРИЯ (дозапись)
+//   FR-5: версионирование. Каждая новая версия — новая строка.
+//   Старые версии хранятся для привязки вердиктов (rubric_version).
+//   Ответ на (а): «пока версия рубрики не изменилась» — факт версии зафиксирован.
+//   Ответ на (в): изменение рубрики не пересчитывает старые вердикты.
+
+// GitCredential — ТЕКУЩЕЕ СОСТОЯНИЕ (перезапись)
+//   Токен заменяется при ротации. is_valid/checked_at сбрасываются.
+//   История старых токенов не нужна (R-PD2: шифрование при хранении, ротация — процедура,
+//   не свойство данных). Ответ на (б): аудит токенов — вне инструмента.
+
+// SyncRun — ИСТОРИЯ (дозапись)
+//   §13: «история наблюдений». Каждый обход — новая строка. Никогда не перезаписывается.
+//   Ответ на (а): ось времени для FR-7 («2+ занятия») и FR-8 («актуально на ЧЧ:ММ»).
+//   Ответ на (б): хронология на защите (FR-9) строится из последовательности SyncRun.
+//   Ответ на (в): force-push не влияет — SyncRun привязан к времени обхода, не к git.
+
+// ArtifactSnapshot — ИСТОРИЯ (дозапись)
+//   §13: явное решение. FR-9: хронология. FR-7: подсчёт пропусков.
+//   Ответ на (а): без истории ArtifactSnapshot нельзя узнать, какие артефакты
+//   отсутствовали «2+ занятия подряд» (FR-7).
+//   Ответ на (б): каждый снапшот — срез на момент обхода; цепочка снапшотов = хронология (FR-9).
+//   Ответ на (в): source_commit_sha фиксирует коммит на момент проверки;
+//   force-push не ломает — старый SHA остаётся в снапшоте.
+
+// CoherenceVerdict — ИСТОРИЯ (дозапись)
+//   FR-5: вердикт привязан к четвёрке; старые вердикты не пересчитываются.
+//   FR-9: цепочка вердиктов — хронология разрывов.
+//   Ответ на (а): при изменении документа (новый content_hash) — новый вердикт, старый остаётся.
+//   Ответ на (б): на защите показывается историческая цепочка (FR-9).
+//   Ответ на (в): override привязан к конкретному вердикту; force-push не ломает.
+
+// StepQualityCard (v2) — ИСТОРИЯ (дозапись)
+//   FR-11 наследует паттерн FR-5.
+
+// Override — ИСТОРИЯ (дозапись с мягким удалением)
+//   FR-10: отметка обратима. revoked_at вместо удаления — аудит решений преподавателя.
+//   Ответ на (а): «пока пара не изменилась» — override привязан к CoherenceVerdict,
+//   который привязан к снапшотам. Новая версия пары = новый вердикт = старый override
+//   не применяется.
+//   Ответ на (б): revoked_at хранит историю снятия отметок — доказательство для апелляции.
+
+
+//
+// ===== ЧАСТЬ 4. Ограничения модели =====
+//
+
+// Требования PRD, которые эта модель не выполняет или выполняет с оговорками:
+//
+// 1. FR-4 «частично = заготовка» — модель хранит template_relative_path в ArtifactDef
+//    и partial_reason='template_copy' в ArtifactSnapshot. Но сравнение с шаблоном требует
+//    чтения файлов из репозитория-шаблона (гдето во внешнем мире). Модель не хранит
+//    адрес репозитория-шаблона (он упомянут в PRD §5 как конфиг FR-2, но не отражён
+//    ни в одной сущности). → Нужна либо конфигурационная сущность AppConfig, либо
+//    атрибут «template_repo_url» на уровне, доступном обходчику.
+//
+// 2. FR-5 «deferred» — вердикты с verdict='deferred' не имеют механизма повторной
+//    постановки в очередь. SyncRun завершён, но часть LLM-проверок отложена. Модель
+//    не отличает «отложено, будет перезапущено» от «отложено и забыто».
+//    → Оговорка: deferred требует внешнего механизма (очередь задач, scheduler),
+//    выходящего за рамки модели данных.
+//
+// 3. FR-8 инкрементальный обход — content_hash позволяет детектить изменения,
+//    но «последний известный статус» для каждого <repository, artifact_def>
+//    требует агрегации по MAX(observed_at). В модели нет materialized view или
+//    индекса для этого. → Оговорка: реализуется на прикладном уровне (SQL-запрос
+//    с оконной функцией ROW_NUMBER() или отдельная таблица current_snapshot).
+//
+// 4. NFR-4 лимиты Git API — модель не хранит состояние пагинации, cursor, retry count.
+//    → Вопрос: нужно ли? Если обход упал на середине дерева репозитория (NFR-1:
+//    «рекурсивный обход с корректной обработкой усечённых ответов»), следующий обход
+//    должен начать заново (инкрементальный по content_hash) или с места сбоя?
+//    Draft 2 не отвечает; PRD не специфицирует. Пока считаем, что обход начинается
+//    заново (NFR-1: ≤2 мин — дешевле, чем хранить курсоры).
+//
+// 5. FR-9 «карточка студента» → «карточка репозитория» — модель хранит только
+//    Repository. ФИО студента в данных нет (решение CEO). Перед защитой преподаватель
+//    делает ручной шаг «найти репозиторий по списку». Метрика «секунды» (PRD §4)
+//    не достигается для этого шага. Требует правки PRD.
+//
+// 6. Override.finding_id — полиморфный UUID без referential integrity (см. вопрос 3
+//    в части 1). Альтернатива: две nullable FK — чище для SQL, отходит от draft 2
+//    (где finding_type + finding_id). Рекомендуется пересмотреть на этапе архитектуры.
+//
+// 7. Нет сущности «золотой набор» (golden set) — это артефакт репозитория курса
+//    (evals/golden-set.md), не данные продукта. Подтверждение: PRD §0, ADR-001.
+//    Если golden set потребуется загружать в БД для автоматической регрессии —
+//    нужна отдельная сущность GoldenPair. → Вопрос на будущее, пока вне рамок.
