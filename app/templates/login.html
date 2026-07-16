@@ -2,6 +2,7 @@
 {% block title %}Вход{% endblock %}
 {% block content %}
 <h1>Course Dashboard</h1>
+{% if error %}<p class="error">{{ error }}</p>{% endif %}
 <form method="post" action="/login">
     <input type="text" name="username" placeholder="Логин" required>
     <input type="password" name="password" placeholder="Пароль" required>
