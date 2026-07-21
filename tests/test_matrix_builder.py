@@ -7,7 +7,7 @@ AC тикета #12:
   4. «Актуально на ЧЧ:ММ» присутствует
 """
 
-from datetime import datetime, timedelta
+from datetime import datetime
 
 import pytest
 from alembic.config import Config
@@ -18,7 +18,6 @@ from alembic import command
 from app import store
 from app.models import GitHost, SnapshotStatus, SyncOutcome, SyncTrigger
 from app.models.artifact_def import ArtifactDef
-from app.models.edge_def import EdgeDef
 from app.models.lesson import Lesson
 from app.services.matrix_builder import build_matrix
 
@@ -124,7 +123,7 @@ def test_build_matrix_returns_repo_x_lesson_grid(session):
     assert data["repo1"].id in repo_ids
     assert data["repo2"].id in repo_ids
 
-    lesson_numbers = [l["number"] for l in matrix["lessons"]]
+    lesson_numbers = [les["number"] for les in matrix["lessons"]]
     assert lesson_numbers == [1, 2]
 
 
@@ -132,7 +131,7 @@ def test_build_matrix_lessons_ordered_by_number(session):
     """AC#1: занятия упорядочены по number."""
     _seed_matrix_data(session)
     matrix = build_matrix(session)
-    numbers = [l["number"] for l in matrix["lessons"]]
+    numbers = [les["number"] for les in matrix["lessons"]]
     assert numbers == sorted(numbers)
 
 
@@ -194,7 +193,7 @@ def test_partial_reason_none_for_found(session):
 
 def test_timestamp_present(session):
     """AC#4:矩阵 содержит timestamp «актуально на»."""
-    data = _seed_matrix_data(session)
+    _seed_matrix_data(session)
     matrix = build_matrix(session)
 
     assert "as_of" in matrix
@@ -235,7 +234,7 @@ def test_latest_snapshot_wins(session):
     run2 = store.register_sync_run(session, triggered_by=SyncTrigger.schedule)
     session.flush()
     # Второй снапшот для repo1/interview — теперь found→found (хеш изменился)
-    new_snap = store.register_snapshot(
+    store.register_snapshot(
         session, sync_run_id=run2.id, repository_id=data["repo1"].id,
         artifact_def_id=data["adef_interview"].id,
         status=SnapshotStatus.found, content_hash="new_hash_interview",
