@@ -199,3 +199,21 @@ def find_verdict_by_quadruple(session: Session, *, source_content_hash: str, tar
             CoherenceVerdict.verdict != VerdictValue.deferred,
         )
     )
+
+
+# ── FR-10: Override find_* ─────────────────────────────────────────────────
+
+
+def find_active_override_for_verdict(session: Session, verdict_id: str) -> Override | None:
+    """FR-10: активная (revoked_at IS NULL) отметка на вердикт."""
+    return session.scalar(
+        select(Override).where(
+            Override.coherence_verdict_id == verdict_id,
+            Override.revoked_at.is_(None),
+        )
+    )
+
+
+def find_override_by_id(session: Session, override_id: str) -> Override | None:
+    """FR-10: оверрайд по ID (для UI — просмотр, снятие)."""
+    return session.get(Override, override_id)
