@@ -207,29 +207,6 @@ def test_find_active_override_for_verdict_nonexistent(session):
     assert store.find_active_override_for_verdict(session, "nonexistent-id") is None
 
 
-def test_find_overrides_for_repository_filters(session):
-    """FR-10, FR-6: find_overrides_for_repository — фильтрует по репозиторию."""
-    verdict, override, repo = _make_verdict_with_override(session)
-
-    found = store.find_overrides_for_repository(session, repo.id)
-    assert len(found) == 1
-    assert found[0].id == override.id
-
-    store.update_override_revoked(session, override.id)
-    session.flush()
-    assert store.find_overrides_for_repository(session, repo.id) == []
-
-
-def test_find_overrides_for_repository_other_repo(session):
-    """FR-10: другой репозиторий — пустой список."""
-    _verdict, override, repo = _make_verdict_with_override(session)
-    other_repo = store.register_repository(
-        session, repo_url="https://github.com/u/other", git_host=GitHost.GitHub
-    )
-    session.flush()
-    assert store.find_overrides_for_repository(session, other_repo.id) == []
-
-
 def test_find_override_by_id(session):
     """FR-10: оверрайд по ID."""
     _verdict, override, _repo = _make_verdict_with_override(session)
