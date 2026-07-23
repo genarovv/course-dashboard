@@ -23,11 +23,7 @@ def build_matrix(session: Session) -> dict:
       - as_of: str — время последнего обхода в формате HH:MM
     """
     # Только репозитории, у которых есть хотя бы одна запись SyncRunRepository
-    checked_ids = set(
-        session.scalars(
-            select(distinct(SyncRunRepository.repository_id))
-        )
-    )
+    checked_ids = store.find_checked_repository_ids(session)
     repos = [r for r in store.find_active_repositories(session) if r.id in checked_ids]
     lessons = list(session.scalars(select(Lesson).order_by(Lesson.number)))
 

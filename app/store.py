@@ -12,7 +12,7 @@
 
 from datetime import datetime
 
-from sqlalchemy import create_engine, event, select
+from sqlalchemy import create_engine, distinct, event, select
 from sqlalchemy.orm import Session, sessionmaker
 
 from app.config import settings
@@ -167,6 +167,11 @@ def find_repository_by_normalized_url(session: Session, repo_url: str) -> Reposi
 def find_active_repositories(session: Session) -> list[Repository]:
     """FR-8: репозитории для обхода (archived_at IS NULL)."""
     return list(session.scalars(select(Repository).where(Repository.archived_at.is_(None))))
+
+
+def find_checked_repository_ids(session: Session) -> set[str]:
+    """FR-8: ID репозиторий, у которых есть хотя бы одна запись SyncRunRepository."""
+    return set(session.scalars(select(distinct(SyncRunRepository.repository_id))))
 
 
 def find_credential(session: Session, git_host: GitHost) -> GitCredential | None:
