@@ -4,13 +4,9 @@
 Возвращает dict, пригодный для рендеринга Jinja2/HTMX.
 """
 
-from sqlalchemy import distinct, select
 from sqlalchemy.orm import Session
 
 from app import store
-from app.models.lesson import Lesson
-from app.models.sync_run import SyncRun
-from app.models.sync_run_repository import SyncRunRepository
 
 
 def build_matrix(session: Session) -> dict:
