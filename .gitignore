@@ -12,3 +12,4 @@ dist/
 .ruff_cache/
 .pytest_cache/
 alembic/versions/*.pyc
+.coverage
