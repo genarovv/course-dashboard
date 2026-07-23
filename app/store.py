@@ -17,6 +17,7 @@ from sqlalchemy.orm import Session, sessionmaker
 
 from app.config import settings
 from app.models import GitHost, SyncOutcome, SyncStatus, SyncTrigger, VerdictValue
+from app.models.artifact_def import ArtifactDef
 from app.models.artifact_snapshot import ArtifactSnapshot
 from app.models.coherence_verdict import CoherenceVerdict
 from app.models.git_credential import GitCredential
@@ -178,6 +179,11 @@ def find_checked_repository_ids(session: Session) -> set[str]:
 def find_all_lessons(session: Session) -> list[Lesson]:
     """FR-8: все занятия, упорядоченные по номеру."""
     return list(session.scalars(select(Lesson).order_by(Lesson.number)))
+
+
+def find_artifact_defs_by_lesson(session: Session, lesson_id: str) -> list[ArtifactDef]:
+    """FR-8: артефакт-определения для заданного занятия."""
+    return list(session.scalars(select(ArtifactDef).where(ArtifactDef.lesson_id == lesson_id)))
 
 
 def find_credential(session: Session, git_host: GitHost) -> GitCredential | None:

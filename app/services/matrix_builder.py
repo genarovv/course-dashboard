@@ -31,13 +31,7 @@ def build_matrix(session: Session) -> dict:
     for repo in repos:
         cells[repo.id] = {}
         for lesson in lessons:
-            from app.models.artifact_def import ArtifactDef
-
-            artifact_defs = list(
-                session.scalars(
-                    select(ArtifactDef).where(ArtifactDef.lesson_id == lesson.id)
-                )
-            )
+            artifact_defs = store.find_artifact_defs_by_lesson(session, lesson.id)
             # Берём последний снапшот по любому артефакту занятия
             latest_status = None
             latest_partial_reason = None
