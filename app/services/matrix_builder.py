@@ -25,7 +25,7 @@ def build_matrix(session: Session) -> dict:
     # Только репозитории, у которых есть хотя бы одна запись SyncRunRepository
     checked_ids = store.find_checked_repository_ids(session)
     repos = [r for r in store.find_active_repositories(session) if r.id in checked_ids]
-    lessons = list(session.scalars(select(Lesson).order_by(Lesson.number)))
+    lessons = store.find_all_lessons(session)
 
     cells: dict[str, dict[int, dict]] = {}
     for repo in repos:

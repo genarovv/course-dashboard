@@ -20,6 +20,7 @@ from app.models import GitHost, SyncOutcome, SyncStatus, SyncTrigger, VerdictVal
 from app.models.artifact_snapshot import ArtifactSnapshot
 from app.models.coherence_verdict import CoherenceVerdict
 from app.models.git_credential import GitCredential
+from app.models.lesson import Lesson
 from app.models.override import Override
 from app.models.repository import Repository
 from app.models.rubric import Rubric
@@ -172,6 +173,11 @@ def find_active_repositories(session: Session) -> list[Repository]:
 def find_checked_repository_ids(session: Session) -> set[str]:
     """FR-8: ID репозиторий, у которых есть хотя бы одна запись SyncRunRepository."""
     return set(session.scalars(select(distinct(SyncRunRepository.repository_id))))
+
+
+def find_all_lessons(session: Session) -> list[Lesson]:
+    """FR-8: все занятия, упорядоченные по номеру."""
+    return list(session.scalars(select(Lesson).order_by(Lesson.number)))
 
 
 def find_credential(session: Session, git_host: GitHost) -> GitCredential | None:
