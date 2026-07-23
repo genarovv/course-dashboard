@@ -50,7 +50,7 @@ def build_matrix(session: Session) -> dict:
             }
 
     # Время последнего обхода
-    last_run = session.scalar(select(SyncRun).order_by(SyncRun.started_at.desc()).limit(1))
+    last_run = store.find_last_sync_run(session)
     as_of = last_run.started_at.strftime("%H:%M") if last_run else "—:—"
 
     return {

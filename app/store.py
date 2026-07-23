@@ -186,6 +186,11 @@ def find_artifact_defs_by_lesson(session: Session, lesson_id: str) -> list[Artif
     return list(session.scalars(select(ArtifactDef).where(ArtifactDef.lesson_id == lesson_id)))
 
 
+def find_last_sync_run(session: Session) -> SyncRun | None:
+    """FR-8: последний обход (для метки «актуально на»)."""
+    return session.scalar(select(SyncRun).order_by(SyncRun.started_at.desc()).limit(1))
+
+
 def find_credential(session: Session, git_host: GitHost) -> GitCredential | None:
     """FR-3: запись валидности токена хостинга."""
     return session.scalar(select(GitCredential).where(GitCredential.git_host == git_host))
