@@ -1,8 +1,8 @@
 # MAP — Тесты и покрытие course-dashboard
 
-**Дата:** 2026-07-28 (обновлено в MR тикета G3 #10)
+**Дата:** 2026-07-28 (обновлено в MR тикета G4 #11)
 **Стек:** Python 3.13 · FastAPI · SQLAlchemy 2.x (Mapped) · SQLite (WAL) · Alembic · Jinja2+HTMX · bcrypt
-**Тестов:** 92, все ✅ · **Покрытие общее:** 97% (`pytest-cov`)
+**Тестов:** 100, все ✅ · **Покрытие общее:** 98% (`pytest-cov`)
 
 ---
 
@@ -19,6 +19,7 @@
 | `test_dashboard_matrix.py` | интеграционный (TestClient + реальная БД) | FR-4 (D1 #12): GET / рендерит матрицу — строка репозитория, колонка занятия, partial_reason, «Актуально на», редирект без сессии |
 | `test_migrations.py` | интеграционный (alembic upgrade + raw SQL) | DDL: все 12 таблиц созданы, сид system_user, downgrade без ошибок, И1 (XOR), И3 (quad unique), И4 (one active override), И5 (append-only триггеры), И6 (norm URL unique), И8 (snapshot CHECK), И9+И11 (уникальность тройки/пары), И10 (reference uniqueness) |
 | `test_sync_orchestrator.py` | модульный (FakeGitClient) + интеграционный (TestClient) | FR-8/FR-4 (G2 #9): классификация found/not_found, sha256 (в т.ч. мульти-совпадение паттерна и `**`-глоб), source_commit_sha (FR-9), инкрементальность D28, исходы всех 5 видов + detail, статусы SyncRun, архивные репо пропущены, POST /sync (сессия / X-Sync-Token / 401) |
+| `test_reconcile.py` | модульный (session fixture + фейк-воркер) | FR-5/FR-8 (G4 #11): идентификация пар без валидного вердикта, create_task через инжектированный воркер (ядро FR-5 — за гейтом Фазы 0), D25 «не мигаем», deferred-ретрай, идемпотентность свода, свод в конце run_sync |
 | `test_store.py` | модульный (session fixture) | Контракт store.py: ровно 4 `update_*`, нет `delete_*`, все `register_*` на месте, `normalize_url()`, CRUD-флоу репозиториев/runs/credentials/overrides, `find_verdict_by_quadruple` |
 
 ---
@@ -36,7 +37,7 @@
 | `app/clients/llm_client.py` | 0 | — | **пустой** | — (заглушка, Фаза 0 gate) |
 | `app/services/csv_importer.py` | 38 | 1 miss | **97%** | test_csv_import |
 | `app/services/config_manager.py` | 75 | ✅ | **100%** | test_config_manager |
-| `app/services/sync_orchestrator.py` | 122 | 2 miss | **98%** | test_sync_orchestrator (в т.ч. G3: template_copy, пустой файл, wrong_place без залипания, деградация шаблона с warning) |
+| `app/services/sync_orchestrator.py` | 161 | 2 miss | **99%** | test_sync_orchestrator (G2/G3), test_reconcile (G4) |
 | `app/routes/auth.py` | 41 | 2 miss | **95%** | test_auth |
 | `app/routes/admin.py` | 34 | 1 miss | **97%** | test_csv_import, test_config_manager, test_sync_orchestrator |
 | `app/services/matrix_builder.py` | 29 | 1 miss | **97%** | test_matrix_builder (агрегация ячеек), test_dashboard_matrix |

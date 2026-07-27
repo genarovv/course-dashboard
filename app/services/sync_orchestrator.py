@@ -6,9 +6,11 @@
 хранится исходом ok_unchanged.
 """
 
+import asyncio
 import hashlib
 import logging
 import re
+from dataclasses import dataclass
 
 from sqlalchemy.orm import Session
 
@@ -18,6 +20,7 @@ from app.clients.git_client import (
     GitClientError,
     GitRateLimitedError,
 )
+from app.config import settings
 from app.models import SnapshotStatus, SyncOutcome, SyncStatus, SyncTrigger
 from app.models.artifact_def import ArtifactDef
 from app.models.repository import Repository
@@ -222,6 +225,78 @@ async def _sync_one_repo(
         return _outcome_for_error(exc), str(exc)[:500]
 
 
+@dataclass(frozen=True)
+class PendingPair:
+    """Пара «ребро × репозиторий» без валидного вердикта на текущую четвёрку (И3)."""
+
+    edge_def_id: str
+    repository_id: str
+    source_snapshot_id: str
+    target_snapshot_id: str
+    source_content_hash: str
+    target_content_hash: str
+    rubric_id: str
+    llm_model: str
+
+
+def find_pairs_without_verdict(session: Session, llm_model: str) -> list[PendingPair]:
+    """§5.1: все пары (EdgeDef × репозиторий с текущими снапшотами обеих ролей),
+    у которых нет валидного (не deferred) вердикта на текущую четвёрку."""
+    pairs: list[PendingPair] = []
+    repos = store.find_active_repositories(session)
+    for edge in store.find_all_edge_defs(session):
+        source_defs = store.find_artifact_defs_by_role(session, edge.source_role)
+        target_defs = store.find_artifact_defs_by_role(session, edge.target_role)
+        for repo in repos:
+            for source_def in source_defs:
+                for target_def in target_defs:
+                    snap_a = store.find_last_snapshot(session, repo.id, source_def.id)
+                    snap_b = store.find_last_snapshot(session, repo.id, target_def.id)
+                    if not (snap_a and snap_b and snap_a.content_hash and snap_b.content_hash):
+                        continue  # нет текущих наблюдений обеих ролей — проверять нечего
+                    if store.find_verdict_by_quadruple(
+                        session,
+                        source_content_hash=snap_a.content_hash,
+                        target_content_hash=snap_b.content_hash,
+                        rubric_id=edge.rubric_id,
+                        llm_model=llm_model,
+                    ):
+                        continue  # D25: валидный вердикт есть — не мигаем
+                    pairs.append(PendingPair(
+                        edge_def_id=edge.id,
+                        repository_id=repo.id,
+                        source_snapshot_id=snap_a.id,
+                        target_snapshot_id=snap_b.id,
+                        source_content_hash=snap_a.content_hash,
+                        target_content_hash=snap_b.content_hash,
+                        rubric_id=edge.rubric_id,
+                        llm_model=llm_model,
+                    ))
+    return pairs
+
+
+async def reconcile_llm_pairs(
+    session: Session, *, llm_model: str, verdict_worker=None
+) -> tuple[list[PendingPair], list[asyncio.Task]]:
+    """Идемпотентный свод-реконсиляция (§5.1): в конце КАЖДОГО обхода.
+
+    Deferred-пары и потерянные при рестарте задачи перепроверяются сами:
+    у них нет валидного вердикта, они попадут в следующий свод (без TaskTracker).
+    verdict_worker — ядро FR-5; до прохождения Фазы 0 оно не кодится (PRD §13),
+    поэтому воркер инъецируется, а без него пары только идентифицируются —
+    состояние «проверяется» вычислимо (В13) и видно в /health.
+    """
+    pairs = find_pairs_without_verdict(session, llm_model)
+    if verdict_worker is None:
+        if pairs:
+            logger.info(
+                "Свод: %d пар без вердикта; ядро FR-5 не подключено (гейт Фазы 0)", len(pairs)
+            )
+        return pairs, []
+    tasks = [asyncio.create_task(verdict_worker(pair)) for pair in pairs]
+    return pairs, tasks
+
+
 def _final_status(outcomes: list[SyncOutcome]) -> SyncStatus:
     """AC 4: completed — все ок; partial — часть ок; failed — ни одного ок при непустом списке."""
     if not outcomes or all(o in _OK_OUTCOMES for o in outcomes):
@@ -237,6 +312,8 @@ async def run_sync(
     *,
     triggered_by: SyncTrigger = SyncTrigger.schedule,
     template_repo=None,  # ConfigYAML.template_repo (PRD FR-4); None — детект заготовок выключен
+    llm_model: str | None = None,  # модель четвёрки И3; по умолчанию — settings.deepseek_model
+    verdict_worker=None,  # ядро FR-5; None до прохождения Фазы 0 (PRD §13)
 ) -> SyncRun:
     """Полный обход активных репозиториев (§5.1). Возвращает SyncRun с финальным статусом."""
     run = store.register_sync_run(session, triggered_by=triggered_by)
@@ -261,4 +338,11 @@ async def run_sync(
 
     store.update_sync_run_status(session, run.id, _final_status(outcomes))
     session.flush()
+
+    # §5.1: свод-реконсиляция LLM-пар — в конце каждого обхода (G4, #11)
+    await reconcile_llm_pairs(
+        session,
+        llm_model=llm_model or settings.deepseek_model,
+        verdict_worker=verdict_worker,
+    )
     return run

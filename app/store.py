@@ -214,6 +214,16 @@ def config_repoint_edge_rubric(session: Session, *, edge_def_id: str, rubric_id:
 # ── SELECT: find_* ───────────────────────────────────────────────────────────
 
 
+def find_all_edge_defs(session: Session) -> list[EdgeDef]:
+    """FR-5: все рёбра связности (для свода-реконсиляции §5.1)."""
+    return list(session.scalars(select(EdgeDef)))
+
+
+def find_artifact_defs_by_role(session: Session, role) -> list[ArtifactDef]:
+    """FR-5: артефакт-определения роли (стороны ребра)."""
+    return list(session.scalars(select(ArtifactDef).where(ArtifactDef.role == role)))
+
+
 def find_edge_def_by_roles(session: Session, source_role, target_role) -> "EdgeDef | None":
     """FR-2/FR-5: ребро по паре ролей (UNIQUE source_role+target_role, И10)."""
     return session.scalar(
