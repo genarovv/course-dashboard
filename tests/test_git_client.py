@@ -36,6 +36,24 @@ def test_github_tree_and_file():
     assert content == "# PRD"
 
 
+def test_github_head_sha():
+    def handler(request: httpx.Request) -> httpx.Response:
+        assert "/commits/" in request.url.path
+        return httpx.Response(200, json={"sha": "a" * 40})
+
+    sha = _run(_client(handler).get_head_sha("https://github.com/u/r", "GitHub"))
+    assert sha == "a" * 40
+
+
+def test_gitlab_head_sha():
+    def handler(request: httpx.Request) -> httpx.Response:
+        assert "/repository/commits/" in request.url.path
+        return httpx.Response(200, json={"id": "b" * 40})
+
+    sha = _run(_client(handler).get_head_sha("https://gitlab.com/g/r", "GitLab"))
+    assert sha == "b" * 40
+
+
 def test_gitlab_tree_and_file():
     def handler(request: httpx.Request) -> httpx.Response:
         if "/repository/tree" in request.url.path:

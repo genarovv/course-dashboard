@@ -38,23 +38,30 @@ from app.services.sync_orchestrator import run_sync
 PRD_TEXT = "# PRD\nПродукт делает X."
 
 
+HEAD_SHA = "f" * 40
+
+
 class FakeGitClient:
     """Фейк G1: словарь url → {files: {path: content}} или исключение."""
 
     def __init__(self, repos: dict):
         self.repos = repos
 
-    async def get_tree(self, repo_url, git_host, ref="main"):
+    def _entry(self, repo_url):
         entry = self.repos[repo_url]
         if isinstance(entry, Exception):
             raise entry
-        return list(entry.keys())
+        return entry
+
+    async def get_tree(self, repo_url, git_host, ref="main"):
+        return list(self._entry(repo_url).keys())
 
     async def get_file_content(self, repo_url, git_host, file_path, ref="main"):
-        entry = self.repos[repo_url]
-        if isinstance(entry, Exception):
-            raise entry
-        return entry[file_path]
+        return self._entry(repo_url)[file_path]
+
+    async def get_head_sha(self, repo_url, git_host, ref="main"):
+        self._entry(repo_url)
+        return HEAD_SHA
 
 
 @pytest.fixture()
@@ -152,6 +159,73 @@ async def test_changed_content_new_snapshot_outcome_ok_changed(session):
         select(SyncRunRepository).order_by(SyncRunRepository.checked_at)
     ))[-1]
     assert last_outcome.outcome == SyncOutcome.ok_changed
+
+
+@pytest.mark.anyio
+async def test_multi_match_pattern_observes_all_files(session):
+    """Артефакт с N совпадениями: изменение любого файла меняет наблюдение (fix по ревью, находка 1)."""
+    adef, (repo,) = _seed(session)
+    adef.expected_pattern = "product/interviews/*.md"
+    session.flush()
+    client = FakeGitClient({repo.repo_url: {
+        "product/interviews/01.md": "первое",
+        "product/interviews/02.md": "второе",
+    }})
+    await _sync(session, client)
+    session.commit()
+
+    client.repos[repo.repo_url]["product/interviews/02.md"] = "второе изменено"
+    await _sync(session, client)
+
+    snaps = list(session.scalars(select(ArtifactSnapshot)))
+    assert len(snaps) == 2  # изменение НЕ первого файла тоже даёт новое наблюдение
+    assert snaps[0].content_hash != snaps[1].content_hash
+    assert all(s.file_path == "product/interviews/01.md" for s in snaps)  # представитель — min
+
+
+@pytest.mark.anyio
+async def test_double_star_pattern_matches_nested(session):
+    """Паттерн app/**/*.py матчит вложенные пути (без зависимости от Python 3.13 full_match)."""
+    adef, (repo,) = _seed(session)
+    adef.expected_pattern = "app/**/*.py"
+    session.flush()
+    client = FakeGitClient({repo.repo_url: {"app/services/x.py": "код", "README.md": "н"}})
+
+    await _sync(session, client)
+
+    snap = store.find_last_snapshot(session, repo.id, adef.id)
+    assert snap.status == SnapshotStatus.found
+    assert snap.file_path == "app/services/x.py"
+
+
+@pytest.mark.anyio
+async def test_snapshot_records_head_commit_sha(session):
+    """FR-9: снапшот found несёт source_commit_sha (fix по ревью, находка 2); not_found — без SHA (И8)."""
+    adef, (repo,) = _seed(session)
+    client = FakeGitClient({repo.repo_url: {"product/prd.md": PRD_TEXT}})
+    await _sync(session, client)
+    snap = store.find_last_snapshot(session, repo.id, adef.id)
+    assert snap.source_commit_sha == HEAD_SHA
+
+    client.repos[repo.repo_url] = {}  # артефакт исчез
+    session.commit()
+    await _sync(session, client)
+    snap2 = store.find_last_snapshot(session, repo.id, adef.id)
+    assert snap2.status == SnapshotStatus.not_found
+    assert snap2.source_commit_sha is None
+
+
+@pytest.mark.anyio
+async def test_error_outcome_records_detail(session):
+    """Причина ошибки сохраняется в SyncRunRepository.detail (fix по ревью, находка 5)."""
+    adef, (repo,) = _seed(session)
+    client = FakeGitClient({repo.repo_url: GitRepoUnavailableError("HTTP 404")})
+
+    await _sync(session, client)
+
+    row = session.scalar(select(SyncRunRepository))
+    assert row.outcome == SyncOutcome.repo_unavailable
+    assert "404" in row.detail
 
 
 # ── AC 1: обходятся только активные ────────────────────────────────────────
