@@ -302,6 +302,24 @@ def find_verdict_by_quadruple(session: Session, *, source_content_hash: str, tar
     )
 
 
+def find_latest_verdict_for_quadruple(
+    session: Session, *, source_content_hash: str, target_content_hash: str,
+    rubric_id: str, llm_model: str,
+) -> CoherenceVerdict | None:
+    """FR-8 (/health): последний вердикт четвёрки, ВКЛЮЧАЯ deferred — диагностика §5.4."""
+    return session.scalar(
+        select(CoherenceVerdict)
+        .where(
+            CoherenceVerdict.source_content_hash == source_content_hash,
+            CoherenceVerdict.target_content_hash == target_content_hash,
+            CoherenceVerdict.rubric_id == rubric_id,
+            CoherenceVerdict.llm_model == llm_model,
+        )
+        .order_by(CoherenceVerdict.computed_at.desc())
+        .limit(1)
+    )
+
+
 # ── FR-10: Override find_* ─────────────────────────────────────────────────
 
 

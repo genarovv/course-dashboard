@@ -303,6 +303,27 @@ async def reconcile_llm_pairs(
     return pairs, tasks
 
 
+def build_health_counters(session: Session, llm_model: str) -> dict:
+    """§5.4 (I2, #13): счётчики /health — вычислимые запросы к БД, без in-memory состояния.
+
+    deferred считается по текущим парам (последний вердикт четвёрки = deferred),
+    а не по всему журналу: исторические deferred уже неактуальны.
+    """
+    pairs = find_pairs_without_verdict(session, llm_model)
+    deferred = {"llm_unavailable": 0, "parse_error": 0}
+    for pair in pairs:
+        verdict = store.find_latest_verdict_for_quadruple(
+            session,
+            source_content_hash=pair.source_content_hash,
+            target_content_hash=pair.target_content_hash,
+            rubric_id=pair.rubric_id,
+            llm_model=pair.llm_model,
+        )
+        if verdict is not None and verdict.deferred_reason is not None:
+            deferred[verdict.deferred_reason] += 1
+    return {"pairs_without_verdict": len(pairs), "deferred": deferred}
+
+
 def _final_status(outcomes: list[SyncOutcome]) -> SyncStatus:
     """AC 4: completed — все ок; partial — часть ок; failed — ни одного ок при непустом списке."""
     if not outcomes or all(o in _OK_OUTCOMES for o in outcomes):

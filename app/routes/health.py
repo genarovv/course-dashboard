@@ -1,10 +1,29 @@
-"""GET /health. I1 (#2): жив ли процесс; счётчики из БД — I2 (#13)."""
+"""GET /health — жив ли процесс + счётчики из БД (I2, #13; ARCHITECTURE §5.4).
 
-from fastapi import APIRouter
+Открыт без аутентификации: отдаёт только агрегированные счётчики (без URL и ПД);
+им пользуются мониторинг и cron-диагностика (§5.5).
+"""
+
+from fastapi import APIRouter, Depends
+from sqlalchemy.orm import Session
+
+from app import store
+from app.config import settings
+from app.routes import get_session
+from app.services import sync_orchestrator
 
 router = APIRouter()
 
 
 @router.get("/health")
-async def health():
-    return {"status": "ok"}
+async def health(session: Session = Depends(get_session)):
+    run = store.find_last_sync_run(session)
+    last_sync = None
+    if run is not None:
+        last_sync = {
+            "started_at": run.started_at.isoformat(),
+            "completed_at": run.completed_at.isoformat() if run.completed_at else None,
+            "status": run.status,
+        }
+    counters = sync_orchestrator.build_health_counters(session, settings.deepseek_model)
+    return {"status": "ok", "last_sync": last_sync, **counters}

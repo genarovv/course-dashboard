@@ -7,10 +7,8 @@ from app.main import app
 client = TestClient(app)
 
 
-def test_health_endpoint():
-    response = client.get("/health")
-    assert response.status_code == 200
-    assert response.json() == {"status": "ok"}
+# /health с тикета I2 (#13) читает счётчики из БД — его контракт проверяет
+# tests/test_health.py на мигрированной БД (изменение требования: AC тикета #13).
 
 
 def test_login_form_returns_html():

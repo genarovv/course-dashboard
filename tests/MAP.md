@@ -1,8 +1,8 @@
 # MAP — Тесты и покрытие course-dashboard
 
-**Дата:** 2026-07-28 (обновлено в MR тикета G4 #11)
+**Дата:** 2026-07-28 (обновлено в MR тикета I2 #13)
 **Стек:** Python 3.13 · FastAPI · SQLAlchemy 2.x (Mapped) · SQLite (WAL) · Alembic · Jinja2+HTMX · bcrypt
-**Тестов:** 100, все ✅ · **Покрытие общее:** 98% (`pytest-cov`)
+**Тестов:** 103, все ✅ · **Покрытие общее:** 98% (`pytest-cov`)
 
 ---
 
@@ -14,6 +14,7 @@
 | `test_auth.py` | интеграционный (TestClient + реальная БД) | FR-0: логин/выход/блокировка — сессия создаётся, после 5 ошибок lockout 15 мин, logout чистит сессию |
 | `test_config_manager.py` | модульный + интеграционный (session fixture, TestClient) | FR-2 (S4 #6, ADR-005): создание Lesson/ArtifactDef/EdgeDef/Rubric из YAML, идемпотентность reload, repoint рубрики со старыми вердиктами нетронутыми, флаг golden set, ограничитель «config_* вызывает только config_manager», роут /admin/reload-config, чтение конфига на старте |
 | `test_csv_import.py` | интеграционный (TestClient + MockTransport) | FR-1: CSV-импорт создаёт репозитории, дубликаты (И6) отсеиваются, reimport не теряет старые, без авторизации → 401 |
+| `test_health.py` | интеграционный (TestClient + реальная БД) | FR-8 (I2 #13): /health без аутентификации — время последнего обхода, пары без вердикта, deferred по причинам, нули на пустой БД |
 | `test_git_client.py` | модульный (MockTransport, без сети) | FR-3/NFR-4: GitHub и GitLab API — деревья + файлы + head SHA (FR-9), 401→GitAuthFailedError, 429→пауза+ретрай, исчерпание лимита, изоляция ошибок между репо |
 | `test_matrix_builder.py` | модульный (session fixture + alembic) | FR-4 (D1 #12): матрица «репо × занятие» — статусы ячеек, partial_reason, последний снапшот побеждает, «актуально на», пустая БД |
 | `test_dashboard_matrix.py` | интеграционный (TestClient + реальная БД) | FR-4 (D1 #12): GET / рендерит матрицу — строка репозитория, колонка занятия, partial_reason, «Актуально на», редирект без сессии |
@@ -42,7 +43,7 @@
 | `app/routes/admin.py` | 34 | 1 miss | **97%** | test_csv_import, test_config_manager, test_sync_orchestrator |
 | `app/services/matrix_builder.py` | 29 | 1 miss | **97%** | test_matrix_builder (агрегация ячеек), test_dashboard_matrix |
 | `app/routes/dashboard.py` | 12 | ✅ | **100%** | test_app_starts, test_dashboard_matrix |
-| `app/routes/health.py` | 5 | ✅ | **100%** | test_app_starts |
+| `app/routes/health.py` | 18 | ✅ | **100%** | test_health |
 | `app/routes/__init__.py` | 8 | 3 miss | **62%** | все тесты через dependency override → сид сессии |
 
 ---
