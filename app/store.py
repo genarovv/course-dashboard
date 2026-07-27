@@ -334,6 +334,11 @@ def find_latest_verdict_for_quadruple(
     )
 
 
+def find_verdict_by_id(session: Session, verdict_id: str) -> CoherenceVerdict | None:
+    """FR-10: вердикт по ID (цель отметки «ложный разрыв»)."""
+    return session.get(CoherenceVerdict, verdict_id)
+
+
 # ── FR-10: Override find_* ─────────────────────────────────────────────────
 
 

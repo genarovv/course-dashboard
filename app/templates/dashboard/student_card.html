@@ -30,6 +30,13 @@
         </ul>
         {% endif %}
         {% if edge.notes %}<p class="notes">{{ edge.notes }}</p>{% endif %}
+        {% if edge.verdict == "break" %}
+        <form method="post" action="/verdicts/{{ edge.verdict_id }}/override-toggle">
+            <button type="submit">
+                {{ "снять отметку «ложный разрыв»" if edge.override_active else "ложный разрыв" }}
+            </button>
+        </form>
+        {% endif %}
         {% endif %}
     </article>
     {% endfor %}

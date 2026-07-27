@@ -13,6 +13,7 @@
             {% for lesson in matrix.lessons %}
             <th title="{{ lesson.title }}">{{ lesson.number }}. {{ lesson.title }}</th>
             {% endfor %}
+            <th>Разрывы связности</th>
         </tr>
     </thead>
     <tbody>
@@ -32,6 +33,24 @@
                 {% endif %}
             </td>
             {% endfor %}
+            <td class="breaks">
+                {% for break_card in matrix.breaks.get(repo.id, []) %}
+                <div class="break{% if break_card.override_active %} break-overridden{% endif %}">
+                    {{ break_card.source_role }}→{{ break_card.target_role }}
+                    {% if break_card.override_active %}
+                    <span class="override">отмечен как ложный</span>
+                    {% endif %}
+                    <form method="post" action="/verdicts/{{ break_card.verdict_id }}/override-toggle">
+                        <button type="submit">
+                            {{ "снять отметку «ложный разрыв»" if break_card.override_active
+                               else "ложный разрыв" }}
+                        </button>
+                    </form>
+                </div>
+                {% else %}
+                <span class="no-breaks">—</span>
+                {% endfor %}
+            </td>
         </tr>
         {% endfor %}
     </tbody>

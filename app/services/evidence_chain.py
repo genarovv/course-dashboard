@@ -67,6 +67,14 @@ def _edge_card(session: Session, repository_id: str, edge, llm_model: str) -> di
     return card
 
 
+def edge_states(session: Session, repository_id: str, llm_model: str) -> list[dict]:
+    """Состояния всех рёбер конвейера для репозитория (карточка + разрывы матрицы, O2)."""
+    return [
+        _edge_card(session, repository_id, edge, llm_model)
+        for edge in store.find_all_edge_defs(session)
+    ]
+
+
 def build_student_card(
     session: Session, repository_id: str, *, llm_model: str | None = None
 ) -> dict | None:
@@ -96,10 +104,7 @@ def build_student_card(
         }
         for snap in store.find_snapshots_by_repository(session, repository_id)
     ]
-    edges = [
-        _edge_card(session, repository_id, edge, llm_model)
-        for edge in store.find_all_edge_defs(session)
-    ]
+    edges = edge_states(session, repository_id, llm_model)
     return {
         "repository": {"id": repo.id, "repo_url": repo.repo_url, "git_host": repo.git_host},
         "timeline": timeline,
