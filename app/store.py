@@ -20,6 +20,7 @@ from app.models import GitHost, SyncOutcome, SyncStatus, SyncTrigger, VerdictVal
 from app.models.artifact_def import ArtifactDef
 from app.models.artifact_snapshot import ArtifactSnapshot
 from app.models.coherence_verdict import CoherenceVerdict
+from app.models.edge_def import EdgeDef
 from app.models.git_credential import GitCredential
 from app.models.lesson import Lesson
 from app.models.override import Override
@@ -151,7 +152,73 @@ def update_credential_validity(session: Session, credential_id: str, *, is_valid
     credential.checked_at = datetime.utcnow()
 
 
+# ── КОНФИГ-РЕКОНСИЛЯЦИЯ из config.yaml (категория 3 §3.5, ADR-005) ──────────
+# Единственный вызывающий — config_manager (ограничитель закреплён тестом на импорт).
+
+
+def config_upsert_lesson(session: Session, *, number: int, title: str, date) -> tuple[Lesson, str]:
+    """FR-2: занятие из config.yaml. Возвращает (lesson, 'created'|'updated'|'unchanged')."""
+    lesson = session.scalar(select(Lesson).where(Lesson.number == number))
+    if lesson is None:
+        lesson = Lesson(number=number, title=title, date=date)
+        session.add(lesson)
+        return lesson, "created"
+    if (lesson.title, lesson.date) != (title, date):
+        lesson.title = title
+        lesson.date = date
+        return lesson, "updated"
+    return lesson, "unchanged"
+
+
+def config_upsert_artifact_def(
+    session: Session, *, lesson_id: str, role, expected_pattern: str,
+    template_relative_path: str | None = None,
+) -> tuple[ArtifactDef, str]:
+    """FR-2: ожидаемый артефакт занятия. Возвращает (artifact_def, 'created'|'updated'|'unchanged')."""
+    adef = session.scalar(
+        select(ArtifactDef).where(ArtifactDef.lesson_id == lesson_id, ArtifactDef.role == role)
+    )
+    if adef is None:
+        adef = ArtifactDef(
+            lesson_id=lesson_id, role=role, expected_pattern=expected_pattern,
+            template_relative_path=template_relative_path,
+        )
+        session.add(adef)
+        return adef, "created"
+    if (adef.expected_pattern, adef.template_relative_path) != (expected_pattern, template_relative_path):
+        adef.expected_pattern = expected_pattern
+        adef.template_relative_path = template_relative_path
+        return adef, "updated"
+    return adef, "unchanged"
+
+
+def config_create_edge_def(session: Session, *, source_role, target_role, rubric_id: str) -> "EdgeDef":
+    """FR-5: новое ребро связности из config.yaml."""
+    edge = EdgeDef(source_role=source_role, target_role=target_role, rubric_id=rubric_id)
+    session.add(edge)
+    return edge
+
+
+def config_repoint_edge_rubric(session: Session, *, edge_def_id: str, rubric_id: str) -> None:
+    """FR-2 (ADR-005): перенаправление ребра на новую версию рубрики.
+
+    Старые вердикты не трогаются — они привязаны к своим версиям через rubric_id
+    в четвёрке И3. Смена рубрики = обязательный прогон golden set (CLAUDE.md).
+    """
+    edge = session.get(EdgeDef, edge_def_id)
+    edge.rubric_id = rubric_id
+
+
 # ── SELECT: find_* ───────────────────────────────────────────────────────────
+
+
+def find_edge_def_by_roles(session: Session, source_role, target_role) -> "EdgeDef | None":
+    """FR-2/FR-5: ребро по паре ролей (UNIQUE source_role+target_role, И10)."""
+    return session.scalar(
+        select(EdgeDef).where(
+            EdgeDef.source_role == source_role, EdgeDef.target_role == target_role
+        )
+    )
 
 
 def find_user_by_username(session: Session, username: str) -> SystemUser | None:

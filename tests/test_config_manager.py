@@ -26,7 +26,6 @@ from app.config import settings
 from app.main import app
 from app.models.coherence_verdict import CoherenceVerdict
 from app.models.edge_def import EdgeDef
-from app.models.lesson import Lesson
 from app.models.rubric import Rubric
 from app.routes import get_session
 from app.services import config_manager

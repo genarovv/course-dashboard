@@ -1,8 +1,8 @@
 # MAP — Тесты и покрытие course-dashboard
 
-**Дата:** 2026-07-28 (обновлено в MR тикета D1 #12)
+**Дата:** 2026-07-28 (обновлено в MR тикета S4 #6)
 **Стек:** Python 3.13 · FastAPI · SQLAlchemy 2.x (Mapped) · SQLite (WAL) · Alembic · Jinja2+HTMX · bcrypt
-**Тестов:** 55, все ✅ · **Покрытие общее:** 97% (`pytest-cov`)
+**Тестов:** 64, все ✅ · **Покрытие общее:** 97% (`pytest-cov`)
 
 ---
 
@@ -12,6 +12,7 @@
 |---|---|---|
 | `test_app_starts.py` | интеграционный (TestClient) | Скелет приложения: `/health` отвечает 200, `/login` отдаёт форму, `/` без авторизации → 303 на `/login` |
 | `test_auth.py` | интеграционный (TestClient + реальная БД) | FR-0: логин/выход/блокировка — сессия создаётся, после 5 ошибок lockout 15 мин, logout чистит сессию |
+| `test_config_manager.py` | модульный + интеграционный (session fixture, TestClient) | FR-2 (S4 #6, ADR-005): создание Lesson/ArtifactDef/EdgeDef/Rubric из YAML, идемпотентность reload, repoint рубрики со старыми вердиктами нетронутыми, флаг golden set, ограничитель «config_* вызывает только config_manager», роут /admin/reload-config, чтение конфига на старте |
 | `test_csv_import.py` | интеграционный (TestClient + MockTransport) | FR-1: CSV-импорт создаёт репозитории, дубликаты (И6) отсеиваются, reimport не теряет старые, без авторизации → 401 |
 | `test_git_client.py` | модульный (MockTransport, без сети) | FR-3/NFR-4: GitHub и GitLab API — деревья + файлы, 401→GitAuthFailedError, 429→пауза+ретрай, исчерпание лимита, изоляция ошибок между репо |
 | `test_matrix_builder.py` | модульный (session fixture + alembic) | FR-4 (D1 #12): матрица «репо × занятие» — статусы ячеек, partial_reason, последний снапшот побеждает, «актуально на», пустая БД |
@@ -33,6 +34,7 @@
 | `app/clients/git_client.py` | 81 | 8 miss | **90%** | test_git_client (MockTransport) |
 | `app/clients/llm_client.py` | 0 | — | **пустой** | — (заглушка, Фаза 0 gate) |
 | `app/services/csv_importer.py` | 38 | 1 miss | **97%** | test_csv_import |
+| `app/services/config_manager.py` | 75 | ✅ | **100%** | test_config_manager |
 | `app/routes/auth.py` | 41 | 2 miss | **95%** | test_auth |
 | `app/routes/admin.py` | 16 | 1 miss | **94%** | test_csv_import |
 | `app/services/matrix_builder.py` | 29 | 1 miss | **97%** | test_matrix_builder (агрегация ячеек), test_dashboard_matrix |
@@ -49,7 +51,6 @@
 | `services/sync_orchestrator.py` | **пустой** (0 строк) | Тикет G2 #9 — не начат |
 | `services/coherence_analyzer.py` | **пустой** (0 строк) | ⛔ Фаза 0 gate (PRD §13) — железное правило CLAUDE.md |
 | `services/evidence_chain.py` | **пустой** (0 строк) | Тикет D4 #14 — не начат |
-| `services/config_manager.py` | **пустой** (0 строк) | Тикет S4 #6 — не начат |
 | `clients/llm_client.py` | **пустой** (0 строк) | Тикет C1 — не начат (после Фаза 0) |
 
 ---
@@ -61,8 +62,7 @@
 1. **sync_orchestrator.py** — дыра или сознательно не тестируем?
 2. **coherence_analyzer.py** — ⛔ Фаза 0 gate, но: дыра или сознательно не тестируем?
 3. **evidence_chain.py** — дыра или сознательно не тестируем?
-4. **config_manager.py** — дыра или сознательно не тестируем?
-5. **llm_client.py** — дыра или сознательно не тестируем?
+4. **llm_client.py** — дыра или сознательно не тестируем?
 
 **Пропуски в покрытых модулях:**
 
@@ -71,13 +71,6 @@
 
 ---
 
-## 5. Рекомендация: где начать test-first
+## 5. Рекомендация: где продолжать test-first
 
-**S4 — config_manager** (тикет [#6](https://github.com/genarovv/course-dashboard/issues/6)).
-
-Почему именно он:
-- **Нет gate-ограничений** — в отличие от coherence_analyzer (⛔ Фаза 0)
-- **Дешёвый модуль** — YAML → Pydantic → diff с БД → append-only register_rubric + update Lesson/ArtifactDef/EdgeDef (контракт §3.5, категория 3)
-- **Закрывает реальную дыру** — единственный из Stage 2, кто не написан
-- **Высокая тестуемость** — стопка YAML, БД с миграциями, всё локальное, без внешних вызовов
-- **Открывает путь к G2** — sync_orchestrator зависит от конфига (рубрики, артефакты, рёбра)
+**G2 — sync_orchestrator** (тикет [#9](https://github.com/genarovv/course-dashboard/issues/9)): конфиг готов (S4), git_client готов (G1) — обход можно тестировать на фейковом клиенте без сети; за ним стеком G3 (детект заготовок) и G4 (свод-реконсиляция).
