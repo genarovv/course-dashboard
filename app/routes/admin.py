@@ -44,7 +44,11 @@ async def sync(
     if "user_id" not in request.session and not token_ok:  # BR-4: teacher-only
         return JSONResponse({"error": "не аутентифицирован"}, status_code=401)
     triggered_by = SyncTrigger.schedule if token_ok else SyncTrigger.manual
-    run = await sync_orchestrator.run_sync(session, git_client, triggered_by=triggered_by)
+    # адрес репозитория-шаблона — из config.yaml (PRD FR-4, D35)
+    template_repo = config_manager.load_config().template_repo
+    run = await sync_orchestrator.run_sync(
+        session, git_client, triggered_by=triggered_by, template_repo=template_repo
+    )
     return JSONResponse({"sync_run_id": run.id, "status": run.status})
 
 

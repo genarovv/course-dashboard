@@ -15,7 +15,7 @@ from sqlalchemy.orm import Session
 
 from app import store
 from app.config import settings
-from app.models import ArtifactRole, RubricType
+from app.models import ArtifactRole, GitHost, RubricType
 
 
 class ArtifactConfig(BaseModel):
@@ -43,9 +43,18 @@ class EdgeConfig(BaseModel):
     rubric: RubricConfig
 
 
+class TemplateRepoConfig(BaseModel):
+    """PRD FR-4: адрес репозитория-шаблона задаётся в конфиге FR-2 (D35, детект заготовок)."""
+
+    url: str
+    git_host: GitHost = GitHost.GitHub
+    branch: str = "main"
+
+
 class ConfigYAML(BaseModel):
     lessons: list[LessonConfig]
     edges: list[EdgeConfig] = Field(default_factory=list)
+    template_repo: TemplateRepoConfig | None = None
 
 
 class ReloadSummary(BaseModel):

@@ -3,6 +3,12 @@
 # Смена текста/версии рубрики = новая append-only строка Rubric + прогон golden set (CLAUDE.md).
 # Паттерны артефактов — по структуре project-context-template (контракт артефактов, курсовой ADR-003).
 
+# PRD FR-4 / D35: эталон для детекта заготовок — публичный репозиторий шаблона
+template_repo:
+  url: "https://github.com/genarovv/project-context-template"
+  git_host: GitHub
+  branch: main
+
 lessons:
   - number: 3
     title: "Customer development и проблемные интервью"

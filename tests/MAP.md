@@ -2,7 +2,7 @@
 
 **Дата:** 2026-07-28 (обновлено в MR тикета G3 #10)
 **Стек:** Python 3.13 · FastAPI · SQLAlchemy 2.x (Mapped) · SQLite (WAL) · Alembic · Jinja2+HTMX · bcrypt
-**Тестов:** 88, все ✅ · **Покрытие общее:** 98% (`pytest-cov`)
+**Тестов:** 92, все ✅ · **Покрытие общее:** 97% (`pytest-cov`)
 
 ---
 
@@ -36,7 +36,7 @@
 | `app/clients/llm_client.py` | 0 | — | **пустой** | — (заглушка, Фаза 0 gate) |
 | `app/services/csv_importer.py` | 38 | 1 miss | **97%** | test_csv_import |
 | `app/services/config_manager.py` | 75 | ✅ | **100%** | test_config_manager |
-| `app/services/sync_orchestrator.py` | 112 | 1 miss | **99%** | test_sync_orchestrator (в т.ч. G3: template_copy, wrong_place, деградация шаблона) |
+| `app/services/sync_orchestrator.py` | 122 | 2 miss | **98%** | test_sync_orchestrator (в т.ч. G3: template_copy, пустой файл, wrong_place без залипания, деградация шаблона с warning) |
 | `app/routes/auth.py` | 41 | 2 miss | **95%** | test_auth |
 | `app/routes/admin.py` | 34 | 1 miss | **97%** | test_csv_import, test_config_manager, test_sync_orchestrator |
 | `app/services/matrix_builder.py` | 29 | 1 miss | **97%** | test_matrix_builder (агрегация ячеек), test_dashboard_matrix |

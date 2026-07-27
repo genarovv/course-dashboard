@@ -14,11 +14,9 @@ class Settings(BaseSettings):
     deepseek_model: str = "deepseek-v4-flash"
     secret_key: str = "change-me"
     template_dir: str = str(Path(__file__).parent / "templates")
-    # FR-2: эталонный конфиг курса (§3.4) — источник правды для Lesson/ArtifactDef/EdgeDef/Rubric
+    # FR-2: эталонный конфиг курса (§3.4) — источник правды для Lesson/ArtifactDef/EdgeDef/Rubric;
+    # там же — адрес репозитория-шаблона для детекта заготовок (PRD FR-4, D35)
     config_yaml_path: str = str(Path(__file__).parent / "config.yaml")
-    # D35/BR-3: репозиторий-шаблон для детекта заготовок (пусто — детект выключен)
-    template_repo_url: str = ""
-    template_repo_host: str = "GitHub"
     static_dir: str = str(Path(__file__).parent / "static")
 
     model_config = {"env_prefix": "CD_", "env_file": ".env"}

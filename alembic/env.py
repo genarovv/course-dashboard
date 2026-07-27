@@ -21,7 +21,9 @@ from app.models import (  # noqa: F401 — ensure models are registered
 
 config = context.config
 if config.config_file_name is not None:
-    fileConfig(config.config_file_name)
+    # disable_existing_loggers=False: иначе fileConfig глушит логгеры приложения,
+    # уже созданные к моменту миграции (в тестах alembic и app живут в одном процессе)
+    fileConfig(config.config_file_name, disable_existing_loggers=False)
 
 target_metadata = Base.metadata
 

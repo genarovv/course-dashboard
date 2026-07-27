@@ -329,7 +329,7 @@ async def test_template_unavailable_degrades_to_no_detection(session, caplog):
     snap = store.find_last_snapshot(session, repo.id, adef.id)
     assert snap.status == SnapshotStatus.found
     assert run.status == SyncStatus.completed
-    assert any("шаблон" in r.message.lower() for r in caplog.records)  # след деградации
+    assert any("шаблон" in r.getMessage().lower() for r in caplog.records)  # след деградации
 
 
 @pytest.mark.anyio

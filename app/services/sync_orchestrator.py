@@ -7,6 +7,7 @@
 """
 
 import hashlib
+import logging
 import re
 
 from sqlalchemy.orm import Session
@@ -17,11 +18,12 @@ from app.clients.git_client import (
     GitClientError,
     GitRateLimitedError,
 )
-from app.config import settings
 from app.models import SnapshotStatus, SyncOutcome, SyncStatus, SyncTrigger
 from app.models.artifact_def import ArtifactDef
 from app.models.repository import Repository
 from app.models.sync_run import SyncRun
+
+logger = logging.getLogger(__name__)
 
 _OK_OUTCOMES = {SyncOutcome.ok_changed, SyncOutcome.ok_unchanged}
 
@@ -67,26 +69,31 @@ def _find_displaced(pattern: str, tree: list[str]) -> str | None:
     return candidates[0] if candidates else None
 
 
-async def _fetch_template_hashes(git_client) -> frozenset[str]:
+async def _fetch_template_hashes(git_client, template_repo) -> frozenset[str]:
     """D35: content_hash всех файлов репозитория-шаблона — один раз за обход.
 
-    Шаблон не настроен или недоступен — детект деградирует до «выключен»
-    на этот обход, сам обход не валится (NFR-2).
+    Адрес шаблона — из config.yaml (PRD FR-4: «задаётся в конфиге FR-2»),
+    сюда приходит как ConfigYAML.template_repo. Шаблон не настроен или
+    недоступен — детект деградирует до «выключен» на этот обход с warning
+    в логе, сам обход не валится (NFR-2).
     """
-    if not settings.template_repo_url:
+    if template_repo is None:
         return frozenset()
     try:
         tree = await git_client.get_tree(
-            settings.template_repo_url, settings.template_repo_host
+            template_repo.url, template_repo.git_host, ref=template_repo.branch
         )
         hashes = set()
         for path in tree:
             content = await git_client.get_file_content(
-                settings.template_repo_url, settings.template_repo_host, path
+                template_repo.url, template_repo.git_host, path, ref=template_repo.branch
             )
             hashes.add(_content_hash(content))
         return frozenset(hashes)
-    except GitClientError:
+    except GitClientError as exc:
+        logger.warning(
+            "Репозиторий-шаблон недоступен (%s) — детект заготовок выключен на этот обход", exc
+        )
         return frozenset()
 
 
@@ -131,15 +138,23 @@ async def _observe_artifact(
 ) -> bool:
     """Наблюдение одного артефакта; True — наблюдение изменилось (записан новый снапшот)."""
     matches = _match_artifact(artifact_def, tree)
-    if matches:
-        file_path = matches[0]  # представитель — первый по алфавиту
-        content_hash = await _hash_matches(git_client, repo, matches)
-        # D35: сравнение с шаблоном — по хешу файла; мульти-файловое наблюдение
-        # (хеш связки) с шаблоном не совпадает by construction (см. issue #10)
-        if content_hash in template_hashes:
+    if matches and len(matches) == 1:
+        file_path = matches[0]
+        content = await git_client.get_file_content(
+            repo.repo_url, repo.git_host, file_path, ref=repo.default_branch
+        )
+        content_hash = _content_hash(content)
+        # BR-3: заготовка = пустой файл ИЛИ не изменён относительно шаблона (D35)
+        if not content.strip() or content_hash in template_hashes:
             status, partial_reason = SnapshotStatus.partial, ["template_copy"]
         else:
             status, partial_reason = SnapshotStatus.found, None
+    elif matches:
+        # мульти-файловое наблюдение: хеш связки, с шаблоном не сравнивается
+        # by construction (см. issue #10); представитель — первый по алфавиту
+        file_path = matches[0]
+        content_hash = await _hash_matches(git_client, repo, matches)
+        status, partial_reason = SnapshotStatus.found, None
     elif displaced := _find_displaced(artifact_def.expected_pattern, tree):
         file_path = displaced
         content = await git_client.get_file_content(
@@ -147,10 +162,10 @@ async def _observe_artifact(
         )
         content_hash = _content_hash(content)
         # приоритет причин — C3: template_copy > wrong_place
-        partial_reason = (
-            ["template_copy", "wrong_place"] if content_hash in template_hashes
-            else ["wrong_place"]
-        )
+        if not content.strip() or content_hash in template_hashes:
+            partial_reason = ["template_copy", "wrong_place"]
+        else:
+            partial_reason = ["wrong_place"]
         status = SnapshotStatus.partial
     else:
         status, partial_reason, file_path, content_hash = (
@@ -158,8 +173,11 @@ async def _observe_artifact(
         )
 
     last = store.find_last_snapshot(session, repo.id, artifact_def.id)
-    if last is not None and (last.status, last.content_hash) == (status, content_hash):
-        return False  # D28: наблюдение не изменилось — снапшот не пишем
+    observed = (status, content_hash, file_path, partial_reason)
+    if last is not None and observed == (
+        last.status, last.content_hash, last.file_path, last.partial_reason or None
+    ):
+        return False  # D28: наблюдение (включая причины и место) не изменилось — снапшот не пишем
 
     fields = dict(
         sync_run_id=sync_run_id,
@@ -218,6 +236,7 @@ async def run_sync(
     git_client,
     *,
     triggered_by: SyncTrigger = SyncTrigger.schedule,
+    template_repo=None,  # ConfigYAML.template_repo (PRD FR-4); None — детект заготовок выключен
 ) -> SyncRun:
     """Полный обход активных репозиториев (§5.1). Возвращает SyncRun с финальным статусом."""
     run = store.register_sync_run(session, triggered_by=triggered_by)
@@ -228,7 +247,7 @@ async def run_sync(
         for lesson in store.find_all_lessons(session)
         for adef in store.find_artifact_defs_by_lesson(session, lesson.id)
     ]
-    template_hashes = await _fetch_template_hashes(git_client)  # D35: раз за обход
+    template_hashes = await _fetch_template_hashes(git_client, template_repo)  # D35: раз за обход
 
     outcomes: list[SyncOutcome] = []
     for repo in store.find_active_repositories(session):
