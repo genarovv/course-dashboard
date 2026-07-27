@@ -14,11 +14,11 @@
 | `test_auth.py` | интеграционный (TestClient + реальная БД) | FR-0: логин/выход/блокировка — сессия создаётся, после 5 ошибок lockout 15 мин, logout чистит сессию |
 | `test_config_manager.py` | модульный + интеграционный (session fixture, TestClient) | FR-2 (S4 #6, ADR-005): создание Lesson/ArtifactDef/EdgeDef/Rubric из YAML, идемпотентность reload, repoint рубрики со старыми вердиктами нетронутыми, флаг golden set, ограничитель «config_* вызывает только config_manager», роут /admin/reload-config, чтение конфига на старте |
 | `test_csv_import.py` | интеграционный (TestClient + MockTransport) | FR-1: CSV-импорт создаёт репозитории, дубликаты (И6) отсеиваются, reimport не теряет старые, без авторизации → 401 |
-| `test_git_client.py` | модульный (MockTransport, без сети) | FR-3/NFR-4: GitHub и GitLab API — деревья + файлы, 401→GitAuthFailedError, 429→пауза+ретрай, исчерпание лимита, изоляция ошибок между репо |
+| `test_git_client.py` | модульный (MockTransport, без сети) | FR-3/NFR-4: GitHub и GitLab API — деревья + файлы + head SHA (FR-9), 401→GitAuthFailedError, 429→пауза+ретрай, исчерпание лимита, изоляция ошибок между репо |
 | `test_matrix_builder.py` | модульный (session fixture + alembic) | FR-4 (D1 #12): матрица «репо × занятие» — статусы ячеек, partial_reason, последний снапшот побеждает, «актуально на», пустая БД |
 | `test_dashboard_matrix.py` | интеграционный (TestClient + реальная БД) | FR-4 (D1 #12): GET / рендерит матрицу — строка репозитория, колонка занятия, partial_reason, «Актуально на», редирект без сессии |
 | `test_migrations.py` | интеграционный (alembic upgrade + raw SQL) | DDL: все 12 таблиц созданы, сид system_user, downgrade без ошибок, И1 (XOR), И3 (quad unique), И4 (one active override), И5 (append-only триггеры), И6 (norm URL unique), И8 (snapshot CHECK), И9+И11 (уникальность тройки/пары), И10 (reference uniqueness) |
-| `test_sync_orchestrator.py` | модульный (FakeGitClient) + интеграционный (TestClient) | FR-8/FR-4 (G2 #9): классификация found/not_found, sha256, инкрементальность D28 (без дубля снапшота), исходы ok_changed/ok_unchanged/repo_unavailable/auth_failed/skipped_rate_limit, статусы SyncRun, архивные репо пропущены, POST /sync (сессия / X-Sync-Token / 401) |
+| `test_sync_orchestrator.py` | модульный (FakeGitClient) + интеграционный (TestClient) | FR-8/FR-4 (G2 #9): классификация found/not_found, sha256 (в т.ч. мульти-совпадение паттерна и `**`-глоб), source_commit_sha (FR-9), инкрементальность D28, исходы всех 5 видов + detail, статусы SyncRun, архивные репо пропущены, POST /sync (сессия / X-Sync-Token / 401) |
 | `test_store.py` | модульный (session fixture) | Контракт store.py: ровно 4 `update_*`, нет `delete_*`, все `register_*` на месте, `normalize_url()`, CRUD-флоу репозиториев/runs/credentials/overrides, `find_verdict_by_quadruple` |
 
 ---
@@ -36,9 +36,9 @@
 | `app/clients/llm_client.py` | 0 | — | **пустой** | — (заглушка, Фаза 0 gate) |
 | `app/services/csv_importer.py` | 38 | 1 miss | **97%** | test_csv_import |
 | `app/services/config_manager.py` | 75 | ✅ | **100%** | test_config_manager |
-| `app/services/sync_orchestrator.py` | 72 | 2 miss | **97%** | test_sync_orchestrator |
+| `app/services/sync_orchestrator.py` | 91 | 2 miss | **98%** | test_sync_orchestrator |
 | `app/routes/auth.py` | 41 | 2 miss | **95%** | test_auth |
-| `app/routes/admin.py` | 16 | 1 miss | **94%** | test_csv_import |
+| `app/routes/admin.py` | 34 | 1 miss | **97%** | test_csv_import, test_config_manager, test_sync_orchestrator |
 | `app/services/matrix_builder.py` | 29 | 1 miss | **97%** | test_matrix_builder (агрегация ячеек), test_dashboard_matrix |
 | `app/routes/dashboard.py` | 12 | ✅ | **100%** | test_app_starts, test_dashboard_matrix |
 | `app/routes/health.py` | 5 | ✅ | **100%** | test_app_starts |
