@@ -71,6 +71,21 @@ class GitClient:
             page = response.headers.get("x-next-page", "")
         return paths
 
+    async def get_head_sha(self, repo_url: str, git_host: str, ref: str = "main") -> str:
+        """SHA головного коммита ветки — свидетельство доказательной цепочки FR-9."""
+        host, path = _parse_repo(repo_url)
+        if git_host == "GitHub":
+            data = await self._request_json(
+                f"https://api.github.com/repos/{path}/commits/{quote(ref)}",
+                self._github_headers(),
+            )
+            return data["sha"]
+        data = await self._request_json(
+            f"https://{host}/api/v4/projects/{quote(path, safe='')}/repository/commits/{quote(ref)}",
+            self._gitlab_headers(),
+        )
+        return data["id"]
+
     async def get_file_content(self, repo_url: str, git_host: str, file_path: str, ref: str = "main") -> str:
         """Сырое содержимое файла."""
         host, path = _parse_repo(repo_url)

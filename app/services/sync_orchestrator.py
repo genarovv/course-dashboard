@@ -7,7 +7,7 @@
 """
 
 import hashlib
-from pathlib import PurePosixPath
+import re
 
 from sqlalchemy.orm import Session
 
@@ -29,13 +29,28 @@ def _content_hash(content: str) -> str:
     return hashlib.sha256(content.encode("utf-8")).hexdigest()
 
 
-def _match_artifact(artifact_def: ArtifactDef, tree: list[str]) -> str | None:
-    """Первый (лексикографически) путь дерева, подходящий под expected_pattern."""
-    matches = [
-        path for path in tree
-        if PurePosixPath(path).full_match(artifact_def.expected_pattern)
-    ]
-    return min(matches) if matches else None
+def _glob_regex(pattern: str) -> re.Pattern:
+    """Глоб → regex: `**` — любое число сегментов, `*` — внутри сегмента.
+
+    Своя трансляция, а не PurePosixPath.full_match: full_match появился в 3.13,
+    проект заявляет Python 3.12+ (pyproject/CLAUDE.md).
+    """
+    segments = pattern.split("/")
+    parts = []
+    for i, segment in enumerate(segments):
+        last = i == len(segments) - 1
+        if segment == "**":
+            parts.append(".*" if last else "(?:[^/]+/)*")
+            continue
+        escaped = re.escape(segment).replace(r"\*", "[^/]*").replace(r"\?", "[^/]")
+        parts.append(escaped if last else escaped + "/")
+    return re.compile("^" + "".join(parts) + "$")
+
+
+def _match_artifact(artifact_def: ArtifactDef, tree: list[str]) -> list[str]:
+    """Все пути дерева под expected_pattern, отсортированы (детерминизм наблюдения)."""
+    regex = _glob_regex(artifact_def.expected_pattern)
+    return sorted(path for path in tree if regex.match(path))
 
 
 def _classify(
@@ -57,6 +72,27 @@ def _outcome_for_error(exc: GitClientError) -> SyncOutcome:
     return SyncOutcome.repo_unavailable  # GitRepoUnavailableError и прочие GitClientError
 
 
+async def _hash_matches(git_client, repo: Repository, matches: list[str]) -> str:
+    """Хеш наблюдения артефакта по всем совпавшим файлам.
+
+    Один файл — sha256 содержимого (совместимо с G3-сравнением против шаблона).
+    Несколько — sha256 связки «путь + хеш файла» по отсортированным путям:
+    изменение любого из файлов меняет наблюдение (fix по ревью G2, находка 1).
+    """
+    if len(matches) == 1:
+        content = await git_client.get_file_content(
+            repo.repo_url, repo.git_host, matches[0], ref=repo.default_branch
+        )
+        return _content_hash(content)
+    parts = []
+    for path in matches:
+        content = await git_client.get_file_content(
+            repo.repo_url, repo.git_host, path, ref=repo.default_branch
+        )
+        parts.append(f"{path}\0{_content_hash(content)}")
+    return _content_hash("\0".join(parts))
+
+
 async def _observe_artifact(
     session: Session,
     git_client,
@@ -64,16 +100,13 @@ async def _observe_artifact(
     repo: Repository,
     artifact_def: ArtifactDef,
     tree: list[str],
+    head_sha: str | None,
     template_hashes: frozenset[str],
 ) -> bool:
     """Наблюдение одного артефакта; True — наблюдение изменилось (записан новый снапшот)."""
-    file_path = _match_artifact(artifact_def, tree)
-    content_hash = None
-    if file_path is not None:
-        content = await git_client.get_file_content(
-            repo.repo_url, repo.git_host, file_path, ref=repo.default_branch
-        )
-        content_hash = _content_hash(content)
+    matches = _match_artifact(artifact_def, tree)
+    file_path = matches[0] if matches else None  # представитель — первый по алфавиту
+    content_hash = await _hash_matches(git_client, repo, matches) if matches else None
     status, partial_reason = _classify(content_hash, template_hashes)
     if status == SnapshotStatus.not_found:
         file_path = None  # И8: у not_found нет file_path/sha
@@ -89,6 +122,8 @@ async def _observe_artifact(
         status=status,
         file_path=file_path,
         content_hash=content_hash,
+        # FR-9: SHA головы ветки — свидетельство «такая версия существовала» (C4)
+        source_commit_sha=head_sha if status != SnapshotStatus.not_found else None,
     )
     if partial_reason is not None:
         # явный None в JSON-колонке стал бы json-'null' и нарушил бы CHECK И8
@@ -104,17 +139,23 @@ async def _sync_one_repo(
     repo: Repository,
     artifact_defs: list[ArtifactDef],
     template_hashes: frozenset[str],
-) -> SyncOutcome:
+) -> tuple[SyncOutcome, str | None]:
     try:
         tree = await git_client.get_tree(repo.repo_url, repo.git_host, ref=repo.default_branch)
+        head_sha = await git_client.get_head_sha(
+            repo.repo_url, repo.git_host, ref=repo.default_branch
+        )
         changed = False
         for artifact_def in artifact_defs:
             changed |= await _observe_artifact(
-                session, git_client, sync_run_id, repo, artifact_def, tree, template_hashes
+                session, git_client, sync_run_id, repo, artifact_def, tree, head_sha,
+                template_hashes,
             )
-        return SyncOutcome.ok_changed if changed else SyncOutcome.ok_unchanged
+        return SyncOutcome.ok_changed if changed else SyncOutcome.ok_unchanged, None
     except GitClientError as exc:  # NFR-2: ошибка репозитория — исход, не крах обхода
-        return _outcome_for_error(exc)
+        # Ошибка посреди цикла артефактов: уже записанные наблюдения остаются —
+        # append-only журнал истинен, исход честно говорит «не дочитано» (§5.3)
+        return _outcome_for_error(exc), str(exc)[:500]
 
 
 def _final_status(outcomes: list[SyncOutcome]) -> SyncStatus:
@@ -145,11 +186,11 @@ async def run_sync(
 
     outcomes: list[SyncOutcome] = []
     for repo in store.find_active_repositories(session):
-        outcome = await _sync_one_repo(
+        outcome, detail = await _sync_one_repo(
             session, git_client, run.id, repo, artifact_defs, template_hashes
         )
         store.register_sync_outcome(
-            session, sync_run_id=run.id, repository_id=repo.id, outcome=outcome
+            session, sync_run_id=run.id, repository_id=repo.id, outcome=outcome, detail=detail
         )
         outcomes.append(outcome)
 
