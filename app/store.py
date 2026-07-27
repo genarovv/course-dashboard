@@ -1,9 +1,11 @@
 """store.py — единая точка доступа к данным (S2, тикет #3; ARCHITECTURE §3.1, §3.5).
 
-Контракт «журнал vs состояние»:
+Контракт «журнал vs состояние vs конфиг» — три категории (§3.5, ADR-005):
 - журнальные сущности (Rubric, ArtifactSnapshot, CoherenceVerdict, SyncRunRepository,
   создание Override) — только register_* (INSERT) и find_* (SELECT);
-- состояние — ровно 4 узких update_* (см. §3.5); delete_* нет вообще;
+- рабочее состояние — ровно 4 узких update_* (см. §3.5); delete_* нет вообще;
+- конфиг-реконсиляция из config.yaml (config_*: Lesson, ArtifactDef, EdgeDef.rubric_id) —
+  единственный вызывающий config_manager, закреплено тестом на импорт;
 - system_user не создаётся через store — И10: сид одной строки при миграции,
   путь записи отсутствует by design.
 

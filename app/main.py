@@ -1,7 +1,6 @@
 """App factory (I1, #2). ARCHITECTURE §3.1: main.py — app factory, lifespan, middleware."""
 
 from contextlib import asynccontextmanager
-from pathlib import Path
 
 from fastapi import FastAPI
 from fastapi.staticfiles import StaticFiles
@@ -15,11 +14,11 @@ from app.services import config_manager
 
 @asynccontextmanager
 async def lifespan(_app: FastAPI):
-    # FR-2 (S4, #6): при старте config_manager читает эталонный config.yaml (§3.4)
-    if Path(settings.config_yaml_path).exists():
-        with store.SessionLocal() as session:
-            config_manager.reconcile(session, config_manager.load_config())
-            session.commit()
+    # FR-2 (S4, #6): при старте config_manager читает эталонный config.yaml (§3.4).
+    # Файла нет — fail-fast: источник правды о конфигурации отсутствует.
+    with store.SessionLocal() as session:
+        config_manager.reconcile(session, config_manager.load_config())
+        session.commit()
     yield
 
 
