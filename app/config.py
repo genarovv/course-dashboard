@@ -16,6 +16,9 @@ class Settings(BaseSettings):
     template_dir: str = str(Path(__file__).parent / "templates")
     # FR-2: эталонный конфиг курса (§3.4) — источник правды для Lesson/ArtifactDef/EdgeDef/Rubric
     config_yaml_path: str = str(Path(__file__).parent / "config.yaml")
+    # D35/BR-3: репозиторий-шаблон для детекта заготовок (пусто — детект выключен)
+    template_repo_url: str = ""
+    template_repo_host: str = "GitHub"
     static_dir: str = str(Path(__file__).parent / "static")
 
     model_config = {"env_prefix": "CD_", "env_file": ".env"}

@@ -17,6 +17,7 @@ from app.clients.git_client import (
     GitClientError,
     GitRateLimitedError,
 )
+from app.config import settings
 from app.models import SnapshotStatus, SyncOutcome, SyncStatus, SyncTrigger
 from app.models.artifact_def import ArtifactDef
 from app.models.repository import Repository
@@ -53,15 +54,40 @@ def _match_artifact(artifact_def: ArtifactDef, tree: list[str]) -> list[str]:
     return sorted(path for path in tree if regex.match(path))
 
 
-def _classify(
-    content_hash: str | None, template_hashes: frozenset[str]
-) -> tuple[SnapshotStatus, list[str] | None]:
-    """Классификация наблюдения (AC 2). Детект заготовки — D35/BR-3 (G3, #10)."""
-    if content_hash is None:
-        return SnapshotStatus.not_found, None
-    if content_hash in template_hashes:
-        return SnapshotStatus.partial, ["template_copy"]
-    return SnapshotStatus.found, None
+def _find_displaced(pattern: str, tree: list[str]) -> str | None:
+    """BR-3: файл с ожидаемым именем, но не в ожидаемой папке («частично/не там»).
+
+    Только для конкретных имён (без глоб-символов в basename): для «*.md»
+    поиск по имени вырождался бы в «любой md где угодно».
+    """
+    basename = pattern.rsplit("/", 1)[-1]
+    if any(ch in basename for ch in "*?"):
+        return None
+    candidates = sorted(p for p in tree if p.rsplit("/", 1)[-1] == basename)
+    return candidates[0] if candidates else None
+
+
+async def _fetch_template_hashes(git_client) -> frozenset[str]:
+    """D35: content_hash всех файлов репозитория-шаблона — один раз за обход.
+
+    Шаблон не настроен или недоступен — детект деградирует до «выключен»
+    на этот обход, сам обход не валится (NFR-2).
+    """
+    if not settings.template_repo_url:
+        return frozenset()
+    try:
+        tree = await git_client.get_tree(
+            settings.template_repo_url, settings.template_repo_host
+        )
+        hashes = set()
+        for path in tree:
+            content = await git_client.get_file_content(
+                settings.template_repo_url, settings.template_repo_host, path
+            )
+            hashes.add(_content_hash(content))
+        return frozenset(hashes)
+    except GitClientError:
+        return frozenset()
 
 
 def _outcome_for_error(exc: GitClientError) -> SyncOutcome:
@@ -105,11 +131,31 @@ async def _observe_artifact(
 ) -> bool:
     """Наблюдение одного артефакта; True — наблюдение изменилось (записан новый снапшот)."""
     matches = _match_artifact(artifact_def, tree)
-    file_path = matches[0] if matches else None  # представитель — первый по алфавиту
-    content_hash = await _hash_matches(git_client, repo, matches) if matches else None
-    status, partial_reason = _classify(content_hash, template_hashes)
-    if status == SnapshotStatus.not_found:
-        file_path = None  # И8: у not_found нет file_path/sha
+    if matches:
+        file_path = matches[0]  # представитель — первый по алфавиту
+        content_hash = await _hash_matches(git_client, repo, matches)
+        # D35: сравнение с шаблоном — по хешу файла; мульти-файловое наблюдение
+        # (хеш связки) с шаблоном не совпадает by construction (см. issue #10)
+        if content_hash in template_hashes:
+            status, partial_reason = SnapshotStatus.partial, ["template_copy"]
+        else:
+            status, partial_reason = SnapshotStatus.found, None
+    elif displaced := _find_displaced(artifact_def.expected_pattern, tree):
+        file_path = displaced
+        content = await git_client.get_file_content(
+            repo.repo_url, repo.git_host, displaced, ref=repo.default_branch
+        )
+        content_hash = _content_hash(content)
+        # приоритет причин — C3: template_copy > wrong_place
+        partial_reason = (
+            ["template_copy", "wrong_place"] if content_hash in template_hashes
+            else ["wrong_place"]
+        )
+        status = SnapshotStatus.partial
+    else:
+        status, partial_reason, file_path, content_hash = (
+            SnapshotStatus.not_found, None, None, None  # И8: у not_found нет file_path/sha
+        )
 
     last = store.find_last_snapshot(session, repo.id, artifact_def.id)
     if last is not None and (last.status, last.content_hash) == (status, content_hash):
@@ -182,7 +228,7 @@ async def run_sync(
         for lesson in store.find_all_lessons(session)
         for adef in store.find_artifact_defs_by_lesson(session, lesson.id)
     ]
-    template_hashes: frozenset[str] = frozenset()  # заполняется детектом заготовок (G3, #10)
+    template_hashes = await _fetch_template_hashes(git_client)  # D35: раз за обход
 
     outcomes: list[SyncOutcome] = []
     for repo in store.find_active_repositories(session):
