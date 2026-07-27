@@ -172,17 +172,17 @@ def find_active_repositories(session: Session) -> list[Repository]:
 
 
 def find_checked_repository_ids(session: Session) -> set[str]:
-    """FR-8: ID репозиторий, у которых есть хотя бы одна запись SyncRunRepository."""
+    """FR-4: ID репозиториев, у которых есть хотя бы одна запись SyncRunRepository."""
     return set(session.scalars(select(distinct(SyncRunRepository.repository_id))))
 
 
 def find_all_lessons(session: Session) -> list[Lesson]:
-    """FR-8: все занятия, упорядоченные по номеру."""
+    """FR-2/FR-4: все занятия, упорядоченные по номеру."""
     return list(session.scalars(select(Lesson).order_by(Lesson.number)))
 
 
 def find_artifact_defs_by_lesson(session: Session, lesson_id: str) -> list[ArtifactDef]:
-    """FR-8: артефакт-определения для заданного занятия."""
+    """FR-2/FR-4: артефакт-определения для заданного занятия."""
     return list(session.scalars(select(ArtifactDef).where(ArtifactDef.lesson_id == lesson_id)))
 
 

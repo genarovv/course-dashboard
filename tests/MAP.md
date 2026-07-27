@@ -1,8 +1,8 @@
 # MAP — Тесты и покрытие course-dashboard
 
-**Дата:** 2026-07-21
+**Дата:** 2026-07-28 (обновлено в MR тикета D1 #12)
 **Стек:** Python 3.13 · FastAPI · SQLAlchemy 2.x (Mapped) · SQLite (WAL) · Alembic · Jinja2+HTMX · bcrypt
-**Тестов:** 36, все ✅ · **Покрытие общее:** 96% (`pytest-cov`)
+**Тестов:** 55, все ✅ · **Покрытие общее:** 97% (`pytest-cov`)
 
 ---
 
@@ -35,7 +35,8 @@
 | `app/services/csv_importer.py` | 38 | 1 miss | **97%** | test_csv_import |
 | `app/routes/auth.py` | 41 | 2 miss | **95%** | test_auth |
 | `app/routes/admin.py` | 16 | 1 miss | **94%** | test_csv_import |
-| `app/routes/dashboard.py` | 9 | ✅ | **100%** | test_app_starts |
+| `app/services/matrix_builder.py` | 29 | 1 miss | **97%** | test_matrix_builder (агрегация ячеек), test_dashboard_matrix |
+| `app/routes/dashboard.py` | 12 | ✅ | **100%** | test_app_starts, test_dashboard_matrix |
 | `app/routes/health.py` | 5 | ✅ | **100%** | test_app_starts |
 | `app/routes/__init__.py` | 8 | 3 miss | **62%** | все тесты через dependency override → сид сессии |
 
@@ -59,10 +60,9 @@
 
 1. **sync_orchestrator.py** — дыра или сознательно не тестируем?
 2. **coherence_analyzer.py** — ⛔ Фаза 0 gate, но: дыра или сознательно не тестируем?
-3. **matrix_builder.py** — дыра или сознательно не тестируем?
-4. **evidence_chain.py** — дыра или сознательно не тестируем?
-5. **config_manager.py** — дыра или сознательно не тестируем?
-6. **llm_client.py** — дыра или сознательно не тестируем?
+3. **evidence_chain.py** — дыра или сознательно не тестируем?
+4. **config_manager.py** — дыра или сознательно не тестируем?
+5. **llm_client.py** — дыра или сознательно не тестируем?
 
 **Пропуски в покрытых модулях:**
 

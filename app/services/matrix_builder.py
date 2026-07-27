@@ -7,6 +7,39 @@
 from sqlalchemy.orm import Session
 
 from app import store
+from app.models import SnapshotStatus
+
+
+def _aggregate_cell(session: Session, repository_id: str, artifact_defs: list) -> dict:
+    """Статус ячейки по последним снапшотам всех артефактов занятия (FR-4).
+
+    Детерминированное правило: все found → found; все not_found → not_found;
+    смесь или хотя бы один partial → partial. Причины partial — объединение
+    по всем partial-артефактам, без дублей. Нет ни одного снапшота → пустая ячейка.
+    """
+    snaps = [
+        snap
+        for adef in artifact_defs
+        if (snap := store.find_last_snapshot(session, repository_id, adef.id)) is not None
+    ]
+    if not snaps:
+        return {"status": None, "partial_reason": None, "content_hash": None}
+
+    statuses = {snap.status for snap in snaps}
+    if statuses == {SnapshotStatus.found}:
+        status = SnapshotStatus.found
+    elif statuses == {SnapshotStatus.not_found}:
+        status = SnapshotStatus.not_found
+    else:
+        status = SnapshotStatus.partial
+
+    reasons = sorted({r for snap in snaps for r in (snap.partial_reason or [])})
+    hashes = [snap.content_hash for snap in snaps if snap.content_hash]
+    return {
+        "status": status,
+        "partial_reason": reasons or None,
+        "content_hash": hashes[0] if len(hashes) == 1 else None,
+    }
 
 
 def build_matrix(session: Session) -> dict:
@@ -22,28 +55,17 @@ def build_matrix(session: Session) -> dict:
     checked_ids = store.find_checked_repository_ids(session)
     repos = [r for r in store.find_active_repositories(session) if r.id in checked_ids]
     lessons = store.find_all_lessons(session)
+    defs_by_lesson = {
+        lesson.id: store.find_artifact_defs_by_lesson(session, lesson.id) for lesson in lessons
+    }
 
     cells: dict[str, dict[int, dict]] = {}
     for repo in repos:
         cells[repo.id] = {}
         for lesson in lessons:
-            artifact_defs = store.find_artifact_defs_by_lesson(session, lesson.id)
-            # Берём последний снапшот по любому артефакту занятия
-            latest_status = None
-            latest_partial_reason = None
-            latest_content_hash = None
-            for adef in artifact_defs:
-                snap = store.find_last_snapshot(session, repo.id, adef.id)
-                if snap is not None:
-                    latest_status = snap.status
-                    latest_partial_reason = snap.partial_reason
-                    latest_content_hash = snap.content_hash
-
-            cells[repo.id][lesson.number] = {
-                "status": latest_status,
-                "partial_reason": latest_partial_reason,
-                "content_hash": latest_content_hash,
-            }
+            cells[repo.id][lesson.number] = _aggregate_cell(
+                session, repo.id, defs_by_lesson[lesson.id]
+            )
 
     # Время последнего обхода
     last_run = store.find_last_sync_run(session)
