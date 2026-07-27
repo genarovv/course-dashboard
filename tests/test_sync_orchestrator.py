@@ -228,6 +228,127 @@ async def test_error_outcome_records_detail(session):
     assert "404" in row.detail
 
 
+# ── G3 (#10): детект заготовок и «не там» (D35, BR-3) ──────────────────────
+
+TEMPLATE_URL = "https://github.com/genarovv/project-context-template"
+TEMPLATE_PRD = "# PRD (шаблон)\nЗаполните разделы."
+
+
+class CountingFakeGitClient(FakeGitClient):
+    def __init__(self, repos):
+        super().__init__(repos)
+        self.tree_calls: dict[str, int] = {}
+
+    async def get_tree(self, repo_url, git_host, ref="main"):
+        self.tree_calls[repo_url] = self.tree_calls.get(repo_url, 0) + 1
+        return await super().get_tree(repo_url, git_host, ref)
+
+
+@pytest.fixture()
+def template_env(monkeypatch):
+    from app.config import settings
+
+    monkeypatch.setattr(settings, "template_repo_url", TEMPLATE_URL)
+    monkeypatch.setattr(settings, "template_repo_host", "GitHub")
+
+
+@pytest.mark.anyio
+async def test_template_copy_marked_partial(session, template_env):
+    """AC #10: нетронутая заготовка → partial с partial_reason=["template_copy"]."""
+    adef, (repo,) = _seed(session)
+    client = FakeGitClient({
+        TEMPLATE_URL: {"product/prd.md": TEMPLATE_PRD},
+        repo.repo_url: {"product/prd.md": TEMPLATE_PRD},  # студент не менял файл
+    })
+
+    await _sync(session, client)
+
+    snap = store.find_last_snapshot(session, repo.id, adef.id)
+    assert snap.status == SnapshotStatus.partial
+    assert snap.partial_reason == ["template_copy"]
+
+
+@pytest.mark.anyio
+async def test_modified_template_is_found(session, template_env):
+    """Изменённый студентом файл — found, не заготовка."""
+    adef, (repo,) = _seed(session)
+    client = FakeGitClient({
+        TEMPLATE_URL: {"product/prd.md": TEMPLATE_PRD},
+        repo.repo_url: {"product/prd.md": TEMPLATE_PRD + "\nМой контент."},
+    })
+
+    await _sync(session, client)
+
+    snap = store.find_last_snapshot(session, repo.id, adef.id)
+    assert snap.status == SnapshotStatus.found
+
+
+@pytest.mark.anyio
+async def test_template_hashes_fetched_once_per_run(session, template_env):
+    """AC #10: хеши шаблона тянутся один раз за обход (не по разу на репозиторий)."""
+    adef, repos = _seed(
+        session, repo_urls=("https://github.com/s1/r", "https://github.com/s2/r")
+    )
+    client = CountingFakeGitClient({
+        TEMPLATE_URL: {"product/prd.md": TEMPLATE_PRD},
+        repos[0].repo_url: {"product/prd.md": "a"},
+        repos[1].repo_url: {"product/prd.md": "b"},
+    })
+
+    await _sync(session, client)
+
+    assert client.tree_calls[TEMPLATE_URL] == 1
+
+
+@pytest.mark.anyio
+async def test_template_unavailable_degrades_to_no_detection(session, template_env):
+    """Недоступный шаблон не валит обход — детект деградирует (NFR-2)."""
+    adef, (repo,) = _seed(session)
+    client = FakeGitClient({
+        TEMPLATE_URL: GitRepoUnavailableError("404"),
+        repo.repo_url: {"product/prd.md": PRD_TEXT},
+    })
+
+    run = await _sync(session, client)
+
+    snap = store.find_last_snapshot(session, repo.id, adef.id)
+    assert snap.status == SnapshotStatus.found
+    assert run.status == SyncStatus.completed
+
+
+@pytest.mark.anyio
+async def test_wrong_place_marked_partial(session, template_env):
+    """BR-3: файл не в ожидаемой папке → «частично/не там», а не «нет» (скоуп из issue #10)."""
+    adef, (repo,) = _seed(session)  # pattern product/prd.md
+    client = FakeGitClient({
+        TEMPLATE_URL: {"product/prd.md": TEMPLATE_PRD},
+        repo.repo_url: {"docs/prd.md": PRD_TEXT},
+    })
+
+    await _sync(session, client)
+
+    snap = store.find_last_snapshot(session, repo.id, adef.id)
+    assert snap.status == SnapshotStatus.partial
+    assert snap.partial_reason == ["wrong_place"]
+    assert snap.file_path == "docs/prd.md"
+
+
+@pytest.mark.anyio
+async def test_wrong_place_template_copy_combined(session, template_env):
+    """Заготовка, лежащая не там: обе причины, template_copy первой (приоритет C3)."""
+    adef, (repo,) = _seed(session)
+    client = FakeGitClient({
+        TEMPLATE_URL: {"product/prd.md": TEMPLATE_PRD},
+        repo.repo_url: {"docs/prd.md": TEMPLATE_PRD},
+    })
+
+    await _sync(session, client)
+
+    snap = store.find_last_snapshot(session, repo.id, adef.id)
+    assert snap.status == SnapshotStatus.partial
+    assert snap.partial_reason == ["template_copy", "wrong_place"]
+
+
 # ── AC 1: обходятся только активные ────────────────────────────────────────
 
 
