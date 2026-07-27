@@ -90,8 +90,10 @@ def _seed(session, repo_urls=("https://github.com/s1/r",)):
     return adef, repos
 
 
-async def _sync(session, client):
-    run = await run_sync(session, client, triggered_by=SyncTrigger.manual)
+async def _sync(session, client, template_repo=None):
+    run = await run_sync(
+        session, client, triggered_by=SyncTrigger.manual, template_repo=template_repo
+    )
     session.flush()
     return run
 
@@ -234,6 +236,13 @@ TEMPLATE_URL = "https://github.com/genarovv/project-context-template"
 TEMPLATE_PRD = "# PRD (шаблон)\nЗаполните разделы."
 
 
+def _template_cfg():
+    """Адрес шаблона — из config.yaml (PRD FR-4: «задаётся в конфиге FR-2»)."""
+    from app.services.config_manager import TemplateRepoConfig
+
+    return TemplateRepoConfig(url=TEMPLATE_URL, git_host="GitHub")
+
+
 class CountingFakeGitClient(FakeGitClient):
     def __init__(self, repos):
         super().__init__(repos)
@@ -244,22 +253,42 @@ class CountingFakeGitClient(FakeGitClient):
         return await super().get_tree(repo_url, git_host, ref)
 
 
-@pytest.fixture()
-def template_env(monkeypatch):
-    from app.config import settings
-
-    monkeypatch.setattr(settings, "template_repo_url", TEMPLATE_URL)
-    monkeypatch.setattr(settings, "template_repo_host", "GitHub")
-
-
 @pytest.mark.anyio
-async def test_template_copy_marked_partial(session, template_env):
+async def test_template_copy_marked_partial(session):
     """AC #10: нетронутая заготовка → partial с partial_reason=["template_copy"]."""
     adef, (repo,) = _seed(session)
     client = FakeGitClient({
         TEMPLATE_URL: {"product/prd.md": TEMPLATE_PRD},
         repo.repo_url: {"product/prd.md": TEMPLATE_PRD},  # студент не менял файл
     })
+
+    await _sync(session, client, template_repo=_template_cfg())
+
+    snap = store.find_last_snapshot(session, repo.id, adef.id)
+    assert snap.status == SnapshotStatus.partial
+    assert snap.partial_reason == ["template_copy"]
+
+
+@pytest.mark.anyio
+async def test_modified_template_is_found(session):
+    """Изменённый студентом файл — found, не заготовка."""
+    adef, (repo,) = _seed(session)
+    client = FakeGitClient({
+        TEMPLATE_URL: {"product/prd.md": TEMPLATE_PRD},
+        repo.repo_url: {"product/prd.md": TEMPLATE_PRD + "\nМой контент."},
+    })
+
+    await _sync(session, client, template_repo=_template_cfg())
+
+    snap = store.find_last_snapshot(session, repo.id, adef.id)
+    assert snap.status == SnapshotStatus.found
+
+
+@pytest.mark.anyio
+async def test_empty_file_is_template_copy(session):
+    """BR-3: пустой файл — заготовка, даже без совпадения с хешами шаблона."""
+    adef, (repo,) = _seed(session)
+    client = FakeGitClient({repo.repo_url: {"product/prd.md": "   \n\n"}})
 
     await _sync(session, client)
 
@@ -269,22 +298,7 @@ async def test_template_copy_marked_partial(session, template_env):
 
 
 @pytest.mark.anyio
-async def test_modified_template_is_found(session, template_env):
-    """Изменённый студентом файл — found, не заготовка."""
-    adef, (repo,) = _seed(session)
-    client = FakeGitClient({
-        TEMPLATE_URL: {"product/prd.md": TEMPLATE_PRD},
-        repo.repo_url: {"product/prd.md": TEMPLATE_PRD + "\nМой контент."},
-    })
-
-    await _sync(session, client)
-
-    snap = store.find_last_snapshot(session, repo.id, adef.id)
-    assert snap.status == SnapshotStatus.found
-
-
-@pytest.mark.anyio
-async def test_template_hashes_fetched_once_per_run(session, template_env):
+async def test_template_hashes_fetched_once_per_run(session):
     """AC #10: хеши шаблона тянутся один раз за обход (не по разу на репозиторий)."""
     adef, repos = _seed(
         session, repo_urls=("https://github.com/s1/r", "https://github.com/s2/r")
@@ -295,29 +309,31 @@ async def test_template_hashes_fetched_once_per_run(session, template_env):
         repos[1].repo_url: {"product/prd.md": "b"},
     })
 
-    await _sync(session, client)
+    await _sync(session, client, template_repo=_template_cfg())
 
     assert client.tree_calls[TEMPLATE_URL] == 1
 
 
 @pytest.mark.anyio
-async def test_template_unavailable_degrades_to_no_detection(session, template_env):
-    """Недоступный шаблон не валит обход — детект деградирует (NFR-2)."""
+async def test_template_unavailable_degrades_to_no_detection(session, caplog):
+    """Недоступный шаблон не валит обход — детект деградирует, но не молча (NFR-2)."""
     adef, (repo,) = _seed(session)
     client = FakeGitClient({
         TEMPLATE_URL: GitRepoUnavailableError("404"),
         repo.repo_url: {"product/prd.md": PRD_TEXT},
     })
 
-    run = await _sync(session, client)
+    with caplog.at_level("WARNING"):
+        run = await _sync(session, client, template_repo=_template_cfg())
 
     snap = store.find_last_snapshot(session, repo.id, adef.id)
     assert snap.status == SnapshotStatus.found
     assert run.status == SyncStatus.completed
+    assert any("шаблон" in r.message.lower() for r in caplog.records)  # след деградации
 
 
 @pytest.mark.anyio
-async def test_wrong_place_marked_partial(session, template_env):
+async def test_wrong_place_marked_partial(session):
     """BR-3: файл не в ожидаемой папке → «частично/не там», а не «нет» (скоуп из issue #10)."""
     adef, (repo,) = _seed(session)  # pattern product/prd.md
     client = FakeGitClient({
@@ -325,7 +341,7 @@ async def test_wrong_place_marked_partial(session, template_env):
         repo.repo_url: {"docs/prd.md": PRD_TEXT},
     })
 
-    await _sync(session, client)
+    await _sync(session, client, template_repo=_template_cfg())
 
     snap = store.find_last_snapshot(session, repo.id, adef.id)
     assert snap.status == SnapshotStatus.partial
@@ -334,7 +350,7 @@ async def test_wrong_place_marked_partial(session, template_env):
 
 
 @pytest.mark.anyio
-async def test_wrong_place_template_copy_combined(session, template_env):
+async def test_wrong_place_template_copy_combined(session):
     """Заготовка, лежащая не там: обе причины, template_copy первой (приоритет C3)."""
     adef, (repo,) = _seed(session)
     client = FakeGitClient({
@@ -342,11 +358,67 @@ async def test_wrong_place_template_copy_combined(session, template_env):
         repo.repo_url: {"docs/prd.md": TEMPLATE_PRD},
     })
 
-    await _sync(session, client)
+    await _sync(session, client, template_repo=_template_cfg())
 
     snap = store.find_last_snapshot(session, repo.id, adef.id)
     assert snap.status == SnapshotStatus.partial
     assert snap.partial_reason == ["template_copy", "wrong_place"]
+
+
+@pytest.mark.anyio
+async def test_fixed_placement_writes_new_snapshot(session):
+    """git mv в правильное место без смены контента — новое наблюдение (fix по ревью G3, находка 1)."""
+    adef, (repo,) = _seed(session)
+    client = FakeGitClient({
+        TEMPLATE_URL: {"product/prd.md": TEMPLATE_PRD},
+        repo.repo_url: {"docs/prd.md": TEMPLATE_PRD},
+    })
+    await _sync(session, client, template_repo=_template_cfg())
+    session.commit()
+
+    client.repos[repo.repo_url] = {"product/prd.md": TEMPLATE_PRD}  # git mv, контент тот же
+    await _sync(session, client, template_repo=_template_cfg())
+
+    snaps = list(session.scalars(
+        select(ArtifactSnapshot).order_by(ArtifactSnapshot.observed_at)
+    ))
+    assert len(snaps) == 2  # wrong_place не залипает
+    assert snaps[-1].partial_reason == ["template_copy"]
+    assert snaps[-1].file_path == "product/prd.md"
+
+
+@pytest.mark.anyio
+async def test_multi_file_observation_not_template_copy(session):
+    """Мульти-файловое наблюдение (хеш связки) с шаблоном не сравнивается — не бывает template_copy."""
+    adef, (repo,) = _seed(session)
+    adef.expected_pattern = "product/interviews/*.md"
+    session.flush()
+    client = FakeGitClient({
+        TEMPLATE_URL: {"product/interviews/01.md": TEMPLATE_PRD},
+        repo.repo_url: {
+            "product/interviews/01.md": TEMPLATE_PRD,
+            "product/interviews/02.md": TEMPLATE_PRD,
+        },
+    })
+
+    await _sync(session, client, template_repo=_template_cfg())
+
+    snap = store.find_last_snapshot(session, repo.id, adef.id)
+    assert snap.status == SnapshotStatus.found
+
+
+@pytest.mark.anyio
+async def test_glob_pattern_no_wrong_place_fallback(session):
+    """Глоб-имя («*.md») не ищется «не там» — иначе любой md где угодно стал бы «частично»."""
+    adef, (repo,) = _seed(session)
+    adef.expected_pattern = "product/interviews/*.md"
+    session.flush()
+    client = FakeGitClient({repo.repo_url: {"docs/01.md": "текст"}})
+
+    await _sync(session, client)
+
+    snap = store.find_last_snapshot(session, repo.id, adef.id)
+    assert snap.status == SnapshotStatus.not_found
 
 
 # ── AC 1: обходятся только активные ────────────────────────────────────────
@@ -413,7 +485,13 @@ async def test_all_repos_failed_run_failed(session):
 
 @pytest.fixture()
 def client_env(tmp_path, monkeypatch):
+    from app.config import settings
+
     monkeypatch.setenv("CD_ADMIN_PASSWORD", "pw")
+    # /sync читает адрес шаблона из config.yaml (FR-4) — минимальный конфиг без шаблона
+    yaml_path = tmp_path / "config.yaml"
+    yaml_path.write_text("lessons: []\n", encoding="utf-8")
+    monkeypatch.setattr(settings, "config_yaml_path", str(yaml_path))
     db_path = tmp_path / "test.db"
     cfg = Config("alembic.ini")
     cfg.set_main_option("sqlalchemy.url", f"sqlite:///{db_path}")
