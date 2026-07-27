@@ -1,8 +1,8 @@
 # MAP — Тесты и покрытие course-dashboard
 
-**Дата:** 2026-07-28 (обновлено в MR тикета S4 #6)
+**Дата:** 2026-07-28 (обновлено в MR тикета G2 #9)
 **Стек:** Python 3.13 · FastAPI · SQLAlchemy 2.x (Mapped) · SQLite (WAL) · Alembic · Jinja2+HTMX · bcrypt
-**Тестов:** 64, все ✅ · **Покрытие общее:** 97% (`pytest-cov`)
+**Тестов:** 76, все ✅ · **Покрытие общее:** 97% (`pytest-cov`)
 
 ---
 
@@ -18,6 +18,7 @@
 | `test_matrix_builder.py` | модульный (session fixture + alembic) | FR-4 (D1 #12): матрица «репо × занятие» — статусы ячеек, partial_reason, последний снапшот побеждает, «актуально на», пустая БД |
 | `test_dashboard_matrix.py` | интеграционный (TestClient + реальная БД) | FR-4 (D1 #12): GET / рендерит матрицу — строка репозитория, колонка занятия, partial_reason, «Актуально на», редирект без сессии |
 | `test_migrations.py` | интеграционный (alembic upgrade + raw SQL) | DDL: все 12 таблиц созданы, сид system_user, downgrade без ошибок, И1 (XOR), И3 (quad unique), И4 (one active override), И5 (append-only триггеры), И6 (norm URL unique), И8 (snapshot CHECK), И9+И11 (уникальность тройки/пары), И10 (reference uniqueness) |
+| `test_sync_orchestrator.py` | модульный (FakeGitClient) + интеграционный (TestClient) | FR-8/FR-4 (G2 #9): классификация found/not_found, sha256, инкрементальность D28 (без дубля снапшота), исходы ok_changed/ok_unchanged/repo_unavailable/auth_failed/skipped_rate_limit, статусы SyncRun, архивные репо пропущены, POST /sync (сессия / X-Sync-Token / 401) |
 | `test_store.py` | модульный (session fixture) | Контракт store.py: ровно 4 `update_*`, нет `delete_*`, все `register_*` на месте, `normalize_url()`, CRUD-флоу репозиториев/runs/credentials/overrides, `find_verdict_by_quadruple` |
 
 ---
@@ -35,6 +36,7 @@
 | `app/clients/llm_client.py` | 0 | — | **пустой** | — (заглушка, Фаза 0 gate) |
 | `app/services/csv_importer.py` | 38 | 1 miss | **97%** | test_csv_import |
 | `app/services/config_manager.py` | 75 | ✅ | **100%** | test_config_manager |
+| `app/services/sync_orchestrator.py` | 72 | 2 miss | **97%** | test_sync_orchestrator |
 | `app/routes/auth.py` | 41 | 2 miss | **95%** | test_auth |
 | `app/routes/admin.py` | 16 | 1 miss | **94%** | test_csv_import |
 | `app/services/matrix_builder.py` | 29 | 1 miss | **97%** | test_matrix_builder (агрегация ячеек), test_dashboard_matrix |
@@ -48,7 +50,6 @@
 
 | Модуль | Статус файла | Причина |
 |---|---|---|
-| `services/sync_orchestrator.py` | **пустой** (0 строк) | Тикет G2 #9 — не начат |
 | `services/coherence_analyzer.py` | **пустой** (0 строк) | ⛔ Фаза 0 gate (PRD §13) — железное правило CLAUDE.md |
 | `services/evidence_chain.py` | **пустой** (0 строк) | Тикет D4 #14 — не начат |
 | `clients/llm_client.py` | **пустой** (0 строк) | Тикет C1 — не начат (после Фаза 0) |
@@ -59,10 +60,9 @@
 
 **Пустые сервисы (6 модулей):**
 
-1. **sync_orchestrator.py** — дыра или сознательно не тестируем?
-2. **coherence_analyzer.py** — ⛔ Фаза 0 gate, но: дыра или сознательно не тестируем?
-3. **evidence_chain.py** — дыра или сознательно не тестируем?
-4. **llm_client.py** — дыра или сознательно не тестируем?
+1. **coherence_analyzer.py** — ⛔ Фаза 0 gate, но: дыра или сознательно не тестируем?
+2. **evidence_chain.py** — дыра или сознательно не тестируем?
+3. **llm_client.py** — дыра или сознательно не тестируем?
 
 **Пропуски в покрытых модулях:**
 
