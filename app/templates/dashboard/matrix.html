@@ -1,0 +1,39 @@
+{% extends "base.html" %}
+{% block title %}Матрица — Course Dashboard{% endblock %}
+{% block content %}
+<header class="matrix-header">
+    <h1>Матрица «репозиторий × занятие»</h1>
+    <p class="as-of">Актуально на {{ matrix.as_of }}</p>
+    <a href="/logout">Выйти</a>
+</header>
+<table class="matrix">
+    <thead>
+        <tr>
+            <th>Репозиторий</th>
+            {% for lesson in matrix.lessons %}
+            <th title="{{ lesson.title }}">{{ lesson.number }}. {{ lesson.title }}</th>
+            {% endfor %}
+        </tr>
+    </thead>
+    <tbody>
+        {% for repo in matrix.repositories %}
+        <tr>
+            <td class="repo-url">{{ repo.repo_url }}</td>
+            {% for lesson in matrix.lessons %}
+            {% set cell = matrix.cells[repo.id][lesson.number] %}
+            <td class="cell cell-{{ cell.status or 'none' }}">
+                {% if cell.status %}
+                <span class="status">{{ cell.status }}</span>
+                {% if cell.partial_reason %}
+                <span class="partial-reason">{{ cell.partial_reason | join(", ") }}</span>
+                {% endif %}
+                {% else %}
+                <span class="status status-empty">—</span>
+                {% endif %}
+            </td>
+            {% endfor %}
+        </tr>
+        {% endfor %}
+    </tbody>
+</table>
+{% endblock %}
