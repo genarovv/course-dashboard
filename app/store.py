@@ -302,6 +302,20 @@ def find_verdict_by_quadruple(session: Session, *, source_content_hash: str, tar
     )
 
 
+def find_repository_by_id(session: Session, repository_id: str) -> Repository | None:
+    """FR-9: репозиторий для карточки студента."""
+    return session.get(Repository, repository_id)
+
+
+def find_snapshots_by_repository(session: Session, repository_id: str) -> list[ArtifactSnapshot]:
+    """FR-9: все наблюдения репозитория в порядке observed_at (хронология, D27)."""
+    return list(session.scalars(
+        select(ArtifactSnapshot)
+        .where(ArtifactSnapshot.repository_id == repository_id)
+        .order_by(ArtifactSnapshot.observed_at)
+    ))
+
+
 def find_latest_verdict_for_quadruple(
     session: Session, *, source_content_hash: str, target_content_hash: str,
     rubric_id: str, llm_model: str,

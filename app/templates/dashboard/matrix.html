@@ -18,7 +18,7 @@
     <tbody>
         {% for repo in matrix.repositories %}
         <tr>
-            <td class="repo-url">{{ repo.repo_url }}</td>
+            <td class="repo-url"><a href="/students/{{ repo.id }}">{{ repo.repo_url }}</a></td>
             {% for lesson in matrix.lessons %}
             {% set cell = matrix.cells[repo.id][lesson.number] %}
             <td class="cell cell-{{ cell.status or 'none' }}">

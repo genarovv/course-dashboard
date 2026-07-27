@@ -1,0 +1,56 @@
+{% extends "base.html" %}
+{% block title %}Карточка студента — Course Dashboard{% endblock %}
+{% block content %}
+<header class="card-header">
+    <h1>Карточка студента</h1>
+    <p class="repo-url">{{ card.repository.repo_url }}</p>
+    <a href="/">← к матрице</a>
+</header>
+
+<section class="edges">
+    <h2>Связность конвейера</h2>
+    {% for edge in card.edges %}
+    <article class="edge edge-{{ edge.state }}{% if edge.override_active %} edge-overridden{% endif %}">
+        <h3>{{ edge.source_role }} → {{ edge.target_role }}</h3>
+        {% if edge.state == "no_data" %}
+        <p class="state">нет данных: не наблюдались обе стороны ребра</p>
+        {% elif edge.state == "pending" %}
+        <p class="state">проверяется</p>
+        {% else %}
+        <p class="verdict verdict-{{ edge.verdict }}">
+            {{ "разрыв" if edge.verdict == "break" else "связно" }}
+            <span class="confidence">уверенность: {{ edge.confidence }}</span>
+            {% if edge.override_active %}<span class="override">отмечен как ложный</span>{% endif %}
+        </p>
+        {% if edge.points %}
+        <ul class="points">
+            {% for point in edge.points %}
+            <li><b>{{ point.entity }}</b> — «{{ point.quote }}» — {{ point.why }}</li>
+            {% endfor %}
+        </ul>
+        {% endif %}
+        {% if edge.notes %}<p class="notes">{{ edge.notes }}</p>{% endif %}
+        {% endif %}
+    </article>
+    {% endfor %}
+</section>
+
+<section class="timeline">
+    <h2>Хронология наблюдений (по observed_at)</h2>
+    <table>
+        <thead><tr><th>Когда</th><th>Артефакт</th><th>Статус</th><th>Файл</th><th>Commit</th></tr></thead>
+        <tbody>
+            {% for entry in card.timeline %}
+            <tr>
+                <td>{{ entry.observed_at }}</td>
+                <td>{{ entry.role }}</td>
+                <td class="cell-{{ entry.status }}">{{ entry.status }}
+                    {% if entry.partial_reason %}({{ entry.partial_reason | join(", ") }}){% endif %}</td>
+                <td>{{ entry.file_path or "—" }}</td>
+                <td class="sha">{{ (entry.source_commit_sha or "—")[:8] }}</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</section>
+{% endblock %}

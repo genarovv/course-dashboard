@@ -1,8 +1,8 @@
 # MAP — Тесты и покрытие course-dashboard
 
-**Дата:** 2026-07-28 (обновлено в MR тикета I2 #13)
+**Дата:** 2026-07-28 (обновлено в MR тикета D4 #14)
 **Стек:** Python 3.13 · FastAPI · SQLAlchemy 2.x (Mapped) · SQLite (WAL) · Alembic · Jinja2+HTMX · bcrypt
-**Тестов:** 103, все ✅ · **Покрытие общее:** 98% (`pytest-cov`)
+**Тестов:** 111, все ✅ · **Покрытие общее:** 98% (`pytest-cov`)
 
 ---
 
@@ -15,6 +15,7 @@
 | `test_config_manager.py` | модульный + интеграционный (session fixture, TestClient) | FR-2 (S4 #6, ADR-005): создание Lesson/ArtifactDef/EdgeDef/Rubric из YAML, идемпотентность reload, repoint рубрики со старыми вердиктами нетронутыми, флаг golden set, ограничитель «config_* вызывает только config_manager», роут /admin/reload-config, чтение конфига на старте |
 | `test_csv_import.py` | интеграционный (TestClient + MockTransport) | FR-1: CSV-импорт создаёт репозитории, дубликаты (И6) отсеиваются, reimport не теряет старые, без авторизации → 401 |
 | `test_health.py` | интеграционный (TestClient + реальная БД) | FR-8 (I2 #13): /health без аутентификации — время последнего обхода, пары без вердикта, deferred по причинам, нули на пустой БД |
+| `test_evidence_chain.py` | модульный (session fixture) + интеграционный (TestClient) | FR-9 (D4 #14): хронология по observed_at (force-push), рёбра done/pending/no_data, вердикт+уверенность+≤5 точек, override-флаг, GET /students/{id} (200/303/404) |
 | `test_git_client.py` | модульный (MockTransport, без сети) | FR-3/NFR-4: GitHub и GitLab API — деревья + файлы + head SHA (FR-9), 401→GitAuthFailedError, 429→пауза+ретрай, исчерпание лимита, изоляция ошибок между репо |
 | `test_matrix_builder.py` | модульный (session fixture + alembic) | FR-4 (D1 #12): матрица «репо × занятие» — статусы ячеек, partial_reason, последний снапшот побеждает, «актуально на», пустая БД |
 | `test_dashboard_matrix.py` | интеграционный (TestClient + реальная БД) | FR-4 (D1 #12): GET / рендерит матрицу — строка репозитория, колонка занятия, partial_reason, «Актуально на», редирект без сессии |
@@ -42,6 +43,7 @@
 | `app/routes/auth.py` | 41 | 2 miss | **95%** | test_auth |
 | `app/routes/admin.py` | 34 | 1 miss | **97%** | test_csv_import, test_config_manager, test_sync_orchestrator |
 | `app/services/matrix_builder.py` | 29 | 1 miss | **97%** | test_matrix_builder (агрегация ячеек), test_dashboard_matrix |
+| `app/services/evidence_chain.py` | 34 | ✅ | **100%** | test_evidence_chain |
 | `app/routes/dashboard.py` | 12 | ✅ | **100%** | test_app_starts, test_dashboard_matrix |
 | `app/routes/health.py` | 15 | ✅ | **100%** | test_health |
 | `app/routes/__init__.py` | 8 | 3 miss | **62%** | все тесты через dependency override → сид сессии |
@@ -53,7 +55,6 @@
 | Модуль | Статус файла | Причина |
 |---|---|---|
 | `services/coherence_analyzer.py` | **пустой** (0 строк) | ⛔ Фаза 0 gate (PRD §13) — железное правило CLAUDE.md |
-| `services/evidence_chain.py` | **пустой** (0 строк) | Тикет D4 #14 — не начат |
 | `clients/llm_client.py` | **пустой** (0 строк) | Тикет C1 — не начат (после Фаза 0) |
 
 ---
@@ -63,8 +64,7 @@
 **Пустые сервисы (6 модулей):**
 
 1. **coherence_analyzer.py** — ⛔ Фаза 0 gate, но: дыра или сознательно не тестируем?
-2. **evidence_chain.py** — дыра или сознательно не тестируем?
-3. **llm_client.py** — дыра или сознательно не тестируем?
+2. **llm_client.py** — дыра или сознательно не тестируем?
 
 **Пропуски в покрытых модулях:**
 
