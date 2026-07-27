@@ -320,7 +320,8 @@ def build_health_counters(session: Session, llm_model: str) -> dict:
             llm_model=pair.llm_model,
         )
         if verdict is not None and verdict.deferred_reason is not None:
-            deferred[verdict.deferred_reason] += 1
+            reason = str(verdict.deferred_reason)
+            deferred[reason] = deferred.get(reason, 0) + 1  # устойчиво к расширению C1
     return {"pairs_without_verdict": len(pairs), "deferred": deferred}
 
 
