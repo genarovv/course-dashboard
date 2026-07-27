@@ -192,7 +192,7 @@ def test_partial_reason_none_for_found(session):
 
 
 def test_timestamp_present(session):
-    """AC#4:矩阵 содержит timestamp «актуально на»."""
+    """AC#4: матрица содержит timestamp «актуально на»."""
     _seed_matrix_data(session)
     matrix = build_matrix(session)
 
@@ -202,6 +202,65 @@ def test_timestamp_present(session):
     parts = matrix["as_of"].split(":")
     assert len(parts) == 2
     assert all(p.isdigit() for p in parts)
+
+
+# ── AC#2: агрегация нескольких артефактов одного занятия ──────────────────
+
+
+def test_multi_artifact_lesson_mixed_statuses_aggregate_to_partial(session):
+    """Занятие с found + not_found → ячейка partial (детерминированно, не «последний в цикле»)."""
+    data = _seed_matrix_data(session)
+    adef_extra = ArtifactDef(
+        lesson_id=data["lesson1"].id, role="persona", expected_pattern="**/personas.md"
+    )
+    session.add(adef_extra)
+    session.flush()
+    store.register_snapshot(
+        session, sync_run_id=data["run"].id, repository_id=data["repo1"].id,
+        artifact_def_id=adef_extra.id, status=SnapshotStatus.not_found,
+    )
+    session.flush()
+
+    cell = build_matrix(session)["cells"][data["repo1"].id][data["lesson1"].number]
+    assert cell["status"] == SnapshotStatus.partial  # found + not_found = частично
+
+
+def test_multi_artifact_lesson_all_found_aggregates_to_found(session):
+    """Занятие с двумя found-артефактами → ячейка found."""
+    data = _seed_matrix_data(session)
+    adef_extra = ArtifactDef(
+        lesson_id=data["lesson1"].id, role="persona", expected_pattern="**/personas.md"
+    )
+    session.add(adef_extra)
+    session.flush()
+    store.register_snapshot(
+        session, sync_run_id=data["run"].id, repository_id=data["repo1"].id,
+        artifact_def_id=adef_extra.id, status=SnapshotStatus.found, content_hash="hash_extra",
+    )
+    session.flush()
+
+    cell = build_matrix(session)["cells"][data["repo1"].id][data["lesson1"].number]
+    assert cell["status"] == SnapshotStatus.found
+
+
+def test_multi_artifact_lesson_partial_reasons_united(session):
+    """Причины partial собираются со всех partial-артефактов занятия (без дублей)."""
+    data = _seed_matrix_data(session)
+    adef_extra = ArtifactDef(
+        lesson_id=data["lesson1"].id, role="persona", expected_pattern="**/personas.md"
+    )
+    session.add(adef_extra)
+    session.flush()
+    store.register_snapshot(
+        session, sync_run_id=data["run"].id, repository_id=data["repo2"].id,
+        artifact_def_id=adef_extra.id, status=SnapshotStatus.partial,
+        content_hash="hash_extra2", partial_reason=["wrong_place", "template_copy"],
+    )
+    session.flush()
+
+    cell = build_matrix(session)["cells"][data["repo2"].id][data["lesson1"].number]
+    assert cell["status"] == SnapshotStatus.partial
+    assert sorted(cell["partial_reason"]) == ["template_copy", "wrong_place"]
 
 
 # ── Edge-кейсы ──────────────────────────────────────────────────────────────
