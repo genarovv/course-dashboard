@@ -262,3 +262,12 @@ def test_startup_reads_config(client_env):
         pass
     with Session(engine) as s:
         assert [lesson.number for lesson in store.find_all_lessons(s)] == [5, 6]
+
+
+def test_startup_without_config_fails_fast(client_env, monkeypatch):
+    """Отсутствие config.yaml — ошибка старта, а не молчаливый пропуск (§3.4: источник правды)."""
+    client, _ = client_env
+    monkeypatch.setattr(settings, "config_yaml_path", "no/such/config.yaml")
+    with pytest.raises(FileNotFoundError):
+        with client:
+            pass
