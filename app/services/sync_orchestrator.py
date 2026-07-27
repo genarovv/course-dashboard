@@ -29,6 +29,7 @@ from app.models.sync_run import SyncRun
 logger = logging.getLogger(__name__)
 
 _OK_OUTCOMES = {SyncOutcome.ok_changed, SyncOutcome.ok_unchanged}
+_pending_tasks: set[asyncio.Task] = set()  # GC-guard для fire-and-forget задач свода
 
 
 def _content_hash(content: str) -> str:
@@ -294,6 +295,11 @@ async def reconcile_llm_pairs(
             )
         return pairs, []
     tasks = [asyncio.create_task(verdict_worker(pair)) for pair in pairs]
+    for task in tasks:
+        # event loop держит task слабой ссылкой — без guard задача может быть
+        # собрана GC до завершения; это не TaskTracker (состояния не хранит)
+        _pending_tasks.add(task)
+        task.add_done_callback(_pending_tasks.discard)
     return pairs, tasks
 
 
