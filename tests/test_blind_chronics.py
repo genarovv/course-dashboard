@@ -162,6 +162,43 @@ def test_recent_change_not_chronic(session):
     assert build_matrix(session, today=TODAY)["chronics"] == []
 
 
+def test_blind_spot_rendered_on_dashboard(tmp_path, monkeypatch):
+    """UI: блок «Слепая зона» виден на матрице (FR-6)."""
+    from fastapi.testclient import TestClient
+
+    from app.main import app
+    from app.routes import get_session
+
+    monkeypatch.setenv("CD_ADMIN_PASSWORD", "pw")  # до миграции — сид читает env
+    db_path = tmp_path / "ui.db"
+    cfg = Config("alembic.ini")
+    cfg.set_main_option("sqlalchemy.url", f"sqlite:///{db_path}")
+    command.upgrade(cfg, "head")
+    engine = create_engine(f"sqlite:///{db_path}")
+    with Session(engine) as s:
+        _seed_lessons(s)
+        repo = _repo(s, "https://github.com/s/gone")
+        _outcome(s, repo, SyncOutcome.repo_unavailable, detail="HTTP 404")
+        s.commit()
+
+    def override_session():
+        with Session(engine) as s:
+            yield s
+            s.commit()
+
+    app.dependency_overrides[get_session] = override_session
+    try:
+        client = TestClient(app)
+        client.post("/login", data={"username": "admin", "password": "pw"})
+        html = client.get("/").text
+    finally:
+        app.dependency_overrides.clear()
+        engine.dispose()
+
+    assert "Слепая зона" in html
+    assert "https://github.com/s/gone" in html
+
+
 def test_blind_spot_not_doubled_in_chronics(session):
     """Недоступный репо — слепая зона, а не хроника (не двоим сигнал)."""
     _seed_lessons(session)

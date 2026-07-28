@@ -251,6 +251,31 @@ def find_active_repositories(session: Session) -> list[Repository]:
     return list(session.scalars(select(Repository).where(Repository.archived_at.is_(None))))
 
 
+def find_archived_repositories(session: Session) -> list[Repository]:
+    """FR-6: архивные репо — слепая зона по определению (§5.3)."""
+    return list(session.scalars(select(Repository).where(Repository.archived_at.is_not(None))))
+
+
+def find_last_outcome_row(session: Session, repository_id: str) -> SyncRunRepository | None:
+    """FR-6/FR-7: последняя строка охвата репозитория — доступность вычислима из неё (§3.5)."""
+    return session.scalar(
+        select(SyncRunRepository)
+        .where(SyncRunRepository.repository_id == repository_id)
+        .order_by(SyncRunRepository.checked_at.desc())
+        .limit(1)
+    )
+
+
+def find_last_observed_at(session: Session, repository_id: str):
+    """FR-7: время последнего нового наблюдения (снапшота) репозитория."""
+    return session.scalar(
+        select(ArtifactSnapshot.observed_at)
+        .where(ArtifactSnapshot.repository_id == repository_id)
+        .order_by(ArtifactSnapshot.observed_at.desc())
+        .limit(1)
+    )
+
+
 def find_checked_repository_ids(session: Session) -> set[str]:
     """FR-4: ID репозиториев, у которых есть хотя бы одна запись SyncRunRepository."""
     return set(session.scalars(select(distinct(SyncRunRepository.repository_id))))

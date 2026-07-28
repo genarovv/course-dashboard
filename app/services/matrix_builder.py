@@ -4,12 +4,55 @@
 Возвращает dict, пригодный для рендеринга Jinja2/HTMX.
 """
 
+from datetime import date
+
 from sqlalchemy.orm import Session
 
 from app import store, timeutil
 from app.config import settings
-from app.models import SnapshotStatus, VerdictValue
+from app.models import SnapshotStatus, SyncOutcome, VerdictValue
 from app.services import evidence_chain
+
+
+def _blind_spots_and_signals(session: Session, repos: list, today: date) -> dict:
+    """§5.3 (#18): слепая зона, auth-баннер, «не проверялось», хроники.
+
+    Слепая зона — последний исход repo_unavailable либо архив. auth_failed —
+    проблема нашего токена, не студента: баннер, не слепая зона. Хроника —
+    нет новых наблюдений 2 и более занятия подряд (по lesson.date, US-B4).
+    """
+    blind_spots, unchecked, chronics = [], [], []
+    auth_banner = False
+    lesson_dates = sorted(lesson.date for lesson in store.find_all_lessons(session))
+
+    for repo in store.find_archived_repositories(session):
+        blind_spots.append({"repo_url": repo.repo_url, "detail": "архивирован"})
+
+    for repo in repos:
+        last = store.find_last_outcome_row(session, repo.id)
+        outcome = last.outcome if last else None
+        if outcome == SyncOutcome.repo_unavailable:
+            blind_spots.append({"repo_url": repo.repo_url, "detail": last.detail or ""})
+            continue  # недоступный репо не судим за тишину
+        if outcome == SyncOutcome.auth_failed:
+            auth_banner = True
+            continue
+        if outcome == SyncOutcome.skipped_rate_limit:
+            unchecked.append({"repo_url": repo.repo_url})
+            continue
+        last_change = store.find_last_observed_at(session, repo.id) or repo.added_at
+        lessons_silent = sum(
+            1 for d in lesson_dates if last_change.date() < d <= today
+        )
+        if lessons_silent >= 2:
+            chronics.append({"repo_url": repo.repo_url, "lessons_silent": lessons_silent})
+
+    return {
+        "blind_spots": blind_spots,
+        "auth_banner": auth_banner,
+        "unchecked": unchecked,
+        "chronics": chronics,
+    }
 
 
 def _aggregate_cell(session: Session, repository_id: str, artifact_defs: list) -> dict:
@@ -44,7 +87,7 @@ def _aggregate_cell(session: Session, repository_id: str, artifact_defs: list) -
     }
 
 
-def build_matrix(session: Session, llm_model: str | None = None) -> dict:
+def build_matrix(session: Session, llm_model: str | None = None, today: date | None = None) -> dict:
     """Построение матрицы «репозиторий × занятие» из последних снапшотов.
 
     Возвращает dict с ключами:
@@ -102,4 +145,9 @@ def build_matrix(session: Session, llm_model: str | None = None) -> dict:
         "as_of": as_of,
         # #31: пустой реестр — видимое состояние, не молчаливо пустая матрица
         "registry_count": len(store.find_active_repositories(session)),
+        # #18 (v1.1): слепая зона FR-6, хроники FR-7, auth-баннер, «не проверялось»
+        **_blind_spots_and_signals(
+            session, store.find_active_repositories(session),
+            today or timeutil.utcnow().date(),
+        ),
     }
