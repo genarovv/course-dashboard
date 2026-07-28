@@ -60,7 +60,7 @@
             {% set cell = matrix.cells[repo.id][lesson.number] %}
             <td class="cell cell-{{ cell.status or 'none' }}{% if cell.mr_channel %} cell-mr-channel{% endif %}">
                 {% if cell.mr_channel %}
-                <span class="status status-mr">сдача через MR</span>
+                <a class="status status-mr" href="/students/{{ repo.id }}" title="Канал сдачи этого занятия — запрос на слияние; наблюдение MR появится с FR-12">сдача через MR, не наблюдается</a>
                 {% elif cell.status %}
                 <span class="status">{{ cell.status }}</span>
                 {% if cell.partial_reason %}

@@ -48,6 +48,7 @@
 | number | int | Порядковый номер (упорядоченность нужна FR-7: «2+ занятия подряд») |
 | title | string | Название занятия |
 | date | date | Дата занятия — база интервалов FR-7 «2+ занятия подряд» (Б2, добавлено 2026-07-07) |
+| submission_channel | string (files \| mr) | Канал сдачи занятия: files — артефакты в default-ветке; mr — работа сдаётся запросом на слияние (порядок занятия 11). FR-12, ADR-007; добавлено 2026-07-28 |
 
 ### 1.4 ArtifactDef — определение ожидаемого артефакта (какой документ на каком занятии)
 
@@ -225,6 +226,8 @@ erDiagram
     sync_run ||--o{ artifact_snapshot : "R3 результат обхода (FR-8)"
     sync_run ||--o{ sync_run_repository : "R14 охват обхода (FR-8, Б2)"
     repository ||--o{ sync_run_repository : "R15 исход проверки (FR-6/7/8)"
+    sync_run ||--o{ mr_observation : "R16 наблюдение MR за обход (FR-12)"
+    repository ||--o{ mr_observation : "R17 MR репозитория (FR-12)"
     repository ||--o{ artifact_snapshot : "R4 строка матрицы (FR-4)"
     artifact_def ||--o{ artifact_snapshot : "R5 столбец матрицы (FR-4)"
     edge_def ||--o{ coherence_verdict : "R6 проверка ребра (FR-5)"
@@ -355,6 +358,7 @@ erDiagram
 | ArtifactDef | состояние | FR-2: правка чек-листа пересчитывает статусы вперёд; реконструкция прошлых конфигов не требуется (В12) |
 | EdgeDef | состояние | то же; рёбра включаются по мере курса (PRD §12) |
 | Rubric | **история** (append-only версии) | (б) вердикт привязан к версии рубрики; golden set требует репродуцируемости → правка = новая строка |
+| MrObservation | **история** (append-only журнал) | (в) ветки MR переписываемы (squash/force-push) и удаляемы после merge — наблюдение фиксирует «как было на момент обхода» (FR-12, ADR-007) |
 | SyncRun | **история** (строки не удаляются), но `status` мутирует | (а) «актуально на ЧЧ:ММ»: каждая строка — состоявшийся обход; `status` — жизненный цикл (in_progress→completed/partial/failed), поэтому из И5 исключён (2026-07-09) |
 | SyncRunRepository | **история** (append-only) | (а) «актуально на» = последняя *проверка*, не последнее *изменение*; пообходный охват (Б2, 2026-07-07) |
 | ArtifactSnapshot | **история** (append-only) | все три сигнала; при `force-push` наша запись с `source_commit_sha` остаётся, когда git-история уже переписана |
@@ -398,7 +402,8 @@ erDiagram
 |----------|---------------------|
 | SystemUser | FR-0, R-PD1 |
 | Repository | FR-1, FR-3, FR-4, FR-5, FR-6, FR-9 (карточка репозитория) |
-| Lesson | FR-2, FR-4, FR-7 |
+| Lesson | FR-2, FR-4, FR-7, FR-12 (`submission_channel`) |
+| MrObservation | FR-12 (наблюдение канала сдачи; ADR-007) |
 | ArtifactDef | FR-2, FR-4, FR-5, FR-11 |
 | EdgeDef | FR-5 |
 | Rubric | FR-2, FR-5, FR-11 |
@@ -423,6 +428,7 @@ erDiagram
 | FR-8 автосинхронизация | SyncRun, SyncRunRepository, ArtifactSnapshot (`content_hash`, `observed_at`) | ✓ **Б2 закрыт (2026-07-07):** `SyncRunRepository` хранит «проверено, изменений нет»; «актуально на ЧЧ:ММ» = последняя проверка `ok_*` |
 | FR-9 доказательная цепочка | ArtifactSnapshot (`source_commit_sha`, `observed_at`), CoherenceVerdict (`points`), Override (`revoked_at`) | ✓ против `force-push`; оговорки: карточка репозитория, не студента (решение CEO, В9); цитаты `points` неверифицируемы против стёртого коммита — контент не хранится (C4 закрыт сознательно, ARCHITECTURE v2 §6) |
 | FR-10 отметка ложного разрыва | Override | ✓; отметка переживает реверт пары к прежним хешам (Б1, 2026-07-07) |
+| FR-12 наблюдение канала сдачи | Lesson (`submission_channel`), MrObservation | Интерим (пометка «сдача через MR») — в коде 2026-07-28; сущность — в модели, реализация обхода MR — тикеты волны 2 (plan.md §4, триггер отката 8.08) |
 | NFR-1 производительность | `computed_at` у вердиктов/карточек — проверки асинхронны, вне обхода (решение В1) | ✓; статус «проверяется» — вычислимое состояние, не хранимое (В13) |
 | NFR-2 устойчивость к сбоям | SyncRun (`status=partial`), SyncRunRepository (доступность — вычислимая проекция) | ✓; пообходный охват — `SyncRunRepository` (С5 закрыт 2026-07-07) |
 | NFR-3 безопасность токена | GitCredential (`is_valid`, `checked_at`); сам токен — env-var, не в БД (решение CEO 2026-07-09, ARCHITECTURE v3 §8) | ✓ |
