@@ -57,7 +57,7 @@ def test_migration_downgrade_works(tmp_path):
     cfg = Config("alembic.ini")
     cfg.set_main_option("sqlalchemy.url", f"sqlite:///{db_path}")
     command.upgrade(cfg, "head")
-    command.downgrade(cfg, "-1")
+    command.downgrade(cfg, "d408a1d4f3e7")  # до ревизии перед submission_channel (не «-1»: цепочка растёт)
     engine = create_engine(f"sqlite:///{db_path}")
     columns = {c["name"] for c in inspect(engine).get_columns("lesson")}
     assert "submission_channel" not in columns

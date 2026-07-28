@@ -25,6 +25,7 @@ from app.models.coherence_verdict import CoherenceVerdict
 from app.models.edge_def import EdgeDef
 from app.models.git_credential import GitCredential
 from app.models.lesson import Lesson
+from app.models.mr_observation import MrObservation
 from app.models.override import Override
 from app.models.repository import Repository
 from app.models.rubric import Rubric
@@ -115,6 +116,13 @@ def register_verdict(session: Session, **fields) -> CoherenceVerdict:
     verdict = CoherenceVerdict(**fields)
     session.add(verdict)
     return verdict
+
+
+def register_mr_observation(session: Session, **fields) -> "MrObservation":
+    """FR-12: наблюдение MR за обход (append-only, И12; ADR-007)."""
+    row = MrObservation(**fields)
+    session.add(row)
+    return row
 
 
 def register_override(session: Session, *, coherence_verdict_id: str, reason: str) -> Override:
@@ -361,6 +369,34 @@ def find_latest_verdict_for_quadruple(
         .order_by(CoherenceVerdict.computed_at.desc())
         .limit(1)
     )
+
+
+def find_mr_observations(session: Session, repository_id: str, sync_run_id: str) -> list["MrObservation"]:
+    """FR-12: наблюдения MR репозитория в конкретном обходе."""
+    return list(session.scalars(
+        select(MrObservation)
+        .where(
+            MrObservation.repository_id == repository_id,
+            MrObservation.sync_run_id == sync_run_id,
+        )
+        .order_by(MrObservation.mr_number.desc())
+    ))
+
+
+def find_latest_mr_observations(session: Session, repository_id: str) -> list["MrObservation"]:
+    """FR-12: наблюдения последнего обхода, в котором у репозитория есть MR-данные.
+
+    Обход без MR-шага (деградация NFR-2) не затирает картину прошлого обхода.
+    """
+    last_run_id = session.scalar(
+        select(MrObservation.sync_run_id)
+        .where(MrObservation.repository_id == repository_id)
+        .order_by(MrObservation.observed_at.desc())
+        .limit(1)
+    )
+    if last_run_id is None:
+        return []
+    return find_mr_observations(session, repository_id, last_run_id)
 
 
 def find_verdict_by_id(session: Session, verdict_id: str) -> CoherenceVerdict | None:
