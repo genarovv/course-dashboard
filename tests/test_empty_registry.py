@@ -31,6 +31,9 @@ class FakeGitClient:
     async def get_head_sha(self, repo_url, git_host, ref="main"):
         return "a" * 40
 
+    async def fetch_default_branch(self, repo_url, git_host):
+        return "main"  # контракт ADR-006: обход сверяет default-ветку
+
 
 @pytest.fixture()
 def client_env(tmp_path, monkeypatch):

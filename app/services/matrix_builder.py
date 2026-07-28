@@ -100,4 +100,6 @@ def build_matrix(session: Session, llm_model: str | None = None) -> dict:
         "cells": cells,
         "breaks": breaks,
         "as_of": as_of,
+        # #31: пустой реестр — видимое состояние, не молчаливо пустая матрица
+        "registry_count": len(store.find_active_repositories(session)),
     }

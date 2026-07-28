@@ -6,6 +6,7 @@ from fastapi import APIRouter, Depends, Request
 from fastapi.responses import JSONResponse
 from sqlalchemy.orm import Session
 
+from app import store
 from app.clients.git_client import GitClient
 from app.config import settings
 from app.models import SyncTrigger
@@ -49,7 +50,18 @@ async def sync(
     run = await sync_orchestrator.run_sync(
         session, git_client, triggered_by=triggered_by, template_repo=template_repo
     )
-    return JSONResponse({"sync_run_id": run.id, "status": run.status})
+    # #31: обход нуля репозиториев — не успех, а сигнал «реестр пуст»
+    checked = len(store.find_active_repositories(session))
+    warning = (
+        "Реестр пуст — обходить нечего. Импортируйте репозитории: POST /import-csv."
+        if checked == 0 else None
+    )
+    return JSONResponse({
+        "sync_run_id": run.id,
+        "status": run.status,
+        "repositories_checked": checked,
+        "warning": warning,
+    })
 
 
 @router.post("/admin/reload-config")
