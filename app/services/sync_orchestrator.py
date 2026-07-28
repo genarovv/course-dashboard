@@ -354,6 +354,18 @@ async def run_sync(
     ]
     template_hashes = await _fetch_template_hashes(git_client, template_repo)  # D35: раз за обход
 
+    # ADR-006: переопределить default_branch для репо, созданных до фикса
+    for repo in store.find_active_repositories(session):
+        try:
+            actual = await git_client.fetch_default_branch(
+                repo.repo_url, repo.git_host
+            )
+            if actual != repo.default_branch:
+                repo.default_branch = actual
+        except GitClientError:
+            pass
+    session.flush()
+
     outcomes: list[SyncOutcome] = []
     for repo in store.find_active_repositories(session):
         outcome, detail = await _sync_one_repo(

@@ -203,6 +203,9 @@ async def test_without_worker_pairs_identified_no_tasks(session):
 
 
 class _EdgeFakeGit:
+    async def fetch_default_branch(self, repo_url, git_host):
+        return "main"
+
     async def get_tree(self, repo_url, git_host, ref="main"):
         return ["product/prd.md", "data-model.md"]
 

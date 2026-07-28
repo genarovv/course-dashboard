@@ -34,9 +34,14 @@ def client_and_engine(tmp_path, monkeypatch):
     def handler(request: httpx.Request) -> httpx.Response:
         if "dead" in request.url.path:
             return httpx.Response(404)
-        if "/api/v4/" in request.url.path:  # GitLab отдаёт список
+        if "/api/v4/projects/" in request.url.path and "/repository/" not in request.url.path:
+            return httpx.Response(200, json={"default_branch": "main"})
+        if "/api/v4/" in request.url.path:  # GitLab tree
             return httpx.Response(200, json=[])
-        return httpx.Response(200, json={"tree": []})
+        if "/git/trees/" in request.url.path:  # GitHub tree
+            return httpx.Response(200, json={"tree": []})
+        # GitHub repo info (fetch_default_branch)
+        return httpx.Response(200, json={"default_branch": "main"})
 
     app.dependency_overrides[get_session] = override_session
     app.dependency_overrides[get_git_client] = lambda: GitClient(

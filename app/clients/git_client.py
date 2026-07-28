@@ -86,6 +86,21 @@ class GitClient:
         )
         return data["id"]
 
+    async def fetch_default_branch(self, repo_url: str, git_host: str) -> str:
+        """Определить дефолтную ветку репозитория через API (ADR-006)."""
+        host, path = _parse_repo(repo_url)
+        if git_host == "GitHub":
+            data = await self._request_json(
+                f"https://api.github.com/repos/{path}",
+                self._github_headers(),
+            )
+            return data["default_branch"]
+        data = await self._request_json(
+            f"https://{host}/api/v4/projects/{quote(path, safe='')}",
+            self._gitlab_headers(),
+        )
+        return data["default_branch"]
+
     async def get_file_content(self, repo_url: str, git_host: str, file_path: str, ref: str = "main") -> str:
         """Сырое содержимое файла."""
         host, path = _parse_repo(repo_url)

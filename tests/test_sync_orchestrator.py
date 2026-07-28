@@ -59,12 +59,15 @@ class FakeGitClient:
     async def get_file_content(self, repo_url, git_host, file_path, ref="main"):
         return self._entry(repo_url)[file_path]
 
+    async def fetch_default_branch(self, repo_url, git_host):
+        return "main"
+
     async def get_head_sha(self, repo_url, git_host, ref="main"):
         self._entry(repo_url)
         return HEAD_SHA
 
 
-@pytest.fixture()
+@ pytest.fixture()
 def session(tmp_path):
     db_path = tmp_path / "test.db"
     cfg = Config("alembic.ini")

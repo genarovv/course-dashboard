@@ -52,6 +52,13 @@ async def import_csv(session: Session, csv_text: str, git_client: GitClient) -> 
         repo = store.register_repository(session, repo_url=repo_url, git_host=git_host)
         session.flush()
         try:
+            actual = await git_client.fetch_default_branch(repo_url, git_host.value)
+            if actual != repo.default_branch:
+                repo.default_branch = actual
+                session.flush()
+        except GitClientError:
+            pass
+        try:
             await git_client.get_tree(repo_url, git_host.value, repo.default_branch)
             summary.available += 1
         except GitClientError:
