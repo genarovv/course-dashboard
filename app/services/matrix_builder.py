@@ -7,7 +7,9 @@
 from sqlalchemy.orm import Session
 
 from app import store
-from app.models import SnapshotStatus
+from app.config import settings
+from app.models import SnapshotStatus, VerdictValue
+from app.services import evidence_chain
 
 
 def _aggregate_cell(session: Session, repository_id: str, artifact_defs: list) -> dict:
@@ -42,7 +44,7 @@ def _aggregate_cell(session: Session, repository_id: str, artifact_defs: list) -
     }
 
 
-def build_matrix(session: Session) -> dict:
+def build_matrix(session: Session, llm_model: str | None = None) -> dict:
     """Построение матрицы «репозиторий × занятие» из последних снапшотов.
 
     Возвращает dict с ключами:
@@ -67,6 +69,17 @@ def build_matrix(session: Session) -> dict:
                 session, repo.id, defs_by_lesson[lesson.id]
             )
 
+    # FR-10 (O2, #16): разрывы по рёбрам конвейера — точки для кнопки «ложный разрыв»
+    resolved_model = llm_model or settings.deepseek_model
+    breaks = {
+        repo.id: [
+            card
+            for card in evidence_chain.edge_states(session, repo.id, resolved_model)
+            if card["state"] == "done" and card["verdict"] == VerdictValue.break_
+        ]
+        for repo in repos
+    }
+
     # Время последнего обхода
     last_run = store.find_last_sync_run(session)
     as_of = last_run.started_at.strftime("%H:%M") if last_run else "—:—"
@@ -81,5 +94,6 @@ def build_matrix(session: Session) -> dict:
             for les in lessons
         ],
         "cells": cells,
+        "breaks": breaks,
         "as_of": as_of,
     }

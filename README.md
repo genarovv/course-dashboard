@@ -83,5 +83,23 @@ course-dashboard/
 
 ## Статус
 
-Первая итерация в работе: ORM, store, git-клиент, CSV-импорт, матрица, auth — реализованы.
-LLM-ядро (`coherence_analyzer.py`) заблокировано гейтом Фазы 0 (живая валидация на студентах).
+Первая итерация кода в работе (занятия 9–13): модели + миграции, store, аутентификация, CSV-импорт, git_client, config_manager (FR-2), обход репозиториев с детектом заготовок (FR-8/FR-4/BR-3), свод-реконсиляция LLM-пар (без ядра), матрица (FR-4), карточка студента (FR-9), Override UI (FR-10), /health. Ядро FR-5 (`coherence_analyzer`) — за гейтом Фазы 0 (PRD §13): свод идентифицирует пары, воркер вердиктов подключается после мини-эвала ADR-004. Трекер: [GitHub Issues](https://github.com/genarovv/course-dashboard/issues), карта тестов: [tests/MAP.md](tests/MAP.md).
+
+## Деплой (VPS, ARCHITECTURE §5.5)
+
+Обход по расписанию запускает системный cron (носитель FR-8 — ОС, не приложение):
+
+```cron
+# обход 2 раза в сутки; SYNC_TOKEN = значение CD_SYNC_TOKEN из окружения приложения
+0 7,19 * * * curl -s -X POST http://localhost:8000/sync -H "X-Sync-Token: $SYNC_TOKEN"
+```
+
+Чек-лист деплоя: env-переменные (`CD_ADMIN_PASSWORD` — до миграции, сид админа читает её; `CD_SECRET_KEY`; `CD_SYNC_TOKEN`; `CD_GITHUB_TOKEN`/`CD_GITLAB_TOKEN` — read-only, NFR-3) → `alembic upgrade head` → `uvicorn app.main:app` → загрузить реестр репозиториев (файл версионируется в репо; импорт идемпотентен — дубликаты отсеиваются по нормализованному URL):
+
+```bash
+curl -X POST http://localhost:8000/import-csv --data-binary @data/student-repos.csv -b cookies.txt
+```
+
+→ `POST /sync` (первый обход) → **проверить `crontab -l`** → `GET /health` показывает время последнего обхода (если cron сломан — отметка «актуально на» устаревает видимо, §5.5).
+
+> Все интервью в основе требований — синтетические (ИИ играл персону); требования — приоритизированные гипотезы. Это учебная честность курса, зафиксированная в PRD §0.

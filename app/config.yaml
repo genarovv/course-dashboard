@@ -1,8 +1,92 @@
+# Эталонный конфиг курса (FR-2, §3.4): источник правды для Lesson/ArtifactDef/EdgeDef/Rubric.
+# Изменение = перезапуск или POST /admin/reload-config (реконсиляцию делает config_manager, ADR-005).
+# Смена текста/версии рубрики = новая append-only строка Rubric + прогон golden set (CLAUDE.md).
+# Паттерны артефактов — по структуре project-context-template (контракт артефактов, курсовой ADR-003).
+
+# PRD FR-4 / D35: эталон для детекта заготовок — публичный репозиторий шаблона
+template_repo:
+  url: "https://github.com/genarovv/ai-agents-project-context"
+  git_host: GitHub
+  branch: main
+
 lessons:
-  - number: 1
-    title: "Знакомство с курсом"
+  - number: 3
+    title: "Customer development и проблемные интервью"
+    date: 2026-06-23
     artifacts:
       - role: interview
-        pattern: "**/interview*.md"
+        expected_pattern: "product/interviews/*.md"
+  - number: 4
+    title: "Системный анализ: JTBD и user stories"
+    date: 2026-06-25
+    artifacts:
       - role: persona
-        pattern: "**/persona*.md"
+        expected_pattern: "product/personas/*.md"
+      - role: user_story
+        expected_pattern: "product/user-stories/*.md"
+  - number: 5
+    title: "Документация требований (PRD)"
+    date: 2026-06-30
+    artifacts:
+      - role: prd
+        expected_pattern: "product/prd.md"
+        template_relative_path: "product/prd.md"
+  - number: 6
+    title: "Проектирование структуры данных"
+    date: 2026-07-02
+    artifacts:
+      - role: data_model
+        expected_pattern: "data-model.md"
+  - number: 7
+    title: "Архитектура, стек и выбор LLM"
+    date: 2026-07-07
+    artifacts:
+      - role: architecture
+        expected_pattern: "ARCHITECTURE.md"
+  - number: 8
+    title: "Планирование разработки"
+    date: 2026-07-09
+    artifacts:
+      - role: plan
+        expected_pattern: "plans/plan.md"
+  - number: 9
+    title: "Разработка с ИИ (1)"
+    date: 2026-07-14
+    artifacts:
+      - role: code
+        expected_pattern: "app/**/*.py"
+  - number: 11
+    title: "Автоматическое тестирование с помощью ИИ"
+    date: 2026-07-21
+    artifacts:
+      - role: tests
+        expected_pattern: "tests/**/*.py"
+
+# v1-минимум D4: два ребра конвейера (plans/plan.md — Pre-defense расширение до 8)
+edges:
+  - source_role: prd
+    target_role: data_model
+    rubric:
+      version: "1.0"
+      text: >-
+        Проверка связности «PRD → схема данных». B обязан опираться на A: каждая значимая
+        сущность PRD (роль, объект предметной области, ключевое требование к данным) либо
+        отражена в схеме данных (синонимы засчитываются и называются), либо исключена явно
+        (out-of-scope с обоснованием), либо потеряна. Разрыв = не менее одной потерянной
+        значимой сущности. Выход строго: ВЕРДИКТ (ok|break) / УВЕРЕННОСТЬ (high|medium|low) /
+        СЧЁТЧИКИ (entities_checked = entities_found + entities_excluded + entities_lost) /
+        ТОЧКИ (до 5: сущность | цитата A до 15 слов | что искал в B и почему не засчитал) /
+        ЗАМЕТКИ до 3 строк.
+  - source_role: data_model
+    target_role: architecture
+    rubric:
+      version: "1.0"
+      text: >-
+        Проверка связности «схема данных → архитектура». B обязан опираться на A: каждая
+        сущность и инвариант схемы данных либо отражены в архитектуре (хранилище, слой,
+        физический механизм инварианта; синонимы засчитываются и называются), либо исключены
+        явно (out-of-scope с обоснованием), либо потеряны. Разрыв = не менее одной потерянной
+        значимой сущности. Выход строго: ВЕРДИКТ (ok|break) / УВЕРЕННОСТЬ (high|medium|low) /
+        СЧЁТЧИКИ (entities_checked = entities_found + entities_excluded + entities_lost) /
+        ТОЧКИ (до 5: сущность | цитата A до 15 слов | что искал в B и почему не засчитал) /
+        ЗАМЕТКИ до 3 строк.
