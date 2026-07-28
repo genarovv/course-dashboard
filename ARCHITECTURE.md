@@ -288,7 +288,7 @@ class EnumColumn(types.TypeDecorator):
 | **И9** (единственность наблюдения) | §1.9 | `UNIQUE (sync_run_id, repository_id, artifact_def_id)` | DDL |
 | **И10** (справочники) | §1.2–1.6 | `UNIQUE (number)` на Lesson; `UNIQUE (source_role, target_role)` на EdgeDef; `UNIQUE (git_host)` на GitCredential — DDL. **Single-user** — сид одной строки `system_user` при миграции + отсутствие роута создания пользователя. Почему не CHECK: `CHECK (SELECT COUNT(*) …)` в SQLite физически не собирается (v2-вариант был неисполним); сид + отсутствие пути записи дают ту же гарантию бесплатно. | DDL (UNIQUE) + сид/код (single-user) |
 | **И11** (единственность охвата) | §1.13 | `UNIQUE (sync_run_id, repository_id)` | DDL |
-| **И12** (единственность наблюдения MR) | §1.14 | `UNIQUE (sync_run_id, repository_id, mr_number)` — приедет с миграцией MrObservation (волна 2 плана, ADR-007) | DDL (план) |
+| **И12** (единственность наблюдения MR) | §1.14 | `UNIQUE (sync_run_id, repository_id, mr_number)` — миграция 9e51c07d2af4 | DDL |
 
 **Итог градации:** DDL — И1, И3, И4, И6, И8, И9, И11, И12 + UNIQUE-части И10. Код/сид — И2, И7, И10 (single-user). Триггеры — только 2 доказательных таблицы (И5). Почему не триггеры на всех журнальных таблицах: при single-writer/single-process дисциплины store.py достаточно; триггер на 1 из 6 таблиц (как было в v2) — полумера, учащая ложной защите, а полный комплект — шум. На двух таблицах, которыми продукт торгует на защите (FR-9), защита от будущего бага с UPDATE стоит ~4 строки DDL и педагогически показывает, где она критична.
 
@@ -314,8 +314,7 @@ POST /sync  →  sync_orchestrator.run_sync()
 
   → update_sync_run_status(completed|partial)     # единственная мутация SyncRun (§3.5)
 
-  → НАБЛЮДЕНИЕ MR (FR-12, ADR-007; ПЛАН — тикеты волны 2 plan.md §4, триггер отката 8.08;
-     в коде 2026-07-28 только интерим-пометка «сдача через MR, не наблюдается»):
+  → НАБЛЮДЕНИЕ MR (FR-12, ADR-007; реализовано 2026-07-28, тикеты #38–#41):
       → git_client.list_merge_requests() + описания + обсуждения
       → маркеры process_markers из config.yaml (regex по описанию)
       → register_mr_observation(…)               # INSERT MrObservation (append-only, И12)

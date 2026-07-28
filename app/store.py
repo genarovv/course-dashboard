@@ -383,6 +383,21 @@ def find_mr_observations(session: Session, repository_id: str, sync_run_id: str)
     ))
 
 
+def find_previous_mr_observation(
+    session: Session, repository_id: str, mr_number: int
+) -> "MrObservation | None":
+    """FR-12: последнее наблюдение конкретного MR — база правила устаревания вердикта (ADR-007 сц. 5)."""
+    return session.scalar(
+        select(MrObservation)
+        .where(
+            MrObservation.repository_id == repository_id,
+            MrObservation.mr_number == mr_number,
+        )
+        .order_by(MrObservation.observed_at.desc())
+        .limit(1)
+    )
+
+
 def find_latest_mr_observations(session: Session, repository_id: str) -> list["MrObservation"]:
     """FR-12: наблюдения последнего обхода, в котором у репозитория есть MR-данные.
 

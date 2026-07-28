@@ -51,7 +51,7 @@ class ProcessMarkerConfig(BaseModel):
 
     key: str
     pattern: str  # regex (обычно с (?im): начало строки, регистронезависимо)
-    since_lesson: int | None = None
+    # привязка маркера к занятию отложена: у MR нет связи с занятием в v1 (ADR-007)
 
 
 class TemplateRepoConfig(BaseModel):

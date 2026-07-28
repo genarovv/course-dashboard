@@ -43,6 +43,14 @@ def _parse_repo(repo_url: str) -> tuple[str, str]:
 
 
 @dataclass(frozen=True)
+class NoteInfo:
+    """Нота обсуждения MR: текст + время (нужно правилу устаревания вердикта, ADR-007 сц. 5)."""
+
+    body: str
+    created_at: str  # ISO-строка хостинга
+
+
+@dataclass(frozen=True)
 class MrInfo:
     """Нормализованный MR/PR (FR-12, #38). Клиент не знает о моделях данных (§3.2)."""
 
@@ -174,8 +182,8 @@ class GitClient:
             page = response.headers.get("x-next-page", "")
         return mrs
 
-    async def list_mr_notes(self, repo_url: str, git_host: str, number: int) -> list[str]:
-        """FR-12 (#38): тексты обсуждения MR/PR (для поиска вердикта ревьюера)."""
+    async def list_mr_notes(self, repo_url: str, git_host: str, number: int) -> list[NoteInfo]:
+        """FR-12 (#38): обсуждение MR/PR — тексты с временем (вердикт ревьюера + устаревание)."""
         host, path = _parse_repo(repo_url)
         if git_host == "GitHub":
             data = await self._request_json(
@@ -188,7 +196,10 @@ class GitClient:
                 f"/merge_requests/{number}/notes?per_page=100",
                 self._gitlab_headers(),
             )
-        return [note.get("body") or "" for note in data]
+        return [
+            NoteInfo(body=note.get("body") or "", created_at=note.get("created_at") or "")
+            for note in data
+        ]
 
     # ── внутреннее ───────────────────────────────────────────────────────
 

@@ -346,13 +346,30 @@ async def _observe_mrs(
     except GitClientError as exc:
         logger.warning("MR-наблюдение недоступно для %s (%s)", repo.repo_url, exc)
         return
+    seen_numbers: set[int] = set()  # дубль номера из сдвига offset-пагинации не роняет И12
     for mr in mrs:
+        if mr.number in seen_numbers:
+            continue
+        seen_numbers.add(mr.number)
         found_markers = {m.key: _match_marker(m.pattern, mr.description) for m in markers}
         approved = False
         if mr.state == "opened":  # merged/closed уже прошли кнопку — обсуждение не читаем
             try:
                 notes = await git_client.list_mr_notes(repo.repo_url, repo.git_host, mr.number)
-                approved = any(_is_approval(note) for note in notes)
+                # ADR-007 сц. 5: «принято» устаревает вместе с головой ветки — после
+                # force-push считаются только ноты, датированные позже того момента,
+                # когда мы в последний раз видели прежнюю голову
+                prev = store.find_previous_mr_observation(session, repo.id, mr.number)
+                if prev is not None and prev.head_sha != mr.head_sha:
+                    cutoff = prev.observed_at
+                    approved = any(
+                        _is_approval(note.body)
+                        and (parsed := _parse_host_datetime(note.created_at)) is not None
+                        and parsed > cutoff
+                        for note in notes
+                    )
+                else:
+                    approved = any(_is_approval(note.body) for note in notes)
             except GitClientError as exc:
                 logger.warning("Обсуждение MR !%s (%s) недоступно: %s", mr.number, repo.repo_url, exc)
         store.register_mr_observation(

@@ -7,13 +7,10 @@
 process_markers:
   - key: mutation        # неделя «Тесты» (занятия 11–12)
     pattern: "(?im)^мутация:"
-    since_lesson: 11
   - key: prichina        # неделя «Отладка» (занятие 13) — единственный контрольный маркер
     pattern: "(?im)^причина:"
-    since_lesson: 13
   - key: dokazatelstvo
     pattern: "(?im)^доказательство:"
-    since_lesson: 13
 
 # PRD FR-4 / D35: эталон для детекта заготовок — публичный репозиторий шаблона
 template_repo:

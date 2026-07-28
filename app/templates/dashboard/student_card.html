@@ -48,10 +48,11 @@
     <ul>
         {% for mr in card.mrs %}
         <li class="mr mr-{{ mr.state }}">
-            <b>{{ mr.title }}</b> — ветка {{ mr.source_branch }}, {{ mr.state }}
+            <b>{{ mr.title }}</b> — ветка {{ mr.source_branch }}, {{ mr.state }}{% if mr.updated_at %}, обновлён {{ mr.updated_at[:10] }}{% endif %}
             {% if mr.ready_for_merge %}<span class="ready">готов к кнопке преподавателя</span>{% endif %}
             {% for key, marker in mr.markers.items() %}
-            {% if marker.found %}<span class="marker">{{ marker.quote }}</span>{% endif %}
+            {% if marker.found %}<span class="marker">{{ marker.quote }}</span>
+            {% else %}<span class="marker marker-missing">{{ key }}: не найден</span>{% endif %}
             {% endfor %}
         </li>
         {% endfor %}

@@ -178,18 +178,20 @@ def test_github_mr_notes():
     def handler(request: httpx.Request) -> httpx.Response:
         assert "/issues/7/comments" in request.url.path
         return httpx.Response(200, json=[
-            {"body": "REWORK: 2 находки"},
-            {"body": "принято"},
+            {"body": "REWORK: 2 находки", "created_at": "2026-07-27T10:00:00Z"},
+            {"body": "принято", "created_at": "2026-07-28T09:00:00Z"},
         ])
 
     notes = _run(_client(handler).list_mr_notes("https://github.com/u/r", "GitHub", 7))
-    assert notes == ["REWORK: 2 находки", "принято"]
+    assert [(n.body, n.created_at) for n in notes] == [
+        ("REWORK: 2 находки", "2026-07-27T10:00:00Z"), ("принято", "2026-07-28T09:00:00Z")]
 
 
 def test_gitlab_mr_notes():
     def handler(request: httpx.Request) -> httpx.Response:
         assert "/merge_requests/41/notes" in request.url.path
-        return httpx.Response(200, content=json.dumps([{"body": "принято"}]))
+        return httpx.Response(200, content=json.dumps(
+            [{"body": "принято", "created_at": "2026-07-28T09:00:00Z"}]))
 
     notes = _run(_client(handler).list_mr_notes("https://gitlab.com/g/r", "GitLab", 41))
-    assert notes == ["принято"]
+    assert [(n.body, n.created_at) for n in notes] == [("принято", "2026-07-28T09:00:00Z")]

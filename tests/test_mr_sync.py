@@ -48,8 +48,14 @@ class FakeGit:
         return self.mrs
 
     async def list_mr_notes(self, repo_url, git_host, number):
+        from app.clients.git_client import NoteInfo
+
         self.notes_calls.append(number)
-        return self.notes.get(number, [])
+        return [
+            note if isinstance(note, NoteInfo)
+            else NoteInfo(body=note, created_at="2026-07-28T09:00:00Z")
+            for note in self.notes.get(number, [])
+        ]
 
 
 def _mr(number, state="opened", description="", branch="S5-auth"):

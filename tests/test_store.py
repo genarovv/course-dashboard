@@ -46,6 +46,7 @@ def test_contract_register_for_journal_entities():
     for fn in (
         "register_rubric", "register_snapshot", "register_verdict",
         "register_sync_outcome", "register_override",
+        "register_mr_observation",  # FR-12: журнальная сущность добавлена ADR-007 (2026-07-28)
     ):
         assert fn in names, fn
 
