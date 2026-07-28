@@ -12,14 +12,16 @@
 
 from datetime import datetime
 
-from sqlalchemy import create_engine, event, select
+from sqlalchemy import create_engine, distinct, event, select
 from sqlalchemy.orm import Session, sessionmaker
 
 from app.config import settings
 from app.models import GitHost, SyncOutcome, SyncStatus, SyncTrigger, VerdictValue
+from app.models.artifact_def import ArtifactDef
 from app.models.artifact_snapshot import ArtifactSnapshot
 from app.models.coherence_verdict import CoherenceVerdict
 from app.models.git_credential import GitCredential
+from app.models.lesson import Lesson
 from app.models.override import Override
 from app.models.repository import Repository
 from app.models.rubric import Rubric
@@ -167,6 +169,26 @@ def find_repository_by_normalized_url(session: Session, repo_url: str) -> Reposi
 def find_active_repositories(session: Session) -> list[Repository]:
     """FR-8: репозитории для обхода (archived_at IS NULL)."""
     return list(session.scalars(select(Repository).where(Repository.archived_at.is_(None))))
+
+
+def find_checked_repository_ids(session: Session) -> set[str]:
+    """FR-4: ID репозиториев, у которых есть хотя бы одна запись SyncRunRepository."""
+    return set(session.scalars(select(distinct(SyncRunRepository.repository_id))))
+
+
+def find_all_lessons(session: Session) -> list[Lesson]:
+    """FR-2/FR-4: все занятия, упорядоченные по номеру."""
+    return list(session.scalars(select(Lesson).order_by(Lesson.number)))
+
+
+def find_artifact_defs_by_lesson(session: Session, lesson_id: str) -> list[ArtifactDef]:
+    """FR-2/FR-4: артефакт-определения для заданного занятия."""
+    return list(session.scalars(select(ArtifactDef).where(ArtifactDef.lesson_id == lesson_id)))
+
+
+def find_last_sync_run(session: Session) -> SyncRun | None:
+    """FR-8: последний обход (для метки «актуально на»)."""
+    return session.scalar(select(SyncRun).order_by(SyncRun.started_at.desc()).limit(1))
 
 
 def find_credential(session: Session, git_host: GitHost) -> GitCredential | None:

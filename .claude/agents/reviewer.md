@@ -16,6 +16,10 @@ tools: Read, Glob, Grep, Bash
 
 ## Чеклист
 
+0. **Тесты:**
+   - У нового поведения есть тесты
+   - Тесты закоммичены раньше кода (commits: «tests first» → implementation)
+   - Изменения старых тестов объяснены в описании MR (= изменение требования)
 1. **Acceptance criteria тикета.** Каждый критерий из `plans/plan.md` выполнен. Не выполнен или выполнен частично — находка.
 2. **Архитектура (ARCHITECTURE.md v3):**
    - Направление зависимостей (§3.2): routes → services → store.py → models; services → clients. Импорт против стрелки (например, models импортирует services, routes лезут в store.py напрямую) — находка.
