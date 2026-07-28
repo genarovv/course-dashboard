@@ -67,6 +67,7 @@
 | D32 | GitHub API | Чтение файлов артефактов, дерево репозитория | HTTPS, read-only токен | FR-3, NFR-3, NFR-4; DM §1.7 |
 | D33 | DeepSeek API | Проверка связности (FR-5) + качество шагов (FR-11, v2) | HTTP API, асинхронно; ~200 запросов/нед | FR-5, FR-11, NFR-1; DM §1.10 |
 | D34 | CSV (Яндекс.Форма) | Импорт списка repo_url студентов | CSV-файл, ручная загрузка | FR-1, BR-6; вопрос №7 |
+| D40 | Канал сдачи — MR (добавлен 2026-07-28) | Чтение списка MR/PR, описаний и обсуждений: состояние, маркеры недели, вердикт агента-ревьюера студента | HTTPS, тот же read-only токен (scope `read_api` — проверить); те же rate-limit/ретраи NFR-4 | FR-12, US-B7; ADR-007; порядок сдачи занятия 11 |
 | D35 | Репозиторий-шаблон | Эталон для детекта заготовок (FR-4 «частично») | Сравнение `content_hash` файла студента с хешами файлов шаблона — **шаг классификации в `sync_orchestrator`** (`status=partial`, `partial_reason=template_copy`); хеши шаблона тянутся раз за обход. Почему не строим отдельный компонент: это одно сравнение хешей внутри уже существующего шага классификации снапшота. | FR-4, BR-3; DM §1.4 |
 
 ### 1.4 Ограничения
@@ -137,6 +138,7 @@ app/
 │   ├── git_credential.py    #   GitCredential — FR-3; git_host + is_valid + checked_at, токен в env (§8)
 │   ├── sync_run.py          #   SyncRun — FR-8
 │   ├── sync_run_repository.py  # SyncRunRepository — FR-6/7/8
+│   ├── mr_observation.py    #   MrObservation — FR-12 (ADR-007, И12); журнал наблюдений MR
 │   ├── artifact_snapshot.py #   ArtifactSnapshot — FR-4; partial_reason — JSON-массив (C3)
 │   ├── coherence_verdict.py #   CoherenceVerdict — FR-5
 │   └── override.py          #   Override — FR-10
@@ -310,6 +312,12 @@ POST /sync  →  sync_orchestrator.run_sync()
       → record_sync_outcome(…)                    # INSERT SyncRunRepository (append-only)
 
   → update_sync_run_status(completed|partial)     # единственная мутация SyncRun (§3.5)
+
+  → НАБЛЮДЕНИЕ MR (FR-12, ADR-007; шаг после артефактов, с 2026-07-28):
+      → git_client.list_merge_requests() + описания + обсуждения
+      → маркеры process_markers из config.yaml (regex по описанию)
+      → register_mr_observation(…)               # INSERT MrObservation (append-only, И12)
+      # ошибка чтения MR — исход, не крах обхода (NFR-2); выводы из порядка коммитов не делаются
 
   → СВОД-РЕКОНСИЛЯЦИЯ (идемпотентный, в конце КАЖДОГО обхода):
       → найти все пары (EdgeDef × репозиторий с текущими снапшотами обеих ролей),
