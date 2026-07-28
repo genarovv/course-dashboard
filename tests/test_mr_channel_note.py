@@ -138,6 +138,43 @@ def test_mr_lesson_not_found_cell_also_marked(session):
     assert cell["mr_channel"] is True
 
 
+def test_mr_note_rendered_with_card_link(tmp_path, monkeypatch):
+    """UI: пометка «сдача через MR, не наблюдается» + ссылка на карточку (AC-5 US-B7)."""
+    from fastapi.testclient import TestClient
+
+    from app.main import app
+    from app.routes import get_session
+
+    monkeypatch.setenv("CD_ADMIN_PASSWORD", "pw")
+    db_path = tmp_path / "ui.db"
+    cfg = Config("alembic.ini")
+    cfg.set_main_option("sqlalchemy.url", f"sqlite:///{db_path}")
+    command.upgrade(cfg, "head")
+    engine = create_engine(f"sqlite:///{db_path}")
+    with Session(engine) as s:
+        config_manager.reconcile(s, config_manager.parse_config(YAML_MR))
+        repo, _run = _seed_checked_repo(s)
+        s.commit()
+        repo_id = repo.id
+
+    def override_session():
+        with Session(engine) as s:
+            yield s
+            s.commit()
+
+    app.dependency_overrides[get_session] = override_session
+    try:
+        client = TestClient(app)
+        client.post("/login", data={"username": "admin", "password": "pw"})
+        html = client.get("/").text
+    finally:
+        app.dependency_overrides.clear()
+        engine.dispose()
+
+    assert "сдача через MR, не наблюдается" in html  # честная формулировка ADR-007 (вариант А)
+    assert f"/students/{repo_id}" in html  # ссылка на карточку
+
+
 def test_mr_lesson_found_shows_real_status(session):
     """Артефакт найден в default-ветке — показываем реальный статус, пометка не нужна."""
     config_manager.reconcile(session, config_manager.parse_config(YAML_MR))
