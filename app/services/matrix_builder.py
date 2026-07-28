@@ -140,6 +140,9 @@ def build_matrix(session: Session, llm_model: str | None = None, today: date | N
             "ready": sum(1 for r in rows if r.state == "opened" and r.reviewer_approved),
             "opened": sum(1 for r in rows if r.state == "opened"),
             "merged": sum(1 for r in rows if r.state == "merged"),
+            # порядок 2026-07-29 (мержат сами): merged+вердикт = сдан; без вердикта — мимо ревью
+            "accepted": sum(1 for r in rows if r.state == "merged" and r.reviewer_approved),
+            "merged_no_review": sum(1 for r in rows if r.state == "merged" and not r.reviewer_approved),
         }
 
     # Время последнего обхода

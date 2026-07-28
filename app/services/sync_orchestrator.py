@@ -353,13 +353,17 @@ async def _observe_mrs(
         seen_numbers.add(mr.number)
         found_markers = {m.key: _match_marker(m.pattern, mr.description) for m in markers}
         approved = False
-        if mr.state == "opened":  # merged/closed уже прошли кнопку — обсуждение не читаем
+        prev = store.find_previous_mr_observation(session, repo.id, mr.number)
+        if prev is not None and prev.head_sha == mr.head_sha and prev.reviewer_approved:
+            approved = True  # вердикт при неизменной голове не отзываем — экономия API
+        elif mr.state in ("opened", "merged"):
+            # порядок сдачи 2026-07-29: студенты мержат сами — вердикт нужен и у merged;
+            # closed без слияния не читаем
             try:
                 notes = await git_client.list_mr_notes(repo.repo_url, repo.git_host, mr.number)
                 # ADR-007 сц. 5: «принято» устаревает вместе с головой ветки — после
                 # force-push считаются только ноты, датированные позже того момента,
                 # когда мы в последний раз видели прежнюю голову
-                prev = store.find_previous_mr_observation(session, repo.id, mr.number)
                 if prev is not None and prev.head_sha != mr.head_sha:
                     cutoff = prev.observed_at
                     approved = any(

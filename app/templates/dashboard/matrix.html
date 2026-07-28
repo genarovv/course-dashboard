@@ -93,7 +93,7 @@
             {% set proc = matrix.process.get(repo.id) %}
             <td class="process">
                 {% if proc and (proc.ready or proc.opened or proc.merged) %}
-                {% if proc.ready %}<b>{{ proc.ready }} готов к кнопке</b> · {% endif %}{{ proc.opened }} откр. · {{ proc.merged }} merged
+                {% if proc.accepted %}<b>{{ proc.accepted }} сдано</b> · {% endif %}{% if proc.ready %}{{ proc.ready }} принят, ждёт merge · {% endif %}{{ proc.opened }} откр.{% if proc.merged_no_review %} · <span class="no-review">{{ proc.merged_no_review }} мимо ревью</span>{% endif %}
                 {% else %}—{% endif %}
             </td>
         </tr>

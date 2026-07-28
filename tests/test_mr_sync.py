@@ -132,14 +132,32 @@ async def test_negated_verdict_not_approved(session):
 
 
 @pytest.mark.anyio
-async def test_notes_fetched_only_for_opened(session):
-    """Экономия API: обсуждение читается только у открытых MR (merged уже прошли кнопку)."""
+async def test_notes_fetched_for_opened_and_merged_not_closed(session):
+    """Порядок 2026-07-29 (мержат сами): вердикт нужен и у merged; closed не читаем.
+
+    Требование изменено решением CEO 2026-07-29 — ранее notes читались только у opened.
+    """
     _repo(session)
     client = FakeGit(mrs=[_mr(7, state="opened"), _mr(6, state="merged"), _mr(5, state="closed")])
 
     await _sync(session, client)
 
-    assert client.notes_calls == [7]
+    assert sorted(client.notes_calls) == [6, 7]
+
+
+@pytest.mark.anyio
+async def test_approved_inherited_without_refetch(session):
+    """Экономия API: вердикт «принято» при неизменной голове наследуется без повторного чтения."""
+    repo = _repo(session)
+    client = FakeGit(mrs=[_mr(6, state="merged")], notes={6: ["принято"]})
+    await _sync(session, client)
+    calls_after_first = len(client.notes_calls)
+
+    run2 = await _sync(session, client)
+
+    assert len(client.notes_calls) == calls_after_first  # второй обход нот не читал
+    (row,) = store.find_mr_observations(session, repo.id, run2.id)
+    assert row.reviewer_approved is True
 
 
 @pytest.mark.anyio

@@ -77,13 +77,16 @@ def test_matrix_process_summary(session):
     matrix = build_matrix(session, llm_model="deepseek-v4-flash")
 
     process = matrix["process"][repo.id]
-    assert process == {"ready": 1, "opened": 2, "merged": 1}
+    # семантика 2026-07-29: merged без вердикта = «мимо ревью», merged+вердикт = accepted
+    assert process == {"ready": 1, "opened": 2, "merged": 1, "accepted": 0, "merged_no_review": 1}
 
 
 def test_matrix_process_empty_without_observations(session):
     repo, _run = _seed(session)
     matrix = build_matrix(session, llm_model="deepseek-v4-flash")
-    assert matrix["process"][repo.id] == {"ready": 0, "opened": 0, "merged": 0}
+    assert matrix["process"][repo.id] == {
+        "ready": 0, "opened": 0, "merged": 0, "accepted": 0, "merged_no_review": 0
+    }
 
 
 def test_ui_renders_mr_block_and_process_column(engine):
@@ -109,7 +112,7 @@ def test_ui_renders_mr_block_and_process_column(engine):
         engine.dispose()
 
     assert "MR 7" in card_html
-    assert "готов к кнопке" in card_html
+    assert "принят ревьюером" in card_html  # ярлык сменён: кнопка преподавателя ушла (2026-07-29)
     assert "Процесс" in matrix_html  # колонка процесса
 
 
