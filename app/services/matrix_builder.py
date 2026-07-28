@@ -132,6 +132,16 @@ def build_matrix(session: Session, llm_model: str | None = None, today: date | N
         for repo in repos
     }
 
+    # FR-12 (#41): сводка процесса сдачи по последним MR-наблюдениям
+    process = {}
+    for repo in repos:
+        rows = store.find_latest_mr_observations(session, repo.id)
+        process[repo.id] = {
+            "ready": sum(1 for r in rows if r.state == "opened" and r.reviewer_approved),
+            "opened": sum(1 for r in rows if r.state == "opened"),
+            "merged": sum(1 for r in rows if r.state == "merged"),
+        }
+
     # Время последнего обхода
     last_run = store.find_last_sync_run(session)
     # #32: в БД наивный UTC, показываем местное время с меткой зоны
@@ -151,6 +161,7 @@ def build_matrix(session: Session, llm_model: str | None = None, today: date | N
         ],
         "cells": cells,
         "breaks": breaks,
+        "process": process,
         "as_of": as_of,
         # #31: пустой реестр — видимое состояние, не молчаливо пустая матрица
         "registry_count": len(active_repos),

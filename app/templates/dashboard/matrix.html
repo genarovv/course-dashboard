@@ -50,6 +50,7 @@
             <th title="{{ lesson.title }}">{{ lesson.number }}. {{ lesson.title }}</th>
             {% endfor %}
             <th>Разрывы связности</th>
+            <th>Процесс</th>
         </tr>
     </thead>
     <tbody>
@@ -88,6 +89,12 @@
                 {% else %}
                 <span class="no-breaks">—</span>
                 {% endfor %}
+            </td>
+            {% set proc = matrix.process.get(repo.id) %}
+            <td class="process">
+                {% if proc and (proc.ready or proc.opened or proc.merged) %}
+                {% if proc.ready %}<b>{{ proc.ready }} готов к кнопке</b> · {% endif %}{{ proc.opened }} откр. · {{ proc.merged }} merged
+                {% else %}—{% endif %}
             </td>
         </tr>
         {% endfor %}
