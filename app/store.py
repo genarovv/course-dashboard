@@ -266,7 +266,7 @@ def find_last_outcome_row(session: Session, repository_id: str) -> SyncRunReposi
     )
 
 
-def find_last_observed_at(session: Session, repository_id: str):
+def find_last_observed_at(session: Session, repository_id: str) -> datetime | None:
     """FR-7: время последнего нового наблюдения (снапшота) репозитория."""
     return session.scalar(
         select(ArtifactSnapshot.observed_at)

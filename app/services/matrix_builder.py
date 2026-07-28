@@ -40,6 +40,9 @@ def _blind_spots_and_signals(session: Session, repos: list, today: date) -> dict
         if outcome == SyncOutcome.skipped_rate_limit:
             unchecked.append({"repo_url": repo.repo_url})
             continue
+        # Известное ограничение (ревью #18, находка 5): хроника не отличает
+        # «студент молчит» от «cron давно не запускался» — устаревание обхода
+        # видно по «Актуально на» (§5.5); гейт по checked_at — кандидат v1.2
         last_change = store.find_last_observed_at(session, repo.id) or repo.added_at
         lessons_silent = sum(
             1 for d in lesson_dates if last_change.date() < d <= today
@@ -98,7 +101,8 @@ def build_matrix(session: Session, llm_model: str | None = None, today: date | N
     """
     # Только репозитории, у которых есть хотя бы одна запись SyncRunRepository
     checked_ids = store.find_checked_repository_ids(session)
-    repos = [r for r in store.find_active_repositories(session) if r.id in checked_ids]
+    active_repos = store.find_active_repositories(session)  # один запрос на весь рендер
+    repos = [r for r in active_repos if r.id in checked_ids]
     lessons = store.find_all_lessons(session)
     defs_by_lesson = {
         lesson.id: store.find_artifact_defs_by_lesson(session, lesson.id) for lesson in lessons
@@ -144,10 +148,10 @@ def build_matrix(session: Session, llm_model: str | None = None, today: date | N
         "breaks": breaks,
         "as_of": as_of,
         # #31: пустой реестр — видимое состояние, не молчаливо пустая матрица
-        "registry_count": len(store.find_active_repositories(session)),
+        "registry_count": len(active_repos),
         # #18 (v1.1): слепая зона FR-6, хроники FR-7, auth-баннер, «не проверялось»
         **_blind_spots_and_signals(
-            session, store.find_active_repositories(session),
+            session, active_repos,
             today or timeutil.utcnow().date(),
         ),
     }
