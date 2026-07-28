@@ -149,3 +149,16 @@ def test_ui_shows_updated_at_and_missing_markers(engine):
 
     assert "2026-07-28" in html  # дата последнего обновления MR (AC1)
     assert "prichina: не найден" in html  # отсутствие маркера — явно, не ошибка (AC2)
+
+
+def test_merged_without_review_is_signal(session):
+    """Порядок 2026-07-29: merged без «принято» — «смержен мимо ревью» в процессе матрицы."""
+    repo, run = _seed(session)
+    _observe(session, run, repo, 6, state="merged", approved=False)
+    _observe(session, run, repo, 5, state="merged", approved=True)
+
+    matrix = build_matrix(session, llm_model="deepseek-v4-flash")
+
+    process = matrix["process"][repo.id]
+    assert process["merged_no_review"] == 1
+    assert process["accepted"] == 1  # merged + принято = сдан

@@ -259,3 +259,30 @@ async def test_duplicate_mr_numbers_from_pagination_deduped(session):
 
     rows = store.find_mr_observations(session, repo.id, run.id)
     assert [r.mr_number for r in rows] == [7]
+
+
+# ── смена порядка сдачи (решение CEO 2026-07-29): мержат сами, мимо кнопки ──
+
+
+@pytest.mark.anyio
+async def test_merged_mr_verdict_is_read(session):
+    """merged больше не значит «преподаватель принял» — вердикт читается и у merged."""
+    repo = _repo(session)
+    client = FakeGit(mrs=[_mr(6, state="merged")], notes={6: ["принято"]})
+
+    run = await _sync(session, client)
+
+    (row,) = store.find_mr_observations(session, repo.id, run.id)
+    assert row.reviewer_approved is True
+
+
+@pytest.mark.anyio
+async def test_merged_without_verdict_flagged(session):
+    """Смержен без «принято» — сигнал «мимо ревью», а не сданная работа."""
+    repo = _repo(session)
+    client = FakeGit(mrs=[_mr(6, state="merged")], notes={6: ["выглядит неплохо"]})
+
+    run = await _sync(session, client)
+
+    (row,) = store.find_mr_observations(session, repo.id, run.id)
+    assert row.reviewer_approved is False
