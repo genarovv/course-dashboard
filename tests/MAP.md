@@ -44,7 +44,7 @@
 | `app/routes/auth.py` | 41 | 2 miss | **95%** | test_auth |
 | `app/routes/admin.py` | 34 | 1 miss | **97%** | test_csv_import, test_config_manager, test_sync_orchestrator |
 | `app/services/matrix_builder.py` | 33 | 1 miss | **97%** | test_matrix_builder, test_dashboard_matrix, test_override_ui (breaks) |
-| `app/services/evidence_chain.py` | 29 | ✅ | **100%** | test_evidence_chain |
+| `app/services/evidence_chain.py` | 31 | ✅ | **100%** | test_evidence_chain, test_override_ui |
 | `app/routes/dashboard.py` | 33 | ✅ | **100%** | test_app_starts, test_dashboard_matrix, test_evidence_chain, test_override_ui |
 | `app/routes/health.py` | 15 | ✅ | **100%** | test_health |
 | `app/routes/__init__.py` | 8 | 3 miss | **62%** | все тесты через dependency override → сид сессии |

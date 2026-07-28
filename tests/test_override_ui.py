@@ -151,9 +151,12 @@ def test_toggle_requires_auth(client_env):
         s.commit()
         verdict_id = verdict.id
 
-    assert client.post(
-        f"/verdicts/{verdict_id}/override-toggle", follow_redirects=False
-    ).status_code == 303  # редирект на /login, не действие
+    response = client.post(f"/verdicts/{verdict_id}/override-toggle", follow_redirects=False)
+
+    assert response.status_code == 303
+    assert response.headers["location"] == "/login"  # именно гвард, а не redirect после действия
+    with Session(engine) as s:
+        assert store.find_active_override_for_verdict(s, verdict_id) is None  # отметка не создана
 
 
 def test_toggle_unknown_verdict_404(client_env):

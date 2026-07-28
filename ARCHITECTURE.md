@@ -157,7 +157,7 @@ app/
 │
 ├── routes/                  # FastAPI HTML-роуты (Jinja2)
 │   ├── auth.py              #   GET/POST /login, GET /logout (FR-0)
-│   ├── dashboard.py         #   GET / — матрица, слепая зона, хроники, карточка студента
+│   ├── dashboard.py         #   GET / — матрица; GET /students/{id} — карточка (FR-9); POST /verdicts/{id}/override-toggle (FR-10)
 │   ├── health.py            #   GET /health — счётчики из БД (вычислимый запрос, без in-memory состояния)
 │   └── admin.py             #   POST /sync, POST /import-csv, POST /credential (FR-1,3,8)
 │
