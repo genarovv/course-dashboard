@@ -5,7 +5,6 @@ pydantic-settings запрещает лишние ключи из env-файла
 из окружения молча игнорирует. CD_ADMIN_PASSWORD читает только миграция.
 """
 
-from pathlib import Path
 
 
 def test_extra_env_file_variable_does_not_crash(tmp_path, monkeypatch):
