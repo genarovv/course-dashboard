@@ -111,3 +111,41 @@ def test_ui_renders_mr_block_and_process_column(engine):
     assert "MR 7" in card_html
     assert "готов к кнопке" in card_html
     assert "Процесс" in matrix_html  # колонка процесса
+
+
+def test_closed_mr_not_ready(session):
+    """Сценарий 3 ADR-007: закрытый без слияния MR уходит из «готов к кнопке»."""
+    repo, run = _seed(session)
+    _observe(session, run, repo, 8, state="closed", approved=True)
+
+    card = build_student_card(session, repo.id, llm_model="deepseek-v4-flash")
+
+    (mr,) = card["mrs"]
+    assert mr["ready_for_merge"] is False
+
+
+def test_ui_shows_updated_at_and_missing_markers(engine):
+    """AC1/AC2 US-B7: дата обновления MR видна; незаполненный маркер показан как «не найден»."""
+    with Session(engine) as s:
+        repo, run = _seed(s)
+        _observe(s, run, repo, 7, state="opened",
+                 markers={"prichina": {"found": False, "quote": None}})
+        s.commit()
+        repo_id = repo.id
+
+    def override_session():
+        with Session(engine) as s:
+            yield s
+            s.commit()
+
+    app.dependency_overrides[get_session] = override_session
+    try:
+        client = TestClient(app)
+        client.post("/login", data={"username": "admin", "password": "pw"})
+        html = client.get(f"/students/{repo_id}").text
+    finally:
+        app.dependency_overrides.clear()
+        engine.dispose()
+
+    assert "2026-07-28" in html  # дата последнего обновления MR (AC1)
+    assert "prichina: не найден" in html  # отсутствие маркера — явно, не ошибка (AC2)

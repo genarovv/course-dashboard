@@ -158,3 +158,98 @@ async def test_without_markers_config_step_skipped(session):
     session.flush()
 
     assert store.find_mr_observations(session, repo.id, run.id) == []
+
+
+# ── fix по ревью #38–#41 ────────────────────────────────────────────────────
+
+
+class FakeGitNotes(FakeGit):
+    """Ноты с временем (NoteInfo) — для сценария 5 ADR-007."""
+
+    def __init__(self, mrs=None, notes_info=None, **kw):
+        super().__init__(mrs=mrs, **kw)
+        self.notes_info = notes_info or {}
+
+    async def list_mr_notes(self, repo_url, git_host, number):
+        self.notes_calls.append(number)
+        return self.notes_info.get(number, [])
+
+
+@pytest.mark.anyio
+async def test_stale_approval_after_force_push(session):
+    """Сценарий 5 ADR-007: «принято» до force-push не переносится на новую голову."""
+    from app.clients.git_client import NoteInfo
+
+    repo = _repo(session)
+    old_note = NoteInfo(body="принято", created_at="2026-07-27T10:00:00Z")
+    client = FakeGitNotes(
+        mrs=[_mr(7)], notes_info={7: [old_note]}
+    )
+    run1 = await _sync(session, client)  # первое наблюдение: head b*40, принято
+    (first,) = store.find_mr_observations(session, repo.id, run1.id)
+    assert first.reviewer_approved is True
+
+    # force-push: новая голова, ноты те же (старое «принято»)
+    client.mrs = [MrInfo(number=7, title="MR 7", source_branch="S5-auth", state="opened",
+                         head_sha="f" * 40, updated_at="2026-07-28T12:00:00Z",
+                         description="")]
+    run2 = await _sync(session, client)
+
+    (second,) = store.find_mr_observations(session, repo.id, run2.id)
+    assert second.reviewer_approved is False  # вердикт устарел вместе с головой
+
+
+@pytest.mark.anyio
+async def test_new_approval_after_force_push_counts(session):
+    """Новая нота «принято» после смены головы — валидна."""
+    from app.clients.git_client import NoteInfo
+
+    repo = _repo(session)
+    client = FakeGitNotes(mrs=[_mr(7)], notes_info={7: [NoteInfo("REWORK", "2026-07-27T10:00:00Z")]})
+    await _sync(session, client)
+
+    client.mrs = [MrInfo(number=7, title="MR 7", source_branch="S5-auth", state="opened",
+                         head_sha="f" * 40, updated_at="2026-07-28T12:00:00Z", description="")]
+    client.notes_info = {7: [NoteInfo("REWORK", "2026-07-27T10:00:00Z"),
+                             NoteInfo("Принято", "2026-07-29T09:00:00Z")]}
+    run2 = await _sync(session, client)
+
+    (second,) = store.find_mr_observations(session, repo.id, run2.id)
+    assert second.reviewer_approved is True
+
+
+@pytest.mark.anyio
+async def test_zero_mrs_is_not_error(session):
+    """Сценарий 6 ADR-007: 0 MR — пустой журнал, обход completed."""
+    repo = _repo(session)
+    client = FakeGit(mrs=[])
+
+    run = await _sync(session, client)
+
+    assert run.status == SyncStatus.completed
+    assert store.find_mr_observations(session, repo.id, run.id) == []
+
+
+@pytest.mark.anyio
+async def test_recreated_mr_two_numbers_same_branch(session):
+    """Сценарий 4 ADR-007: пересозданный MR — два номера одной веткой, оба в журнале."""
+    repo = _repo(session)
+    client = FakeGit(mrs=[_mr(9, state="closed", branch="S5-auth"),
+                          _mr(10, state="opened", branch="S5-auth")])
+
+    run = await _sync(session, client)
+
+    rows = store.find_mr_observations(session, repo.id, run.id)
+    assert {r.mr_number for r in rows} == {9, 10}
+
+
+@pytest.mark.anyio
+async def test_duplicate_mr_numbers_from_pagination_deduped(session):
+    """Дубль номера из сдвига offset-пагинации не роняет обход через И12."""
+    repo = _repo(session)
+    client = FakeGit(mrs=[_mr(7), _mr(7)])
+
+    run = await _sync(session, client)
+
+    rows = store.find_mr_observations(session, repo.id, run.id)
+    assert [r.mr_number for r in rows] == [7]
