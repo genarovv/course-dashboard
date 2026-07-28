@@ -122,3 +122,74 @@ def test_one_repo_error_does_not_break_next_call():
     with pytest.raises(GitRepoUnavailableError):
         _run(client.get_tree("https://github.com/u/broken", "GitHub"))
     assert _run(client.get_tree("https://github.com/u/alive", "GitHub")) == []
+
+
+# ── FR-12 (#38): MR-эндпоинты ───────────────────────────────────────────────
+
+
+def test_github_list_pulls_maps_states():
+    """GitHub: open→opened; closed+merged_at→merged; closed без merged_at→closed."""
+    def handler(request: httpx.Request) -> httpx.Response:
+        assert "/pulls" in request.url.path
+        return httpx.Response(200, json=[
+            {"number": 7, "title": "S5: auth", "state": "open", "merged_at": None,
+             "head": {"ref": "S5-auth", "sha": "a" * 40}, "updated_at": "2026-07-28T10:00:00Z",
+             "body": "Мутация: убрал проверку. Поймал: test_login"},
+            {"number": 6, "title": "S4", "state": "closed", "merged_at": "2026-07-27T09:00:00Z",
+             "head": {"ref": "S4", "sha": "b" * 40}, "updated_at": "2026-07-27T09:00:00Z",
+             "body": None},
+            {"number": 5, "title": "S3", "state": "closed", "merged_at": None,
+             "head": {"ref": "S3", "sha": "c" * 40}, "updated_at": "2026-07-26T08:00:00Z",
+             "body": ""},
+        ])
+
+    mrs = _run(_client(handler).list_merge_requests("https://github.com/u/r", "GitHub"))
+    assert [(m.number, m.state) for m in mrs] == [(7, "opened"), (6, "merged"), (5, "closed")]
+    assert mrs[0].source_branch == "S5-auth"
+    assert mrs[0].head_sha == "a" * 40
+    assert "Мутация" in mrs[0].description
+    assert mrs[2].description == ""  # None/пусто нормализуются в строку
+
+
+def test_gitlab_list_mrs_with_pagination():
+    def handler(request: httpx.Request) -> httpx.Response:
+        assert "/merge_requests" in request.url.path
+        if request.url.params.get("page", "1") == "1":
+            return httpx.Response(
+                200,
+                content=json.dumps([{
+                    "iid": 41, "title": "D1: матрица", "state": "merged",
+                    "source_branch": "D1-matrix", "sha": "d" * 40,
+                    "updated_at": "2026-07-22T12:00:00Z", "description": "Причина: ...",
+                }]),
+                headers={"x-next-page": "2"},
+            )
+        return httpx.Response(200, content=json.dumps([{
+            "iid": 40, "title": "S6", "state": "opened", "source_branch": "S6-1",
+            "sha": "e" * 40, "updated_at": "2026-07-21T12:00:00Z", "description": None,
+        }]))
+
+    mrs = _run(_client(handler).list_merge_requests("https://gitlab.com/g/r", "GitLab"))
+    assert [(m.number, m.state) for m in mrs] == [(41, "merged"), (40, "opened")]
+    assert mrs[0].head_sha == "d" * 40
+
+
+def test_github_mr_notes():
+    def handler(request: httpx.Request) -> httpx.Response:
+        assert "/issues/7/comments" in request.url.path
+        return httpx.Response(200, json=[
+            {"body": "REWORK: 2 находки"},
+            {"body": "принято"},
+        ])
+
+    notes = _run(_client(handler).list_mr_notes("https://github.com/u/r", "GitHub", 7))
+    assert notes == ["REWORK: 2 находки", "принято"]
+
+
+def test_gitlab_mr_notes():
+    def handler(request: httpx.Request) -> httpx.Response:
+        assert "/merge_requests/41/notes" in request.url.path
+        return httpx.Response(200, content=json.dumps([{"body": "принято"}]))
+
+    notes = _run(_client(handler).list_mr_notes("https://gitlab.com/g/r", "GitLab", 41))
+    assert notes == ["принято"]
