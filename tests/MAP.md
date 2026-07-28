@@ -1,8 +1,8 @@
 # MAP — Тесты и покрытие course-dashboard
 
-**Дата:** 2026-07-28 (обновлено в MR тикета O2 #16)
+**Дата:** 2026-07-28 (обновлено в MR FR-12: W-док + интерим)
 **Стек:** Python 3.13 · FastAPI · SQLAlchemy 2.x (Mapped) · SQLite (WAL) · Alembic · Jinja2+HTMX · bcrypt
-**Тестов:** 120, все ✅ · **Покрытие общее:** 98% (`pytest-cov`)
+**Тестов:** 178, все ✅ · **Покрытие общее:** 98% (`pytest-cov`)
 
 ---
 
@@ -22,6 +22,10 @@
 | `test_migrations.py` | интеграционный (alembic upgrade + raw SQL) | DDL: все 12 таблиц созданы, сид system_user, downgrade без ошибок, И1 (XOR), И3 (quad unique), И4 (one active override), И5 (append-only триггеры), И6 (norm URL unique), И8 (snapshot CHECK), И9+И11 (уникальность тройки/пары), И10 (reference uniqueness) |
 | `test_sync_orchestrator.py` | модульный (FakeGitClient) + интеграционный (TestClient) | FR-8/FR-4 (G2 #9): классификация found/not_found, sha256 (в т.ч. мульти-совпадение паттерна и `**`-глоб), source_commit_sha (FR-9), инкрементальность D28, исходы всех 5 видов + detail, статусы SyncRun, архивные репо пропущены, POST /sync (сессия / X-Sync-Token / 401) |
 | `test_override_ui.py` | интеграционный (TestClient + реальная БД) | FR-10 (O2 #16): toggle создаёт/снимает Override (revoked_at, история строк), auth, 404, кнопка «ложный разрыв» в матрице и карточке, гашение подсветки, новая четвёрка не наследует отметку |
+| `test_mr_channel_note.py` | модульный + интеграционный (TestClient) | FR-12 интерим (ADR-007): миграция submission_channel с downgrade, конфиг-реконсиляция канала, пометка «сдача через MR, не наблюдается» в ячейках (пустая/not_found/found), рендер со ссылкой на карточку |
+| `test_mr_observation.py` | модульный (session fixture + alembic) | FR-12 (#39): миграция mr_observation с downgrade, И12 (unique triple), журнал по обходам, последние наблюдения не затираются обходом без MR-данных |
+| `test_mr_sync.py` | модульный (FakeGit) | FR-12 (#40): MR-шаг обхода — маркеры с цитатой, вердикт «принято» (отрицание не считается), notes только у открытых, деградация NFR-2, выключение без конфига |
+| `test_mr_ui.py` | модульный + интеграционный (TestClient) | FR-12 (#41): MR в карточке (ready_for_merge, closed не ready, дата, маркер «не найден»), колонка «Процесс» в матрице, рендер |
 | `test_reconcile.py` | модульный (session fixture + фейк-воркер) | FR-5/FR-8 (G4 #11): идентификация пар без валидного вердикта, create_task через инжектированный воркер (ядро FR-5 — за гейтом Фазы 0), D25 «не мигаем», deferred-ретрай, идемпотентность свода, свод в конце run_sync |
 | `test_store.py` | модульный (session fixture) | Контракт store.py: ровно 4 `update_*`, нет `delete_*`, все `register_*` на месте, `normalize_url()`, CRUD-флоу репозиториев/runs/credentials/overrides, `find_verdict_by_quadruple` |
 

@@ -19,7 +19,13 @@ class Settings(BaseSettings):
     config_yaml_path: str = str(Path(__file__).parent / "config.yaml")
     static_dir: str = str(Path(__file__).parent / "static")
 
-    model_config = {"env_prefix": "CD_", "env_file": ".env"}
+    # #32: смещение отображаемого времени в минутах (240 = UTC+4);
+    # None — взять смещение сервера. Хранение в БД всегда в UTC.
+    tz_offset_minutes: int | None = None
+
+    # extra="ignore" (#33): лишние CD_-переменные в .env (например CD_ADMIN_PASSWORD,
+    # который читает только миграция) не должны ронять старт приложения
+    model_config = {"env_prefix": "CD_", "env_file": ".env", "extra": "ignore"}
 
 
 settings = Settings()

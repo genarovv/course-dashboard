@@ -94,7 +94,7 @@ course-dashboard/
 0 7,19 * * * curl -s -X POST http://localhost:8000/sync -H "X-Sync-Token: $SYNC_TOKEN"
 ```
 
-Чек-лист деплоя: env-переменные (`CD_ADMIN_PASSWORD` — до миграции, сид админа читает её; `CD_SECRET_KEY`; `CD_SYNC_TOKEN`; `CD_GITHUB_TOKEN`/`CD_GITLAB_TOKEN` — read-only, NFR-3) → `alembic upgrade head` → `uvicorn app.main:app` → загрузить реестр репозиториев (файл версионируется в репо; импорт идемпотентен — дубликаты отсеиваются по нормализованному URL):
+Чек-лист деплоя: env-переменные (`CD_ADMIN_PASSWORD` — до миграции, сид админа читает её; `CD_SECRET_KEY`; `CD_SYNC_TOKEN`; `CD_GITHUB_TOKEN`/`CD_GITLAB_TOKEN` — read-only, NFR-3; `CD_TZ_OFFSET_MINUTES` — смещение отображаемого времени в минутах, например 240 для UTC+4, по умолчанию зона сервера) → `alembic upgrade head` → `uvicorn app.main:app` → загрузить реестр репозиториев (файл версионируется в репо; импорт идемпотентен — дубликаты отсеиваются по нормализованному URL):
 
 ```bash
 curl -X POST http://localhost:8000/import-csv --data-binary @data/student-repos.csv -b cookies.txt

@@ -13,3 +13,6 @@ dist/
 .pytest_cache/
 alembic/versions/*.pyc
 .coverage
+*.db-shm
+*.db-wal
+*.db-journal

@@ -4,3 +4,7 @@ body {
     margin: 2rem auto;
     padding: 0 1rem;
 }
+
+/* FR-12 интерим: ячейка MR-канала — приглушённая, не тревожная (это не «нет») */
+.cell-mr-channel { background: #f4f6fa; }
+.status-mr { color: #556; font-style: italic; text-decoration: none; }

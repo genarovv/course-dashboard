@@ -6,6 +6,42 @@
     <p class="as-of">Актуально на {{ matrix.as_of }}</p>
     <a href="/logout">Выйти</a>
 </header>
+{% if matrix.auth_banner %}
+<div class="auth-banner"><b>Обнови токен:</b> часть репозиториев отвечает «доступ запрещён» — это проблема нашего токена, не студентов.</div>
+{% endif %}
+
+{% if matrix.blind_spots %}
+<section class="blind-spots">
+    <h2>Слепая зона</h2>
+    <ul>
+        {% for spot in matrix.blind_spots %}
+        <li>{{ spot.repo_url }}{% if spot.detail %} — {{ spot.detail }}{% endif %}</li>
+        {% endfor %}
+    </ul>
+</section>
+{% endif %}
+
+{% if matrix.chronics %}
+<section class="chronics">
+    <h2>Хроники. Студенты в тишине</h2>
+    <ul>
+        {% for chronic in matrix.chronics %}
+        <li>{{ chronic.repo_url }} — нет новых артефактов {{ chronic.lessons_silent }} занятия(й)</li>
+        {% endfor %}
+    </ul>
+</section>
+{% endif %}
+
+{% if matrix.unchecked %}
+<p class="unchecked">Не проверялось в последний обход (лимит API): {% for u in matrix.unchecked %}{{ u.repo_url }}{% if not loop.last %}, {% endif %}{% endfor %}</p>
+{% endif %}
+
+{% if matrix.registry_count == 0 %}
+<div class="empty-registry">
+    <p><b>Реестр пуст</b> — обходить нечего. Загрузите репозитории:
+    <code>curl -b cookies -X POST /import-csv --data-binary @data/student-repos.csv</code></p>
+</div>
+{% endif %}
 <table class="matrix">
     <thead>
         <tr>
@@ -14,6 +50,7 @@
             <th title="{{ lesson.title }}">{{ lesson.number }}. {{ lesson.title }}</th>
             {% endfor %}
             <th>Разрывы связности</th>
+            <th>Процесс</th>
         </tr>
     </thead>
     <tbody>
@@ -22,8 +59,10 @@
             <td class="repo-url"><a href="/students/{{ repo.id }}">{{ repo.repo_url }}</a></td>
             {% for lesson in matrix.lessons %}
             {% set cell = matrix.cells[repo.id][lesson.number] %}
-            <td class="cell cell-{{ cell.status or 'none' }}">
-                {% if cell.status %}
+            <td class="cell cell-{{ cell.status or 'none' }}{% if cell.mr_channel %} cell-mr-channel{% endif %}">
+                {% if cell.mr_channel %}
+                <a class="status status-mr" href="/students/{{ repo.id }}" title="Канал сдачи этого занятия — запрос на слияние; наблюдение MR появится с FR-12">сдача через MR, не наблюдается</a>
+                {% elif cell.status %}
                 <span class="status">{{ cell.status }}</span>
                 {% if cell.partial_reason %}
                 <span class="partial-reason">{{ cell.partial_reason | join(", ") }}</span>
@@ -50,6 +89,12 @@
                 {% else %}
                 <span class="no-breaks">—</span>
                 {% endfor %}
+            </td>
+            {% set proc = matrix.process.get(repo.id) %}
+            <td class="process">
+                {% if proc and (proc.ready or proc.opened or proc.merged) %}
+                {% if proc.accepted %}<b>{{ proc.accepted }} сдано</b> · {% endif %}{% if proc.ready %}{{ proc.ready }} принят, ждёт merge · {% endif %}{{ proc.opened }} откр.{% if proc.merged_no_review %} · <span class="no-review">{{ proc.merged_no_review }} мимо ревью</span>{% endif %}
+                {% else %}—{% endif %}
             </td>
         </tr>
         {% endfor %}

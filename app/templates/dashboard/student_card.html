@@ -42,6 +42,25 @@
     {% endfor %}
 </section>
 
+{% if card.mrs %}
+<section class="mrs">
+    <h2>Запросы на слияние (канал сдачи)</h2>
+    <ul>
+        {% for mr in card.mrs %}
+        <li class="mr mr-{{ mr.state }}">
+            <b>{{ mr.title }}</b> — ветка {{ mr.source_branch }}, {{ mr.state }}{% if mr.updated_at %}, обновлён {{ mr.updated_at[:10] }}{% endif %}
+            {% if mr.ready_for_merge %}<span class="ready">принят ревьюером, ждёт merge</span>{% endif %}
+            {% if mr.state == "merged" and not mr.reviewer_approved %}<span class="no-review">смержен мимо ревью</span>{% endif %}
+            {% for key, marker in mr.markers.items() %}
+            {% if marker.found %}<span class="marker">{{ marker.quote }}</span>
+            {% else %}<span class="marker marker-missing">{{ key }}: не найден</span>{% endif %}
+            {% endfor %}
+        </li>
+        {% endfor %}
+    </ul>
+</section>
+{% endif %}
+
 <section class="timeline">
     <h2>Хронология наблюдений (по observed_at)</h2>
     <table>

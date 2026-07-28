@@ -105,8 +105,23 @@ def build_student_card(
         for snap in store.find_snapshots_by_repository(session, repository_id)
     ]
     edges = edge_states(session, repository_id, llm_model)
+    # FR-12 (#41): MR последнего наблюдения — процесс сдачи рядом с артефактами
+    mrs = [
+        {
+            "number": row.mr_number,
+            "title": row.title,
+            "source_branch": row.source_branch,
+            "state": row.state,
+            "reviewer_approved": row.reviewer_approved,
+            "ready_for_merge": row.state == "opened" and row.reviewer_approved,
+            "markers": row.markers or {},
+            "updated_at": row.updated_at.isoformat() if row.updated_at else None,
+        }
+        for row in store.find_latest_mr_observations(session, repository_id)
+    ]
     return {
         "repository": {"id": repo.id, "repo_url": repo.repo_url, "git_host": repo.git_host},
         "timeline": timeline,
         "edges": edges,
+        "mrs": mrs,
     }

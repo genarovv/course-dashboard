@@ -6,6 +6,7 @@
 """
 
 import asyncio
+from dataclasses import dataclass
 from urllib.parse import quote, urlparse
 
 import httpx
@@ -39,6 +40,27 @@ def _parse_repo(repo_url: str) -> tuple[str, str]:
     if not parsed.hostname or "/" not in path:
         raise GitRepoUnavailableError(f"не удалось разобрать URL репозитория: {repo_url}")
     return parsed.hostname, path
+
+
+@dataclass(frozen=True)
+class NoteInfo:
+    """Нота обсуждения MR: текст + время (нужно правилу устаревания вердикта, ADR-007 сц. 5)."""
+
+    body: str
+    created_at: str  # ISO-строка хостинга
+
+
+@dataclass(frozen=True)
+class MrInfo:
+    """Нормализованный MR/PR (FR-12, #38). Клиент не знает о моделях данных (§3.2)."""
+
+    number: int              # iid (GitLab) / number (GitHub)
+    title: str
+    source_branch: str
+    state: str               # opened | merged | closed
+    head_sha: str
+    updated_at: str          # ISO-строка хостинга
+    description: str         # тело MR; None хостинга нормализуется в ""
 
 
 class GitClient:
@@ -115,6 +137,69 @@ class GitClient:
             headers = self._gitlab_headers()
         response = await self._request(url, headers)
         return response.text
+
+    async def list_merge_requests(self, repo_url: str, git_host: str) -> list[MrInfo]:
+        """FR-12 (#38): все MR/PR репозитория (открытые, смерженные, закрытые)."""
+        host, path = _parse_repo(repo_url)
+        if git_host == "GitHub":
+            data = await self._request_json(
+                f"https://api.github.com/repos/{path}/pulls?state=all&per_page=100",
+                self._github_headers(),
+            )
+            return [
+                MrInfo(
+                    number=pr["number"],
+                    title=pr.get("title") or "",
+                    source_branch=pr.get("head", {}).get("ref") or "",
+                    state="merged" if pr.get("merged_at")
+                          else ("opened" if pr.get("state") == "open" else "closed"),
+                    head_sha=pr.get("head", {}).get("sha") or "",
+                    updated_at=pr.get("updated_at") or "",
+                    description=pr.get("body") or "",
+                )
+                for pr in data
+            ]
+        mrs: list[MrInfo] = []
+        page = "1"
+        while page:
+            response = await self._request(
+                f"https://{host}/api/v4/projects/{quote(path, safe='')}/merge_requests"
+                f"?state=all&per_page=100&page={page}",
+                self._gitlab_headers(),
+            )
+            mrs += [
+                MrInfo(
+                    number=mr["iid"],
+                    title=mr.get("title") or "",
+                    source_branch=mr.get("source_branch") or "",
+                    state=mr.get("state") or "closed",
+                    head_sha=mr.get("sha") or "",
+                    updated_at=mr.get("updated_at") or "",
+                    description=mr.get("description") or "",
+                )
+                for mr in response.json()
+            ]
+            page = response.headers.get("x-next-page", "")
+        return mrs
+
+    async def list_mr_notes(self, repo_url: str, git_host: str, number: int) -> list[NoteInfo]:
+        """FR-12 (#38): обсуждение MR/PR — тексты с временем (вердикт ревьюера + устаревание)."""
+        host, path = _parse_repo(repo_url)
+        if git_host == "GitHub":
+            data = await self._request_json(
+                f"https://api.github.com/repos/{path}/issues/{number}/comments?per_page=100",
+                self._github_headers(),
+            )
+        else:
+            data = await self._request_json(
+                f"https://{host}/api/v4/projects/{quote(path, safe='')}"
+                f"/merge_requests/{number}/notes?per_page=100",
+                self._gitlab_headers(),
+            )
+        return [
+            NoteInfo(body=note.get("body") or "", created_at=note.get("created_at") or "")
+            for note in data
+        ]
 
     # ── внутреннее ───────────────────────────────────────────────────────
 

@@ -25,12 +25,14 @@ from app.models.coherence_verdict import CoherenceVerdict
 from app.models.edge_def import EdgeDef
 from app.models.git_credential import GitCredential
 from app.models.lesson import Lesson
+from app.models.mr_observation import MrObservation
 from app.models.override import Override
 from app.models.repository import Repository
 from app.models.rubric import Rubric
 from app.models.sync_run import SyncRun
 from app.models.sync_run_repository import SyncRunRepository
 from app.models.system_user import SystemUser
+from app.timeutil import utcnow
 
 engine = create_engine(settings.database_url, connect_args={"check_same_thread": False})
 
@@ -116,6 +118,13 @@ def register_verdict(session: Session, **fields) -> CoherenceVerdict:
     return verdict
 
 
+def register_mr_observation(session: Session, **fields) -> "MrObservation":
+    """FR-12: наблюдение MR за обход (append-only, И12; ADR-007)."""
+    row = MrObservation(**fields)
+    session.add(row)
+    return row
+
+
 def register_override(session: Session, *, coherence_verdict_id: str, reason: str) -> Override:
     """FR-10: отметка ложного разрыва (И1/И4; step_quality_card_id — v2)."""
     override = Override(coherence_verdict_id=coherence_verdict_id, reason=reason)
@@ -130,13 +139,13 @@ def update_sync_run_status(session: Session, sync_run_id: str, status: SyncStatu
     """FR-8, NFR-2: жизненный цикл обхода in_progress → completed/partial/failed."""
     run = session.get(SyncRun, sync_run_id)
     run.status = status
-    run.completed_at = datetime.utcnow()
+    run.completed_at = utcnow()
 
 
 def update_override_revoked(session: Session, override_id: str) -> None:
     """FR-10: снятие отметки — мягкое гашение, не удаление."""
     override = session.get(Override, override_id)
-    override.revoked_at = datetime.utcnow()
+    override.revoked_at = utcnow()
 
 
 def update_user_lockout(session: Session, user_id: str, *, failed_attempts: int,
@@ -151,23 +160,26 @@ def update_credential_validity(session: Session, credential_id: str, *, is_valid
     """FR-3: сигнал «обнови токен»."""
     credential = session.get(GitCredential, credential_id)
     credential.is_valid = is_valid
-    credential.checked_at = datetime.utcnow()
+    credential.checked_at = utcnow()
 
 
 # ── КОНФИГ-РЕКОНСИЛЯЦИЯ из config.yaml (категория 3 §3.5, ADR-005) ──────────
 # Единственный вызывающий — config_manager (ограничитель закреплён тестом на импорт).
 
 
-def config_upsert_lesson(session: Session, *, number: int, title: str, date) -> tuple[Lesson, str]:
+def config_upsert_lesson(
+    session: Session, *, number: int, title: str, date, submission_channel: str = "files"
+) -> tuple[Lesson, str]:
     """FR-2: занятие из config.yaml. Возвращает (lesson, 'created'|'updated'|'unchanged')."""
     lesson = session.scalar(select(Lesson).where(Lesson.number == number))
     if lesson is None:
-        lesson = Lesson(number=number, title=title, date=date)
+        lesson = Lesson(number=number, title=title, date=date, submission_channel=submission_channel)
         session.add(lesson)
         return lesson, "created"
-    if (lesson.title, lesson.date) != (title, date):
+    if (lesson.title, lesson.date, lesson.submission_channel) != (title, date, submission_channel):
         lesson.title = title
         lesson.date = date
+        lesson.submission_channel = submission_channel
         return lesson, "updated"
     return lesson, "unchanged"
 
@@ -248,6 +260,31 @@ def find_repository_by_normalized_url(session: Session, repo_url: str) -> Reposi
 def find_active_repositories(session: Session) -> list[Repository]:
     """FR-8: репозитории для обхода (archived_at IS NULL)."""
     return list(session.scalars(select(Repository).where(Repository.archived_at.is_(None))))
+
+
+def find_archived_repositories(session: Session) -> list[Repository]:
+    """FR-6: архивные репо — слепая зона по определению (§5.3)."""
+    return list(session.scalars(select(Repository).where(Repository.archived_at.is_not(None))))
+
+
+def find_last_outcome_row(session: Session, repository_id: str) -> SyncRunRepository | None:
+    """FR-6/FR-7: последняя строка охвата репозитория — доступность вычислима из неё (§3.5)."""
+    return session.scalar(
+        select(SyncRunRepository)
+        .where(SyncRunRepository.repository_id == repository_id)
+        .order_by(SyncRunRepository.checked_at.desc())
+        .limit(1)
+    )
+
+
+def find_last_observed_at(session: Session, repository_id: str) -> datetime | None:
+    """FR-7: время последнего нового наблюдения (снапшота) репозитория."""
+    return session.scalar(
+        select(ArtifactSnapshot.observed_at)
+        .where(ArtifactSnapshot.repository_id == repository_id)
+        .order_by(ArtifactSnapshot.observed_at.desc())
+        .limit(1)
+    )
 
 
 def find_checked_repository_ids(session: Session) -> set[str]:
@@ -332,6 +369,49 @@ def find_latest_verdict_for_quadruple(
         .order_by(CoherenceVerdict.computed_at.desc())
         .limit(1)
     )
+
+
+def find_mr_observations(session: Session, repository_id: str, sync_run_id: str) -> list["MrObservation"]:
+    """FR-12: наблюдения MR репозитория в конкретном обходе."""
+    return list(session.scalars(
+        select(MrObservation)
+        .where(
+            MrObservation.repository_id == repository_id,
+            MrObservation.sync_run_id == sync_run_id,
+        )
+        .order_by(MrObservation.mr_number.desc())
+    ))
+
+
+def find_previous_mr_observation(
+    session: Session, repository_id: str, mr_number: int
+) -> "MrObservation | None":
+    """FR-12: последнее наблюдение конкретного MR — база правила устаревания вердикта (ADR-007 сц. 5)."""
+    return session.scalar(
+        select(MrObservation)
+        .where(
+            MrObservation.repository_id == repository_id,
+            MrObservation.mr_number == mr_number,
+        )
+        .order_by(MrObservation.observed_at.desc())
+        .limit(1)
+    )
+
+
+def find_latest_mr_observations(session: Session, repository_id: str) -> list["MrObservation"]:
+    """FR-12: наблюдения последнего обхода, в котором у репозитория есть MR-данные.
+
+    Обход без MR-шага (деградация NFR-2) не затирает картину прошлого обхода.
+    """
+    last_run_id = session.scalar(
+        select(MrObservation.sync_run_id)
+        .where(MrObservation.repository_id == repository_id)
+        .order_by(MrObservation.observed_at.desc())
+        .limit(1)
+    )
+    if last_run_id is None:
+        return []
+    return find_mr_observations(session, repository_id, last_run_id)
 
 
 def find_verdict_by_id(session: Session, verdict_id: str) -> CoherenceVerdict | None:

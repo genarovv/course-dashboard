@@ -5,6 +5,7 @@ from sqlalchemy import JSON, DateTime, String, Text
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.models import ArtifactRole, Base, EnumColumn, RubricType
+from app.timeutil import utcnow
 
 
 class Rubric(Base):
@@ -16,4 +17,4 @@ class Rubric(Base):
     version: Mapped[str] = mapped_column(String(20))
     text: Mapped[str] = mapped_column(Text)
     items: Mapped[dict | None] = mapped_column(JSON, nullable=True)
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)

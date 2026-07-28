@@ -5,6 +5,7 @@ from sqlalchemy import JSON, DateTime, ForeignKey, Index, String, Text, text
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.models import Base, ConfidenceLevel, DeferredReason, EnumColumn, VerdictValue
+from app.timeutil import utcnow
 
 
 class CoherenceVerdict(Base):
@@ -29,7 +30,7 @@ class CoherenceVerdict(Base):
     target_content_hash: Mapped[str] = mapped_column(String(64))
     rubric_id: Mapped[str] = mapped_column(String(36), ForeignKey("rubric.id"))
     llm_model: Mapped[str] = mapped_column(String(100))
-    computed_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    computed_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
     verdict: Mapped[VerdictValue] = mapped_column(EnumColumn(VerdictValue))
     deferred_reason: Mapped[DeferredReason | None] = mapped_column(EnumColumn(DeferredReason), nullable=True)
     confidence: Mapped[ConfidenceLevel] = mapped_column(EnumColumn(ConfidenceLevel))

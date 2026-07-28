@@ -26,4 +26,6 @@ async def health(session: Session = Depends(get_session)):
             "status": run.status,
         }
     counters = sync_orchestrator.build_health_counters(session, settings.deepseek_model)
-    return {"status": "ok", "last_sync": last_sync, **counters}
+    # #31: пустой реестр виден в диагностике и без обхода
+    repositories = len(store.find_active_repositories(session))
+    return {"status": "ok", "last_sync": last_sync, "repositories": repositories, **counters}

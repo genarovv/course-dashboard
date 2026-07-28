@@ -5,6 +5,7 @@ from sqlalchemy import JSON, CheckConstraint, DateTime, ForeignKey, String, Uniq
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.models import Base, EnumColumn, SnapshotStatus
+from app.timeutil import utcnow
 
 
 class ArtifactSnapshot(Base):
@@ -37,4 +38,4 @@ class ArtifactSnapshot(Base):
     file_path: Mapped[str | None] = mapped_column(String(500), nullable=True)
     source_commit_sha: Mapped[str | None] = mapped_column(String(40), nullable=True)
     content_hash: Mapped[str | None] = mapped_column(String(64), nullable=True)
-    observed_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    observed_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
