@@ -58,8 +58,10 @@
             <td class="repo-url"><a href="/students/{{ repo.id }}">{{ repo.repo_url }}</a></td>
             {% for lesson in matrix.lessons %}
             {% set cell = matrix.cells[repo.id][lesson.number] %}
-            <td class="cell cell-{{ cell.status or 'none' }}">
-                {% if cell.status %}
+            <td class="cell cell-{{ cell.status or 'none' }}{% if cell.mr_channel %} cell-mr-channel{% endif %}">
+                {% if cell.mr_channel %}
+                <span class="status status-mr">сдача через MR</span>
+                {% elif cell.status %}
                 <span class="status">{{ cell.status }}</span>
                 {% if cell.partial_reason %}
                 <span class="partial-reason">{{ cell.partial_reason | join(", ") }}</span>

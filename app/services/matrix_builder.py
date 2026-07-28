@@ -112,9 +112,14 @@ def build_matrix(session: Session, llm_model: str | None = None, today: date | N
     for repo in repos:
         cells[repo.id] = {}
         for lesson in lessons:
-            cells[repo.id][lesson.number] = _aggregate_cell(
-                session, repo.id, defs_by_lesson[lesson.id]
+            cell = _aggregate_cell(session, repo.id, defs_by_lesson[lesson.id])
+            # FR-12 интерим (ADR-007): у MR-занятия пустая/not_found ячейка — не «нет»,
+            # артефакт может жить в ветке несмерженного MR
+            cell["mr_channel"] = (
+                lesson.submission_channel == "mr"
+                and cell["status"] in (None, SnapshotStatus.not_found)
             )
+            cells[repo.id][lesson.number] = cell
 
     # FR-10 (O2, #16): разрывы по рёбрам конвейера — точки для кнопки «ложный разрыв»
     resolved_model = llm_model or settings.deepseek_model

@@ -8,6 +8,7 @@
 
 from datetime import date as date_type
 from pathlib import Path
+from typing import Literal
 
 import yaml
 from pydantic import BaseModel, Field
@@ -28,6 +29,8 @@ class LessonConfig(BaseModel):
     number: int
     title: str
     date: date_type
+    # FR-12: канал сдачи занятия — с занятия 11 сдача идёт через MR (ADR-007)
+    submission_channel: Literal["files", "mr"] = "files"
     artifacts: list[ArtifactConfig] = Field(default_factory=list)
 
 
@@ -92,7 +95,8 @@ def reconcile(session: Session, config: ConfigYAML) -> ReloadSummary:
 
     for lesson_cfg in config.lessons:
         lesson, outcome = store.config_upsert_lesson(
-            session, number=lesson_cfg.number, title=lesson_cfg.title, date=lesson_cfg.date
+            session, number=lesson_cfg.number, title=lesson_cfg.title, date=lesson_cfg.date,
+            submission_channel=lesson_cfg.submission_channel,
         )
         _count(summary, "lessons", outcome)
         session.flush()

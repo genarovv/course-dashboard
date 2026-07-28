@@ -159,16 +159,19 @@ def update_credential_validity(session: Session, credential_id: str, *, is_valid
 # Единственный вызывающий — config_manager (ограничитель закреплён тестом на импорт).
 
 
-def config_upsert_lesson(session: Session, *, number: int, title: str, date) -> tuple[Lesson, str]:
+def config_upsert_lesson(
+    session: Session, *, number: int, title: str, date, submission_channel: str = "files"
+) -> tuple[Lesson, str]:
     """FR-2: занятие из config.yaml. Возвращает (lesson, 'created'|'updated'|'unchanged')."""
     lesson = session.scalar(select(Lesson).where(Lesson.number == number))
     if lesson is None:
-        lesson = Lesson(number=number, title=title, date=date)
+        lesson = Lesson(number=number, title=title, date=date, submission_channel=submission_channel)
         session.add(lesson)
         return lesson, "created"
-    if (lesson.title, lesson.date) != (title, date):
+    if (lesson.title, lesson.date, lesson.submission_channel) != (title, date, submission_channel):
         lesson.title = title
         lesson.date = date
+        lesson.submission_channel = submission_channel
         return lesson, "updated"
     return lesson, "unchanged"
 

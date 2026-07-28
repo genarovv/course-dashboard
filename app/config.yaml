@@ -58,9 +58,18 @@ lessons:
   - number: 11
     title: "Автоматическое тестирование с помощью ИИ"
     date: 2026-07-21
+    submission_channel: mr   # порядок сдачи занятия 11: работа = принятый MR
     artifacts:
       - role: tests
         expected_pattern: "tests/**/*.py"
+  - number: 12
+    title: "Рефакторинг и работа с зависимостями"
+    date: 2026-07-23
+    submission_channel: mr
+  - number: 13
+    title: "Отладка ИИ-сгенерированного кода"
+    date: 2026-07-28
+    submission_channel: mr
 
 # v1-минимум D4: два ребра конвейера (plans/plan.md — Pre-defense расширение до 8)
 edges:

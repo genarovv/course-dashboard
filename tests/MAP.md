@@ -2,7 +2,7 @@
 
 **Дата:** 2026-07-28 (обновлено в MR тикетов #31–#33, #18)
 **Стек:** Python 3.13 · FastAPI · SQLAlchemy 2.x (Mapped) · SQLite (WAL) · Alembic · Jinja2+HTMX · bcrypt
-**Тестов:** 140, все ✅ · **Покрытие общее:** 98% (`pytest-cov`)
+**Тестов:** 147, все ✅ · **Покрытие общее:** 98% (`pytest-cov`)
 
 ---
 

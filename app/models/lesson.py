@@ -14,3 +14,7 @@ class Lesson(Base):
     number: Mapped[int] = mapped_column(Integer, unique=True)
     title: Mapped[str] = mapped_column(String(200))
     date: Mapped[date] = mapped_column(Date)
+    # FR-12 (ADR-007): канал сдачи занятия — files (default) | mr (порядок сдачи занятия 11)
+    submission_channel: Mapped[str] = mapped_column(
+        String(10), default="files", server_default="files"
+    )
