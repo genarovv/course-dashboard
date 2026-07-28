@@ -46,6 +46,14 @@ class EdgeConfig(BaseModel):
     rubric: RubricConfig
 
 
+class ProcessMarkerConfig(BaseModel):
+    """FR-12 (ADR-007): маркер недели — строка-шаблон в описании MR."""
+
+    key: str
+    pattern: str  # regex (обычно с (?im): начало строки, регистронезависимо)
+    since_lesson: int | None = None
+
+
 class TemplateRepoConfig(BaseModel):
     """PRD FR-4: адрес репозитория-шаблона задаётся в конфиге FR-2 (D35, детект заготовок)."""
 
@@ -58,6 +66,8 @@ class ConfigYAML(BaseModel):
     lessons: list[LessonConfig]
     edges: list[EdgeConfig] = Field(default_factory=list)
     template_repo: TemplateRepoConfig | None = None
+    # FR-12: None — MR-шаг обхода выключен; список (даже пустой) — включён
+    process_markers: list[ProcessMarkerConfig] | None = None
 
 
 class ReloadSummary(BaseModel):

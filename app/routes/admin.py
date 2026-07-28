@@ -45,10 +45,12 @@ async def sync(
     if "user_id" not in request.session and not token_ok:  # BR-4: teacher-only
         return JSONResponse({"error": "не аутентифицирован"}, status_code=401)
     triggered_by = SyncTrigger.schedule if token_ok else SyncTrigger.manual
-    # адрес репозитория-шаблона — из config.yaml (PRD FR-4, D35)
-    template_repo = config_manager.load_config().template_repo
+    # шаблон (PRD FR-4, D35) и маркеры недели (FR-12) — из config.yaml
+    config = config_manager.load_config()
     run = await sync_orchestrator.run_sync(
-        session, git_client, triggered_by=triggered_by, template_repo=template_repo
+        session, git_client, triggered_by=triggered_by,
+        template_repo=config.template_repo,
+        process_markers=config.process_markers,
     )
     # #31: обход нуля репозиториев — не успех, а сигнал «реестр пуст»
     checked = len(store.find_active_repositories(session))

@@ -4,7 +4,6 @@
 ошибка MR-чтения не роняет обход (NFR-2); state merged/closed фиксируются как есть.
 """
 
-from datetime import datetime
 
 import pytest
 from alembic.config import Config
@@ -129,7 +128,7 @@ async def test_negated_verdict_not_approved(session):
 @pytest.mark.anyio
 async def test_notes_fetched_only_for_opened(session):
     """Экономия API: обсуждение читается только у открытых MR (merged уже прошли кнопку)."""
-    repo = _repo(session)
+    _repo(session)
     client = FakeGit(mrs=[_mr(7, state="opened"), _mr(6, state="merged"), _mr(5, state="closed")])
 
     await _sync(session, client)

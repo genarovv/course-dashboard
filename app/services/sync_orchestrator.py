@@ -11,6 +11,7 @@ import hashlib
 import logging
 import re
 from dataclasses import dataclass
+from datetime import UTC, datetime
 
 from sqlalchemy.orm import Session
 
@@ -303,6 +304,72 @@ async def reconcile_llm_pairs(
     return pairs, tasks
 
 
+def _match_marker(pattern: str, description: str) -> dict:
+    """Маркер недели в описании MR: найден/нет + цитата строки (FR-12)."""
+    for line in description.splitlines():
+        if re.search(pattern, line):
+            return {"found": True, "quote": line.strip()[:200]}
+    return {"found": False, "quote": None}
+
+
+def _is_approval(note: str) -> bool:
+    """Вердикт «принято» ревьюера (ADR-007): строка начинается с «принято»/«approve».
+
+    Отрицания («не принято», «пока не принято») не матчатся правилом начала строки.
+    """
+    for line in note.splitlines():
+        stripped = line.strip().lower()
+        if stripped.startswith("принято") or stripped.startswith("approve"):
+            return True
+    return False
+
+
+def _parse_host_datetime(value: str):
+    """ISO-строка хостинга → наивный UTC (контракт хранения, timeutil)."""
+    if not value:
+        return None
+    try:
+        parsed = datetime.fromisoformat(value.replace("Z", "+00:00"))
+    except ValueError:
+        return None
+    if parsed.tzinfo is not None:
+        parsed = parsed.astimezone(UTC).replace(tzinfo=None)
+    return parsed
+
+
+async def _observe_mrs(
+    session: Session, git_client, sync_run_id: str, repo: Repository, markers
+) -> None:
+    """FR-12 (#40): наблюдение MR репозитория. Ошибка — warning, не крах обхода (NFR-2)."""
+    try:
+        mrs = await git_client.list_merge_requests(repo.repo_url, repo.git_host)
+    except GitClientError as exc:
+        logger.warning("MR-наблюдение недоступно для %s (%s)", repo.repo_url, exc)
+        return
+    for mr in mrs:
+        found_markers = {m.key: _match_marker(m.pattern, mr.description) for m in markers}
+        approved = False
+        if mr.state == "opened":  # merged/closed уже прошли кнопку — обсуждение не читаем
+            try:
+                notes = await git_client.list_mr_notes(repo.repo_url, repo.git_host, mr.number)
+                approved = any(_is_approval(note) for note in notes)
+            except GitClientError as exc:
+                logger.warning("Обсуждение MR !%s (%s) недоступно: %s", mr.number, repo.repo_url, exc)
+        store.register_mr_observation(
+            session,
+            sync_run_id=sync_run_id,
+            repository_id=repo.id,
+            mr_number=mr.number,
+            title=mr.title,
+            source_branch=mr.source_branch,
+            state=mr.state,
+            reviewer_approved=approved,
+            markers=found_markers,
+            head_sha=mr.head_sha,
+            updated_at=_parse_host_datetime(mr.updated_at),
+        )
+
+
 def build_health_counters(session: Session, llm_model: str) -> dict:
     """§5.4 (I2, #13): счётчики /health — вычислимые запросы к БД, без in-memory состояния.
 
@@ -342,6 +409,7 @@ async def run_sync(
     template_repo=None,  # ConfigYAML.template_repo (PRD FR-4); None — детект заготовок выключен
     llm_model: str | None = None,  # модель четвёрки И3; по умолчанию — settings.deepseek_model
     verdict_worker=None,  # ядро FR-5; None до прохождения Фазы 0 (PRD §13)
+    process_markers=None,  # FR-12 (#40): маркеры недели из config.yaml; None — MR-шаг выключен
 ) -> SyncRun:
     """Полный обход активных репозиториев (§5.1). Возвращает SyncRun с финальным статусом."""
     run = store.register_sync_run(session, triggered_by=triggered_by)
@@ -375,6 +443,9 @@ async def run_sync(
             session, sync_run_id=run.id, repository_id=repo.id, outcome=outcome, detail=detail
         )
         outcomes.append(outcome)
+        # FR-12 (#40): наблюдение MR — после артефактов, деградация независимая (NFR-2)
+        if process_markers is not None:
+            await _observe_mrs(session, git_client, run.id, repo, process_markers)
 
     store.update_sync_run_status(session, run.id, _final_status(outcomes))
     session.flush()
