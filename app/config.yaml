@@ -5,7 +5,7 @@
 
 # PRD FR-4 / D35: эталон для детекта заготовок — публичный репозиторий шаблона
 template_repo:
-  url: "https://github.com/genarovv/project-context-template"
+  url: "https://github.com/genarovv/ai-agents-project-context"
   git_host: GitHub
   branch: main
 
