@@ -5,6 +5,7 @@ from sqlalchemy import CheckConstraint, DateTime, ForeignKey, Index, String, tex
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.models import Base
+from app.timeutil import utcnow
 
 
 class Override(Base):
@@ -36,5 +37,5 @@ class Override(Base):
     )
     step_quality_card_id: Mapped[str | None] = mapped_column(String(36), nullable=True)
     reason: Mapped[str] = mapped_column(String(500))
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
     revoked_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)

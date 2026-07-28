@@ -31,6 +31,7 @@ from app.models.rubric import Rubric
 from app.models.sync_run import SyncRun
 from app.models.sync_run_repository import SyncRunRepository
 from app.models.system_user import SystemUser
+from app.timeutil import utcnow
 
 engine = create_engine(settings.database_url, connect_args={"check_same_thread": False})
 
@@ -130,13 +131,13 @@ def update_sync_run_status(session: Session, sync_run_id: str, status: SyncStatu
     """FR-8, NFR-2: жизненный цикл обхода in_progress → completed/partial/failed."""
     run = session.get(SyncRun, sync_run_id)
     run.status = status
-    run.completed_at = datetime.utcnow()
+    run.completed_at = utcnow()
 
 
 def update_override_revoked(session: Session, override_id: str) -> None:
     """FR-10: снятие отметки — мягкое гашение, не удаление."""
     override = session.get(Override, override_id)
-    override.revoked_at = datetime.utcnow()
+    override.revoked_at = utcnow()
 
 
 def update_user_lockout(session: Session, user_id: str, *, failed_attempts: int,
@@ -151,7 +152,7 @@ def update_credential_validity(session: Session, credential_id: str, *, is_valid
     """FR-3: сигнал «обнови токен»."""
     credential = session.get(GitCredential, credential_id)
     credential.is_valid = is_valid
-    credential.checked_at = datetime.utcnow()
+    credential.checked_at = utcnow()
 
 
 # ── КОНФИГ-РЕКОНСИЛЯЦИЯ из config.yaml (категория 3 §3.5, ADR-005) ──────────

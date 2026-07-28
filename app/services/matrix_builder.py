@@ -6,7 +6,7 @@
 
 from sqlalchemy.orm import Session
 
-from app import store
+from app import store, timeutil
 from app.config import settings
 from app.models import SnapshotStatus, VerdictValue
 from app.services import evidence_chain
@@ -82,7 +82,11 @@ def build_matrix(session: Session, llm_model: str | None = None) -> dict:
 
     # Время последнего обхода
     last_run = store.find_last_sync_run(session)
-    as_of = last_run.started_at.strftime("%H:%M") if last_run else "—:—"
+    # #32: в БД наивный UTC, показываем местное время с меткой зоны
+    as_of = (
+        f"{timeutil.to_display(last_run.started_at):%H:%M} ({timeutil.offset_label()})"
+        if last_run else "—:—"
+    )
 
     return {
         "repositories": [

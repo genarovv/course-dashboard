@@ -4,6 +4,7 @@ from sqlalchemy import DateTime, ForeignKey, String
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.models import Base, EnumColumn, SyncOutcome
+from app.timeutil import utcnow
 
 
 class SyncRunRepository(Base):
@@ -13,5 +14,5 @@ class SyncRunRepository(Base):
     sync_run_id: Mapped[str] = mapped_column(String(36), ForeignKey("sync_run.id"), primary_key=True)
     repository_id: Mapped[str] = mapped_column(String(36), ForeignKey("repository.id"), primary_key=True)
     outcome: Mapped[SyncOutcome] = mapped_column(EnumColumn(SyncOutcome))
-    checked_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    checked_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
     detail: Mapped[str | None] = mapped_column(String(500), nullable=True)

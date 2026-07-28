@@ -1,6 +1,6 @@
 """S5 (#7), FR-0: login/logout с bcrypt и блокировкой 15 минут после 5 неудач."""
 
-from datetime import datetime, timedelta
+from datetime import timedelta
 from urllib.parse import parse_qs
 
 import bcrypt
@@ -10,6 +10,7 @@ from sqlalchemy.orm import Session
 
 from app import store
 from app.routes import get_session, templates
+from app.timeutil import utcnow
 
 router = APIRouter()
 
@@ -36,7 +37,7 @@ async def login(request: Request, session: Session = Depends(get_session)):
     username = form.get("username", [""])[0]
     password = form.get("password", [""])[0]
     user = store.find_user_by_username(session, username)
-    now = datetime.utcnow()
+    now = utcnow()
 
     if user and user.locked_until and user.locked_until > now:
         return templates.TemplateResponse(
