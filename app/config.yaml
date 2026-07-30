@@ -25,7 +25,7 @@ template_repo:
 lessons:
   - number: 2
     title: "Контекст проекта: правила и инструкции для агентов"
-    date: 2026-06-18   # дата ориентировочная (каденция Вт/Чт) — подтвердить по материалам курса
+    date: 2026-06-18   # подтверждена CEO 2026-07-30
     artifacts:
       - role: claude_md
         expected_pattern: "CLAUDE.md"
