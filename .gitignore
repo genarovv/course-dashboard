@@ -13,6 +13,8 @@ dist/
 .pytest_cache/
 alembic/versions/*.pyc
 .coverage
+# C3 (#34): кеш текстов артефактов студентов для мини-эвала — чужой контент, не коммитим
+evals/pairs/
 *.db-shm
 *.db-wal
 *.db-journal

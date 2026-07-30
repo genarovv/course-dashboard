@@ -1,9 +1,8 @@
 # C3 (#34): тесты мини-эвала deepseek-v4-flash — скрипт вне продукта (evals/mini_eval.py).
 # Сеть не трогаем: LLM-вызов инъецируется, проверяем промпт, валидацию ответа,
 # ретрай→deferred и отчёт (llm_model — обязательное поле, канон Б1).
+import asyncio
 import json
-
-import pytest
 
 from evals.mini_eval import (
     PAIRS,
@@ -105,6 +104,44 @@ def test_validate_rejects_counter_mismatch():
     assert validate_response(make_raw(entities_checked=99)) is None
 
 
+def test_validate_normalizes_uppercase_verdict():
+    # "OK" от модели — не повод для deferred (ретрай тем же промптом при t=0 бессмыслен)
+    validated = validate_response(make_raw(verdict="OK", confidence="High"))
+    assert validated is not None
+    assert validated["verdict"] == "ok"
+    assert validated["confidence"] == "high"
+
+
+def test_validate_rejects_negative_counters():
+    assert (
+        validate_response(
+            make_raw(entities_checked=1, entities_found=2, entities_excluded=0, entities_lost=-1)
+        )
+        is None
+    )
+
+
+def test_validate_rejects_bool_counters():
+    # bool проходит isinstance(int) — защищаемся от True/False в счётчиках
+    assert (
+        validate_response(
+            make_raw(entities_checked=2, entities_found=True, entities_excluded=1, entities_lost=0)
+        )
+        is None
+    )
+
+
+def test_validate_rejects_points_not_a_list():
+    assert validate_response(make_raw(points="нет точек")) is None
+
+
+def test_config_rubrics_are_loaded_for_real_pairs():
+    # R-1/R-2 обязаны использовать тексты рубрик из app/config.yaml, не дубликаты
+    by_key = {p.key: p for p in PAIRS}
+    assert "PRD → схема данных" in by_key["R-1"].rubric_text
+    assert "схема данных → архитектура" in by_key["R-2"].rubric_text
+
+
 def test_validate_rejects_more_than_five_points():
     points = [
         {"entity": f"e{i}", "quote_a": "q", "why_not": "w"} for i in range(6)
@@ -137,43 +174,39 @@ def _pair():
     )
 
 
-@pytest.mark.anyio
-async def test_run_pair_ok_first_try():
+def test_run_pair_ok_first_try():
     async def call(prompt):
         return make_raw()
 
-    result = await run_pair(_pair(), "текст A", "текст B", call)
+    result = asyncio.run(run_pair(_pair(), "текст A", "текст B", call))
     assert result.verdict == "ok"
     assert result.attempts == 1
     assert result.etalon_match is True
 
 
-@pytest.mark.anyio
-async def test_run_pair_retries_once_then_ok():
+def test_run_pair_retries_once_then_ok():
     calls = []
 
     async def call(prompt):
         calls.append(prompt)
         return "мусор" if len(calls) == 1 else make_raw()
 
-    result = await run_pair(_pair(), "a", "b", call)
+    result = asyncio.run(run_pair(_pair(), "a", "b", call))
     assert result.verdict == "ok"
     assert result.attempts == 2
 
 
-@pytest.mark.anyio
-async def test_run_pair_double_failure_is_deferred():
+def test_run_pair_double_failure_is_deferred():
     async def call(prompt):
         return "не json"
 
-    result = await run_pair(_pair(), "a", "b", call)
+    result = asyncio.run(run_pair(_pair(), "a", "b", call))
     assert result.verdict == "deferred"
     assert result.reason == "parse_error"
     assert result.etalon_match is None
 
 
-@pytest.mark.anyio
-async def test_run_pair_etalon_mismatch_is_flagged():
+def test_run_pair_etalon_mismatch_is_flagged():
     async def call(prompt):
         return make_raw(
             verdict="break",
@@ -182,7 +215,7 @@ async def test_run_pair_etalon_mismatch_is_flagged():
             entities_lost=5,
         )
 
-    result = await run_pair(_pair(), "a", "b", call)
+    result = asyncio.run(run_pair(_pair(), "a", "b", call))
     assert result.verdict == "break"
     assert result.etalon_match is False
 
@@ -190,12 +223,14 @@ async def test_run_pair_etalon_mismatch_is_flagged():
 # --- отчёт ---
 
 
-@pytest.mark.anyio
-async def test_report_fixes_llm_model_and_lists_all_pairs():
+def test_report_fixes_llm_model_and_lists_all_pairs():
     async def call(prompt):
         return make_raw()
 
-    results = [await run_pair(p, "a", "b", call) for p in PAIRS[:2]]
+    async def collect():
+        return [await run_pair(p, "a", "b", call) for p in PAIRS[:2]]
+
+    results = asyncio.run(collect())
     report = render_report(results, llm_model="deepseek-v4-flash")
     # llm_model — обязательное поле прогона (канон Б1, golden-set.md)
     assert "deepseek-v4-flash" in report
