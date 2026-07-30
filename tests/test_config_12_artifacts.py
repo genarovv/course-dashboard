@@ -201,3 +201,50 @@ def test_cell_aggregation_alternatives_best_wins(tmp_path):
         cell = _aggregate_cell(s, repo.id, [d1, d2])
         assert cell["status"] == SnapshotStatus.found  # а не partial
     engine.dispose()
+
+
+def test_evidence_chain_prefers_found_alternative_over_fresh_template_copy(tmp_path):
+    """Блокер ревью T3: карточка выбирала альтернативу роли по свежести —
+    свежая partial-заготовка шаблона побеждала настоящий found-документ,
+    и вердикт на защите считался бы по пустой заготовке (ложный break)."""
+    from datetime import datetime, timedelta
+
+    from app import store
+    from app.models import GitHost, SnapshotStatus, SyncTrigger
+    from app.models.lesson import Lesson
+    from app.services.evidence_chain import _latest_snapshot_for_role
+
+    db_path = tmp_path / "chain.db"
+    cfg = Config("alembic.ini")
+    cfg.set_main_option("sqlalchemy.url", f"sqlite:///{db_path}")
+    command.upgrade(cfg, "head")
+    engine = create_engine(f"sqlite:///{db_path}")
+    with Session(engine) as s:
+        lesson = Lesson(number=5, title="PRD", date=datetime(2026, 6, 30).date())
+        s.add(lesson)
+        s.flush()
+        d_tpl = ArtifactDef(lesson_id=lesson.id, role="prd", expected_pattern="product/prd.md")
+        d_req = ArtifactDef(lesson_id=lesson.id, role="prd", expected_pattern="REQUIREMENTS.md")
+        s.add_all([d_tpl, d_req])
+        repo = store.register_repository(s, repo_url="https://github.com/u/r", git_host=GitHost.GitHub)
+        run = store.register_sync_run(s, triggered_by=SyncTrigger.manual)
+        s.flush()
+        older = datetime(2026, 7, 20, 10, 0)
+        real = store.register_snapshot(
+            s, sync_run_id=run.id, repository_id=repo.id, artifact_def_id=d_req.id,
+            status=SnapshotStatus.found, content_hash="a" * 64,
+            file_path="REQUIREMENTS.md", source_commit_sha="c" * 40,
+        )
+        real.observed_at = older
+        template_copy = store.register_snapshot(
+            s, sync_run_id=run.id, repository_id=repo.id, artifact_def_id=d_tpl.id,
+            status=SnapshotStatus.partial, content_hash="b" * 64,
+            file_path="product/prd.md", source_commit_sha="c" * 40,
+            partial_reason=["template_copy"],
+        )
+        template_copy.observed_at = older + timedelta(days=1)  # заготовка свежее
+        s.flush()
+
+        chosen = _latest_snapshot_for_role(s, repo.id, "prd")
+        assert chosen.file_path == "REQUIREMENTS.md"  # found важнее свежести заготовки
+    engine.dispose()
