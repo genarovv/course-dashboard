@@ -16,12 +16,17 @@ from evals.fr11_pilot import (
     validate_response,
 )
 
+FIVE = [
+    {"key": "purpose", "met": True, "note": "назначение ясно"},
+    {"key": "run", "met": False, "note": "команд запуска нет"},
+    {"key": "structure", "met": True, "note": "карта файлов есть"},
+    {"key": "status", "met": True, "note": "стадия описана"},
+    {"key": "honesty", "met": True, "note": "заглушек нет"},
+]
+
 VALID = {
     "verdict": "с оговорками",
-    "criteria": [
-        {"key": "purpose", "met": True, "note": "назначение ясно из первого абзаца"},
-        {"key": "run", "met": False, "note": "команд запуска нет"},
-    ],
+    "criteria": FIVE,
     "notes": "коротко и честно",
 }
 
@@ -63,9 +68,33 @@ def test_validate_rejects_unknown_verdict():
 
 
 def test_validate_rejects_criteria_without_key_or_met():
-    assert validate_response(make_raw(criteria=[{"met": True}])) is None
-    assert validate_response(make_raw(criteria=[{"key": "purpose"}])) is None
+    assert validate_response(make_raw(criteria=[{"met": True}] + FIVE[1:])) is None
+    assert validate_response(make_raw(criteria=[{"key": "purpose"}] + FIVE[1:])) is None
     assert validate_response(make_raw(criteria="не список")) is None
+
+
+def test_validate_requires_exactly_five_unique_domain_keys():
+    """Fix по ревью (находка 4): ровно 5 критериев из домена, без дублей."""
+    assert validate_response(make_raw(criteria=FIVE[:4])) is None  # четыре
+    assert validate_response(make_raw(criteria=FIVE + [FIVE[0]])) is None  # шесть
+    dup = [dict(c) for c in FIVE]
+    dup[1]["key"] = "purpose"  # дубль ключа
+    assert validate_response(make_raw(criteria=dup)) is None
+    alien = [dict(c) for c in FIVE]
+    alien[4]["key"] = "beauty"  # чужой ключ
+    assert validate_response(make_raw(criteria=alien)) is None
+
+
+def test_rule_verdict_computed_in_code_not_by_model():
+    """Fix по ревью (находка 1): вердикт считается кодом из met-счёта;
+    слово модели — только для сверки (расхождение помечается)."""
+    from evals.fr11_pilot import rule_verdict
+
+    assert rule_verdict(FIVE) == "с оговорками"  # 4 met
+    all_met = [dict(c, met=True) for c in FIVE]
+    assert rule_verdict(all_met) == "годно"
+    two_met = [dict(c, met=(c["key"] in ("purpose", "run"))) for c in FIVE]
+    assert rule_verdict(two_met) == "негодно"
 
 
 def test_validate_rejects_non_bool_met():
@@ -81,11 +110,31 @@ def test_validate_rejects_garbage():
 
 def test_report_fixes_model_and_rubric_version():
     rows = [
-        {"repo_label": "С-01", "verdict": "годно", "criteria": VALID["criteria"], "notes": ""},
-        {"repo_label": "С-02", "verdict": None, "criteria": [], "notes": None},  # README нет
+        {"repo_label": "р-01", "verdict": "годно", "model_verdict": "годно",
+         "criteria": [dict(c, met=True) for c in FIVE], "notes": ""},
+        {"repo_label": "р-02", "verdict": None, "reason": "no_readme",
+         "criteria": [], "notes": None},
     ]
     report = render_report(rows, llm_model="deepseek-v4-flash")
     assert "deepseek-v4-flash" in report  # канон Б1: модель зафиксирована
     assert RUBRIC_VERSION in report
-    assert "С-01" in report and "С-02" in report
+    assert "р-01" in report and "р-02" in report
     assert "README не найден" in report
+
+
+def test_report_distinguishes_none_reasons_and_flags_mismatch():
+    """Fix по ревью (находки 1–3): причины «нет вердикта» различимы,
+    расхождение вердикта модели с правилом — помечено."""
+    rows = [
+        {"repo_label": "р-01", "verdict": None, "reason": "llm_unavailable",
+         "criteria": [], "notes": None},
+        {"repo_label": "р-02", "verdict": None, "reason": "parse_error",
+         "criteria": [], "notes": None},
+        {"repo_label": "р-03", "verdict": "негодно", "model_verdict": "годно",
+         "criteria": [dict(c, met=(c["key"] in ("purpose", "run"))) for c in FIVE],
+         "notes": ""},
+    ]
+    report = render_report(rows, llm_model="m")
+    assert "LLM недоступна" in report
+    assert "не распарсился" in report
+    assert "негодно" in report and "расхождение" in report  # правило кода победило
