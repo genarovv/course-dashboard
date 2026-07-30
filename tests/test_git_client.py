@@ -195,3 +195,32 @@ def test_gitlab_mr_notes():
 
     notes = _run(_client(handler).list_mr_notes("https://gitlab.com/g/r", "GitLab", 41))
     assert [(n.body, n.created_at) for n in notes] == [("принято", "2026-07-28T09:00:00Z")]
+
+
+def test_gitlab_head_sha_with_slash_ref_is_encoded():
+    """#51: ref со слэшами (feat/x) в путевом сегменте commits/{ref} кодируется как %2F.
+
+    Без кодирования GitLab видит .../commits/feat/x как чужой путь и отдаёт 404
+    (воспроизведено на реальной ветке студента).
+    """
+    def handler(request: httpx.Request) -> httpx.Response:
+        raw = request.url.raw_path.decode()
+        if "/repository/commits/feat%2Fagentic%2Fsetup" in raw:
+            return httpx.Response(200, json={"id": "c" * 40})
+        return httpx.Response(404)
+
+    sha = _run(
+        _client(handler).get_head_sha("https://gitlab.com/g/r", "GitLab", ref="feat/agentic/setup")
+    )
+    assert sha == "c" * 40
+
+
+def test_github_head_sha_with_slash_ref_still_works():
+    """#51: у GitHub слэш в commits/{ref} допустим — поведение не ломаем."""
+    def handler(request: httpx.Request) -> httpx.Response:
+        if "/commits/" in request.url.path:
+            return httpx.Response(200, json={"sha": "d" * 40})
+        return httpx.Response(404)
+
+    sha = _run(_client(handler).get_head_sha("https://github.com/u/r", "GitHub", ref="feat/x"))
+    assert sha == "d" * 40
