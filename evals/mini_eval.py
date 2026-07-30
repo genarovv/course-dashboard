@@ -13,7 +13,6 @@ from __future__ import annotations
 import argparse
 import asyncio
 import json
-import re
 import sys
 from dataclasses import dataclass
 from pathlib import Path
@@ -30,42 +29,7 @@ def report_date() -> str:
 
     return date.today().isoformat()
 
-# Каркас рубрики v1 (evals/golden-set.md, 2026-07-02) + требование строгого JSON.
-PROMPT_TEMPLATE = """Ты — агент-проверяющий связности учебных артефактов.
-Работаешь строго по правилу ребра, ничего не додумываешь.
-
-ПРАВИЛО РЕБРА:
-{rubric}
-
-АРТЕФАКТ A (источник):
-<<<A
-{source}
-A>>>
-
-АРТЕФАКТ B (цель, обязан опираться на A):
-<<<B
-{target}
-B>>>
-
-Задача: найди значимые сущности A и для каждой определи — отражена в B (синонимы
-засчитываются и называются), исключена явно (out-of-scope с обоснованием)
-или потеряна. Разрыв = не менее одной потерянной значимой сущности.
-
-Ответь СТРОГО одним JSON-объектом без пояснений вокруг:
-{{
-  "verdict": "ok" | "break",
-  "confidence": "high" | "medium" | "low",
-  "entities_checked": <int>,
-  "entities_found": <int>,
-  "entities_excluded": <int>,
-  "entities_lost": <int>,
-  "points": [до 5 объектов {{"entity": "...",
-      "quote_a": "цитата A до 15 слов",
-      "why_not": "что искал в B и почему не засчитал"}}],
-  "notes": "до 3 строк"
-}}
-Целостность обязательна: entities_checked = entities_found + entities_excluded + entities_lost."""
-
+# Каркас рубрики v1 — канонически в app/clients/llm_client.py (C1/#35), здесь не дублируется.
 # Правило по каркасу v1 для рёбер, у которых нет текста рубрики в app/config.yaml.
 GENERIC_RULE = (
     "Проверка связности «{a} → {b}». B обязан опираться на A: каждая значимая сущность A "
@@ -184,57 +148,12 @@ def load_repos() -> dict:
     return json.loads(path.read_text(encoding="utf-8"))
 
 
-def build_prompt(rubric_text: str, source_text: str, target_text: str) -> str:
-    return PROMPT_TEMPLATE.format(rubric=rubric_text, source=source_text, target=target_text)
-
-
-REQUIRED_FIELDS = (
-    "verdict",
-    "confidence",
-    "entities_checked",
-    "entities_found",
-    "entities_excluded",
-    "entities_lost",
-    "points",
+# AC C1 (#35): golden set прогоняется через клиента продукта — промпт-каркас,
+# schema-check §5.2 и ретрай живут в app/clients/llm_client.py, здесь только алиасы.
+from app.clients.llm_client import (  # noqa: E402
+    LLMClient,
+    LLMUnavailableError,
 )
-
-
-def validate_response(raw: str) -> dict | None:
-    """Schema-check по §5.2: обязательные поля, домены, целостность счётчиков, ≤5 точек."""
-    text = raw.strip()
-    fence = re.search(r"```(?:json)?\s*(\{.*\})\s*```", text, re.S)
-    if fence:
-        text = fence.group(1)
-    try:
-        data = json.loads(text)
-    except (json.JSONDecodeError, ValueError):
-        return None
-    if not isinstance(data, dict):
-        return None
-    for fieldname in REQUIRED_FIELDS:
-        if fieldname not in data:
-            return None
-    # регистр нормализуем до проверки домена: "OK" от модели — не повод для deferred
-    for fieldname in ("verdict", "confidence"):
-        if isinstance(data[fieldname], str):
-            data[fieldname] = data[fieldname].lower()
-    if data["verdict"] not in ("ok", "break"):
-        return None
-    if data["confidence"] not in ("high", "medium", "low"):
-        return None
-    counters = [
-        data["entities_checked"],
-        data["entities_found"],
-        data["entities_excluded"],
-        data["entities_lost"],
-    ]
-    if not all(type(c) is int and c >= 0 for c in counters):
-        return None
-    if counters[0] != counters[1] + counters[2] + counters[3]:
-        return None
-    if not isinstance(data["points"], list) or len(data["points"]) > 5:
-        return None
-    return data
 
 
 @dataclass
@@ -247,24 +166,26 @@ class PairResult:
     etalon_match: bool | None = None  # None — эталона нет или deferred
 
 
-async def run_pair(pair: Pair, source_text: str, target_text: str, call) -> PairResult:
-    """Один прогон пары: 1 ретрай при невалидном ответе, затем deferred(parse_error) — §5.2."""
-    prompt = build_prompt(pair.rubric_text, source_text, target_text)
-    attempts = 0
-    for _ in range(2):
-        attempts += 1
-        raw = await call(prompt)
-        validated = validate_response(raw)
-        if validated is not None:
-            match = None if pair.etalon is None else validated["verdict"] == pair.etalon
-            return PairResult(
-                pair=pair,
-                verdict=validated["verdict"],
-                attempts=attempts,
-                data=validated,
-                etalon_match=match,
-            )
-    return PairResult(pair=pair, verdict="deferred", attempts=attempts, reason="parse_error")
+async def run_pair(pair: Pair, source_text: str, target_text: str, check) -> PairResult:
+    """Прогон пары через контракт check_coherence (ретрай и валидация — в клиенте, C1/#35).
+
+    check(source, target, rubric) → валидный dict | None (после ретрая);
+    LLMUnavailableError → deferred(llm_unavailable) без потери прогона.
+    """
+    try:
+        validated = await check(source_text, target_text, pair.rubric_text)
+    except LLMUnavailableError:
+        return PairResult(pair=pair, verdict="deferred", attempts=1, reason="llm_unavailable")
+    if validated is None:
+        return PairResult(pair=pair, verdict="deferred", attempts=2, reason="parse_error")
+    match = None if pair.etalon is None else validated["verdict"] == pair.etalon
+    return PairResult(
+        pair=pair,
+        verdict=validated["verdict"],
+        attempts=1,
+        data=validated,
+        etalon_match=match,
+    )
 
 
 def render_report(results: list[PairResult], llm_model: str) -> str:
@@ -392,43 +313,24 @@ def _load_text(pair: Pair, which: str) -> str:
 
 
 async def run_all() -> None:
-    import httpx
-
     from app.config import settings
 
     if not settings.deepseek_api_key:
-        raise SystemExit("CD_DEEPSEEK_API_KEY не задан в .env — предусловие P2 (plan.md §4)")
+        raise SystemExit("DEEPSEEK_API_KEY не задан в .env — предусловие P2 (plan.md §4)")
     model = settings.deepseek_model
 
-    async with httpx.AsyncClient(timeout=180.0) as http:
-
-        async def call(prompt: str) -> str:
-            resp = await http.post(
-                f"{settings.deepseek_base_url.rstrip('/')}/chat/completions",
-                headers={"Authorization": f"Bearer {settings.deepseek_api_key}"},
-                json={
-                    "model": model,
-                    "messages": [{"role": "user", "content": prompt}],
-                    "response_format": {"type": "json_object"},
-                    "temperature": 0.0,
-                },
-            )
-            resp.raise_for_status()
-            return resp.json()["choices"][0]["message"]["content"]
-
+    # AC C1 (#35): прогон идёт через клиента продукта — тот же промпт, та же валидация
+    client = LLMClient()
+    try:
         results = []
         for pair in PAIRS:
             print(f"прогон {pair.key}…")
-            try:
-                results.append(
-                    await run_pair(pair, _load_text(pair, "a"), _load_text(pair, "b"), call)
-                )
-            except httpx.HTTPError as exc:
-                # §5.2: недоступность LLM = deferred(llm_unavailable), прогон не теряем
-                print(f"  {pair.key}: LLM недоступна ({exc})")
-                results.append(
-                    PairResult(pair=pair, verdict="deferred", attempts=1, reason="llm_unavailable")
-                )
+            results.append(
+                await run_pair(pair, _load_text(pair, "a"), _load_text(pair, "b"),
+                               client.check_coherence)
+            )
+    finally:
+        await client.aclose()
 
     report = render_report(results, llm_model=model)
     out = ROOT / "evals" / f"отчёт-мини-эвал-{report_date()}.md"
