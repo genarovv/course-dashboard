@@ -89,7 +89,7 @@ def test_chronics_silent_repo(engine):
         lesson2 = Lesson(number=2, title="Второе", date=datetime(2026, 6, 8).date())
         s.add(lesson2)
         repo, _ = _seed(s)
-        repo.added_at = datetime(2026, 6, 1, 9, 0)  # добавлен до занятий — тишина честная
+        repo.added_at = datetime(2026, 5, 25, 9, 0)  # добавлен до обоих занятий — тишина 2 занятия
         s.commit()
         matrix = build_artifact_matrix(
             s, llm_model=LLM_MODEL, today=datetime(2026, 6, 20).date()

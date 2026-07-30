@@ -7,6 +7,8 @@
 заметки, FR-10) отдаёт build_cell_details — модальное окно в UI.
 """
 
+from datetime import date, datetime, timedelta
+
 from sqlalchemy.orm import Session
 
 from app import store, timeutil
@@ -14,6 +16,10 @@ from app.config import settings
 from app.models import SNAPSHOT_STATUS_RANK, ArtifactRole, SnapshotStatus, VerdictValue
 from app.services import evidence_chain
 from app.services.labels import PARTIAL_LABELS, repo_short_name
+from app.services.matrix_builder import blind_spots_and_signals
+
+# D10 (#54), US-A3: обход старше этого срока — явный флаг устаревания на стикере
+STALE_AFTER = timedelta(hours=48)
 
 ROLE_TITLES: dict[ArtifactRole, str] = {
     ArtifactRole.interview: "Интервью",
@@ -136,7 +142,8 @@ def _defs_by_role_in_course_order(session: Session) -> dict[ArtifactRole, list]:
 
 
 def build_artifact_matrix(
-    session: Session, llm_model: str | None = None
+    session: Session, llm_model: str | None = None,
+    today: date | None = None, now: datetime | None = None,
 ) -> dict:
     """Матрица «репозиторий × артефакт» для GET /artifacts."""
     resolved_model = llm_model or settings.deepseek_model
@@ -160,8 +167,13 @@ def build_artifact_matrix(
         f"{timeutil.to_display(last_run.started_at):%d.%m %H:%M} ({timeutil.offset_label()})"
         if last_run else "—"
     )
+    resolved_now = now or timeutil.utcnow()
+    stale = bool(last_run and resolved_now - last_run.started_at > STALE_AFTER)
 
     return {
+        "stale": stale,
+        # D10 (#54): те же сигналы FR-6/FR-7/FR-3, что в матрице занятий
+        **blind_spots_and_signals(session, active_repos, today or resolved_now.date()),
         "roles": [
             {"key": str(role), "title": ROLE_TITLES.get(role, str(role))}
             for role in defs_by_role

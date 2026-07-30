@@ -15,7 +15,8 @@ from app.services import evidence_chain
 from app.services.labels import PARTIAL_LABELS, STATUS_LABELS, repo_short_name
 
 
-def _blind_spots_and_signals(session: Session, repos: list, today: date) -> dict:
+def blind_spots_and_signals(session: Session, repos: list, today: date) -> dict:
+    # D10 (#54): функция общая для матрицы занятий и артефактной — один факт в одном месте
     """§5.3 (#18): слепая зона, auth-баннер, «не проверялось», хроники.
 
     Слепая зона — последний исход repo_unavailable либо архив. auth_failed —
@@ -204,7 +205,7 @@ def build_matrix(session: Session, llm_model: str | None = None, today: date | N
         # #31: пустой реестр — видимое состояние, не молчаливо пустая матрица
         "registry_count": len(active_repos),
         # #18 (v1.1): слепая зона FR-6, хроники FR-7, auth-баннер, «не проверялось»
-        **_blind_spots_and_signals(
+        **blind_spots_and_signals(
             session, active_repos,
             today or timeutil.utcnow().date(),
         ),

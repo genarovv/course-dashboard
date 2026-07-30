@@ -23,6 +23,12 @@ body {
     font-size: 0.85rem;
     margin: 0;
 }
+/* D10 (US-A3): обход устарел — стикер тревожный, а не жёлтый */
+.as-of-stale { background: #f6dcdc; border-color: #c66a6a; color: #7c1010; }
+.auth-banner { background: #f6dcdc; border: 1px solid #c66a6a; color: #7c1010; padding: 0.5rem 0.8rem; border-radius: 4px; margin-top: 0.75rem; }
+.blind-spots, .chronics { margin-top: 0.75rem; }
+.blind-spots h2, .chronics h2 { font-size: 1rem; margin: 0 0 0.25rem; }
+.unchecked { color: #667; font-size: 0.85rem; }
 
 /* ── Таблицы матриц ───────────────────────────────────────────────────── */
 table.matrix { border-collapse: collapse; width: 100%; margin-top: 1rem; }

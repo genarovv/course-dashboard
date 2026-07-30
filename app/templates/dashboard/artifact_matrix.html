@@ -3,12 +3,42 @@
 {% block content %}
 <header class="matrix-header">
     <h1>Матрица «репозиторий × артефакт»</h1>
-    <p class="as-of as-of-note">Актуально на {{ matrix.as_of }}</p>
+    <p class="as-of as-of-note{% if matrix.stale %} as-of-stale{% endif %}">Актуально на {{ matrix.as_of }}{% if matrix.stale %} — <b>обход старше 48 часов, данные могли устареть</b>{% endif %}</p>
     <nav class="matrix-nav">
         <a href="/">матрица занятий</a>
         <a href="/logout">Выйти</a>
     </nav>
 </header>
+
+{% if matrix.auth_banner %}
+<div class="auth-banner"><b>Обнови токен:</b> часть репозиториев отвечает «доступ запрещён» — это проблема нашего токена, не студентов.</div>
+{% endif %}
+
+{% if matrix.blind_spots %}
+<section class="blind-spots">
+    <h2>Слепая зона</h2>
+    <ul>
+        {% for spot in matrix.blind_spots %}
+        <li>{{ spot.repo_url }}{% if spot.detail %} — {{ spot.detail }}{% endif %}</li>
+        {% endfor %}
+    </ul>
+</section>
+{% endif %}
+
+{% if matrix.chronics %}
+<section class="chronics">
+    <h2>Хроники. Студенты в тишине</h2>
+    <ul>
+        {% for chronic in matrix.chronics %}
+        <li>{{ chronic.repo_url }} — нет новых артефактов {{ chronic.lessons_silent }} занятия(й)</li>
+        {% endfor %}
+    </ul>
+</section>
+{% endif %}
+
+{% if matrix.unchecked %}
+<p class="unchecked">Не проверялось в последний обход (лимит API): {% for u in matrix.unchecked %}{{ u.repo_url }}{% if not loop.last %}, {% endif %}{% endfor %}</p>
+{% endif %}
 
 {% if matrix.registry_count == 0 %}
 <div class="empty-registry">
