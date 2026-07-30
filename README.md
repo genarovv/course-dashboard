@@ -99,7 +99,7 @@ git config core.hooksPath hooks
 
 ## Статус
 
-Первая итерация кода в работе (занятия 9–13): модели + миграции, store, аутентификация, CSV-импорт, git_client, config_manager (FR-2), обход репозиториев с детектом заготовок (FR-8/FR-4/BR-3), свод-реконсиляция LLM-пар (без ядра), матрица (FR-4), карточка студента (FR-9), Override UI (FR-10), /health. Ядро FR-5 (`coherence_analyzer`) — за гейтом Фазы 0 (PRD §13): свод идентифицирует пары, воркер вердиктов подключается после мини-эвала ADR-004. Трекер: [GitHub Issues](https://github.com/genarovv/course-dashboard/issues), карта тестов: [tests/MAP.md](tests/MAP.md).
+Первая итерация кода в работе (занятия 9–13): модели + миграции, store, аутентификация, CSV-импорт, git_client, config_manager (FR-2), обход репозиториев с детектом заготовок (FR-8/FR-4/BR-3), свод-реконсиляция LLM-пар (без ядра), матрица (FR-4), карточка студента (FR-9), Override UI (FR-10), /health. Ядро FR-5 реализовано (гейт Фазы 0 снят 2026-07-30, ADR-004 Accepted): `llm_client` (C1) + `coherence_analyzer` (C2), воркер вердиктов подключён к своду через /sync; без ключа DeepSeek пары остаются в состоянии «проверяется». Трекер: [GitHub Issues](https://github.com/genarovv/course-dashboard/issues), карта тестов: [tests/MAP.md](tests/MAP.md).
 
 ## Деплой (VPS, ARCHITECTURE §5.5)
 

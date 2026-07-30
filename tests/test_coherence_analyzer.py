@@ -363,3 +363,73 @@ async def test_worker_serializes_writes(session):
     await asyncio.gather(worker(pair), worker(pair))
 
     assert max_active == 1  # сериализовано
+
+
+# ── проводка: POST /sync с ядром рождает вердикты ───────────────────────────
+
+
+def _wire_client(tmp_path, monkeypatch, llm_override):
+    """TestClient с подменёнными зависимостями и шпионом на run_sync."""
+    from fastapi.testclient import TestClient
+
+    from app.main import app
+    from app.routes import get_session
+    from app.routes.admin import get_git_client, get_llm_client
+    from app.services import sync_orchestrator
+
+    monkeypatch.setenv("CD_ADMIN_PASSWORD", "pw")
+    db_path = tmp_path / "wire.db"
+    cfg = Config("alembic.ini")
+    cfg.set_main_option("sqlalchemy.url", f"sqlite:///{db_path}")
+    command.upgrade(cfg, "head")
+    engine = create_engine(f"sqlite:///{db_path}")
+
+    captured = {}
+
+    async def spy_run_sync(session, git_client, **kwargs):
+        captured.update(kwargs)
+
+        class FakeRun:
+            id = "run-1"
+            status = "completed"
+
+        return FakeRun()
+
+    monkeypatch.setattr(sync_orchestrator, "run_sync", spy_run_sync)
+
+    def override_session():
+        with Session(engine) as s:
+            yield s
+            s.commit()
+
+    app.dependency_overrides[get_session] = override_session
+    app.dependency_overrides[get_git_client] = lambda: FakeGit()
+    app.dependency_overrides[get_llm_client] = llm_override
+    client = TestClient(app)
+    client.post("/login", data={"username": "admin", "password": "pw"})
+    return client, captured, app, engine
+
+
+def test_sync_route_builds_verdict_worker_when_llm_available(tmp_path, monkeypatch):
+    """C2 (#36): /sync собирает воркер из get_llm_client и передаёт его в run_sync."""
+    client, captured, app, engine = _wire_client(
+        tmp_path, monkeypatch, lambda: FakeLLM(result=dict(VALID_VERDICT))
+    )
+    try:
+        assert client.post("/sync").status_code == 200
+        assert captured["verdict_worker"] is not None
+        assert callable(captured["verdict_worker"])
+    finally:
+        app.dependency_overrides.clear()
+        engine.dispose()
+
+
+def test_sync_route_without_llm_keeps_worker_none(tmp_path, monkeypatch):
+    """Без ключа ядро выключено: пары честно остаются «проверяется» (как до C2)."""
+    client, captured, app, engine = _wire_client(tmp_path, monkeypatch, lambda: None)
+    try:
+        assert client.post("/sync").status_code == 200
+        assert captured["verdict_worker"] is None
+    finally:
+        app.dependency_overrides.clear()
+        engine.dispose()

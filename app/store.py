@@ -446,3 +446,22 @@ def find_active_override_for_verdict(session: Session, verdict_id: str) -> Overr
 def find_override_by_id(session: Session, override_id: str) -> Override | None:
     """FR-10: оверрайд по ID (для UI — просмотр, снятие)."""
     return session.get(Override, override_id)
+
+
+# ── C2 (#36): точечные find_* для ядра FR-5 ─────────────────────────────────
+
+
+def find_snapshot_by_id(session: Session, snapshot_id: str) -> ArtifactSnapshot | None:
+    return session.get(ArtifactSnapshot, snapshot_id)
+
+
+def find_rubric_by_id(session: Session, rubric_id: str) -> Rubric | None:
+    return session.get(Rubric, rubric_id)
+
+
+def find_edge_def_by_id(session: Session, edge_def_id: str) -> EdgeDef | None:
+    return session.get(EdgeDef, edge_def_id)
+
+
+def find_artifact_def_by_id(session: Session, artifact_def_id: str) -> ArtifactDef | None:
+    return session.get(ArtifactDef, artifact_def_id)

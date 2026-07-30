@@ -2,6 +2,10 @@
 
 История изменений проекта. Правило (CLAUDE.md, «Стандарт документации» п.2): в основных документах живёт только актуальное состояние, устаревшее переносится сюда.
 
+## 2026-07-30 (C2: coherence_analyzer — ядро подключено)
+- #36: `services/coherence_analyzer.py` — `ensure_verdict` по §5.2: D25 «не мигаем» (deferred пересчитывается), И2 кодом (репозиторий и роли соответствуют ребру, нарушение = ValueError без записи), тексты из git по `file_path @ source_commit_sha` (контент не храним — С4), ok/break с полями контракта, деградации parse_error/llm_unavailable → deferred; git-сбой — без записи, пара вернётся следующим сводом. `make_verdict_worker`: собственная сессия на пару, записи сериализованы Lock (единый writer SQLite).
+- Проводка: `POST /sync` собирает воркер из `get_llm_client` (без ключа — None, пары честно «проверяется»). Store: +4 точечных `find_*` (snapshot/rubric/edge_def/artifact_def по id). Доки: ARCHITECTURE §3.1/«Пометки v3», CLAUDE.md (железное правило исполнено), README §Статус, MAP.md. Тестов 210 → 223.
+
 ## 2026-07-30 (C1: llm_client — первый компонент ядра)
 - #35: `app/clients/llm_client.py` — `check_coherence` (DeepSeek, temperature 0, json_object, ключ/адрес/модель из settings) + `validate_llm_response` (schema-check §5.2, нормализация регистра, целостность счётчиков, ≤5 точек); 1 ретрай → None (deferred parse_error у вызывающего), HTTP/сеть → `LLMUnavailableError`. Промпт-каркас v1 канонически переехал сюда из мини-эвала.
 - AC «golden set прогоняется через клиента»: `evals/mini_eval.py` переведён на `LLMClient.check_coherence` (дубли промпта/валидации удалены); контрольный прогон — вердикты идентичны прямому (GS 2/2, R-1..R-3 ok, R-4 break). Тестов: +11 клиента, −13 дублей мини-эвала (сьюта 212 → 210).

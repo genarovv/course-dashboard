@@ -19,6 +19,7 @@
 | `test_git_client.py` | модульный (MockTransport, без сети) | FR-3/NFR-4: GitHub и GitLab API — деревья + файлы + head SHA (FR-9), 401→GitAuthFailedError, 429→пауза+ретрай, исчерпание лимита, изоляция ошибок между репо |
 | `test_hooks.py` | интеграционный (tmp git-репо, subprocess) | H1 (#52): гейт commit-msg — правка/удаление существующих tests/ без «tests-change:» блокируется, с пометкой и для новых файлов проходит, не-тестовые правки свободны; coverage-гейт зафиксирован в pyproject |
 | `test_llm_client.py` | модульный (MockTransport, без сети) | C1 (#35): check_coherence — валидный ответ, 1 ретрай, двойной провал → None, HTTP/сеть → LLMUnavailableError; промпт-контракт; schema-check §5.2 (регистр, счётчики, ≤5 точек, fence) |
+| `test_coherence_analyzer.py` | модульный (фейки git/LLM) + интеграционный (TestClient) | C2 (#36): ensure_verdict — D25 «не мигаем», deferred пересчитывается, ok/break с полями §5.2, деградации (parse_error/llm_unavailable/git-сбой без записи), И2 (репо и роли), воркер в своей сессии + сериализация Lock, проводка /sync → verdict_worker |
 | `test_matrix_builder.py` | модульный (session fixture + alembic) | FR-4 (D1 #12): матрица «репо × занятие» — статусы ячеек, partial_reason, последний снапшот побеждает, «актуально на», пустая БД |
 | `test_dashboard_matrix.py` | интеграционный (TestClient + реальная БД) | FR-4 (D1 #12): GET / рендерит матрицу — строка репозитория, колонка занятия, partial_reason, «Актуально на», редирект без сессии |
 | `test_migrations.py` | интеграционный (alembic upgrade + raw SQL) | DDL: все 12 таблиц созданы, сид system_user, downgrade без ошибок, И1 (XOR), И3 (quad unique), И4 (one active override), И5 (append-only триггеры), И6 (norm URL unique), И8 (snapshot CHECK), И9+И11 (уникальность тройки/пары), И10 (reference uniqueness) |
@@ -43,7 +44,7 @@
 | `app/models/__init__.py` | 67 | ✅ | **100%** | test_migrations (DDL + enums + TypeDecorator) |
 | `app/models/*.py` (11 файлов) | 154 | ✅ | **100%** | test_migrations, test_store |
 | `app/clients/git_client.py` | 81 | 8 miss | **90%** | test_git_client (MockTransport) |
-| `app/clients/llm_client.py` | 0 | — | **пустой** | — (заглушка, Фаза 0 gate) |
+| `app/clients/llm_client.py` | — | ✅ | покрыт | test_llm_client (C1/#35) |
 | `app/services/csv_importer.py` | 38 | 1 miss | **97%** | test_csv_import |
 | `app/services/config_manager.py` | 75 | ✅ | **100%** | test_config_manager |
 | `app/services/sync_orchestrator.py` | 161 | 2 miss | **99%** | test_sync_orchestrator (G2/G3), test_reconcile (G4) |
@@ -61,17 +62,11 @@
 
 | Модуль | Статус файла | Причина |
 |---|---|---|
-| `services/coherence_analyzer.py` | **пустой** (0 строк) | ⛔ Фаза 0 gate (PRD §13) — железное правило CLAUDE.md |
-| `clients/llm_client.py` | **пустой** (0 строк) | Тикет C1 — не начат (после Фаза 0) |
+| — | — | Пустых модулей не осталось: гейт Фазы 0 снят 2026-07-30, ядро реализовано (C1 `llm_client` + C2 `coherence_analyzer`), оба покрыты |
 
 ---
 
 ## 4. Вопросы по непокрытым модулям
-
-**Пустые сервисы (6 модулей):**
-
-1. **coherence_analyzer.py** — ⛔ Фаза 0 gate, но: дыра или сознательно не тестируем?
-2. **llm_client.py** — дыра или сознательно не тестируем?
 
 **Пропуски в покрытых модулях:**
 
