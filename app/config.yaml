@@ -18,13 +18,29 @@ template_repo:
   git_host: GitHub
   branch: main
 
+# Пакет «12 артефактов» (решение CEO 2026-07-30, по ручному аудиту лучшей репы):
+# конфиг покрывает описание курса, а не структуру демо-проекта — несколько
+# паттернов на роль (шаблонный путь + реальные конвенции студентов, агрегация D1),
+# мультистековые code/tests (Dart/JS/Swift, не только Python).
 lessons:
+  - number: 2
+    title: "Контекст проекта: правила и инструкции для агентов"
+    date: 2026-06-18   # дата ориентировочная (каденция Вт/Чт) — подтвердить по материалам курса
+    artifacts:
+      - role: claude_md
+        expected_pattern: "CLAUDE.md"
+      - role: claude_md
+        expected_pattern: "AGENTS.md"
   - number: 3
     title: "Customer development и проблемные интервью"
     date: 2026-06-23
     artifacts:
       - role: interview
         expected_pattern: "product/interviews/*.md"
+      - role: interview
+        expected_pattern: "HYPOTHESES.md"
+      - role: interview
+        expected_pattern: "DISCOVERY.md"
   - number: 4
     title: "Системный анализ: JTBD и user stories"
     date: 2026-06-25
@@ -33,6 +49,10 @@ lessons:
         expected_pattern: "product/personas/*.md"
       - role: user_story
         expected_pattern: "product/user-stories/*.md"
+      - role: user_story
+        expected_pattern: "USER_JOURNEY.md"
+      - role: jtbd
+        expected_pattern: "product/jtbd.md"
   - number: 5
     title: "Документация требований (PRD)"
     date: 2026-06-30
@@ -40,30 +60,64 @@ lessons:
       - role: prd
         expected_pattern: "product/prd.md"
         template_relative_path: "product/prd.md"
+      - role: prd
+        expected_pattern: "REQUIREMENTS.md"
   - number: 6
     title: "Проектирование структуры данных"
     date: 2026-07-02
     artifacts:
       - role: data_model
         expected_pattern: "data-model.md"
+      - role: data_model
+        expected_pattern: "DATA_MODEL.md"
+      - role: data_model
+        expected_pattern: "DATABASE.md"
   - number: 7
     title: "Архитектура, стек и выбор LLM"
     date: 2026-07-07
     artifacts:
       - role: architecture
         expected_pattern: "ARCHITECTURE.md"
+      - role: adr
+        expected_pattern: "decisions/*.md"
   - number: 8
     title: "Планирование разработки"
     date: 2026-07-09
     artifacts:
       - role: plan
         expected_pattern: "plans/plan.md"
+      - role: plan
+        expected_pattern: "plan.md"
+      - role: plan
+        expected_pattern: "TASKS.md"
+      - role: roles_roster
+        expected_pattern: "roles/*.md"
   - number: 9
     title: "Разработка с ИИ (1)"
     date: 2026-07-14
     artifacts:
       - role: code
         expected_pattern: "app/**/*.py"
+      - role: code
+        expected_pattern: "lib/**/*.dart"
+      - role: code
+        expected_pattern: "src/**/*.py"
+      - role: code
+        expected_pattern: "src/**/*.ts"
+      - role: code
+        expected_pattern: "src/**/*.tsx"
+      - role: code
+        expected_pattern: "src/**/*.js"
+      - role: code
+        expected_pattern: "functions/**/*.js"
+  - number: 10
+    title: "Управление документацией"
+    date: 2026-07-16
+    artifacts:
+      - role: readme
+        expected_pattern: "README.md"
+      - role: changelog
+        expected_pattern: "CHANGELOG.md"
   - number: 11
     title: "Автоматическое тестирование с помощью ИИ"
     date: 2026-07-21
@@ -71,6 +125,10 @@ lessons:
     artifacts:
       - role: tests
         expected_pattern: "tests/**/*.py"
+      - role: tests
+        expected_pattern: "test/**/*.dart"
+      - role: tests
+        expected_pattern: "test/**/*_test.*"
   - number: 12
     title: "Рефакторинг и работа с зависимостями"
     date: 2026-07-23
@@ -80,8 +138,23 @@ lessons:
     date: 2026-07-28
     submission_channel: mr
 
-# v1-минимум D4: два ребра конвейера (plans/plan.md — Pre-defense расширение до 8)
+# v1-минимум D4: два ребра конвейера (plans/plan.md — Pre-defense расширение до 8, #42).
+# + prd→architecture (решение CEO 2026-07-30): единственное ребро, у которого обе
+# стороны уже есть в реальных репо, — даёт живые вердикты до сдачи схем данных.
 edges:
+  - source_role: prd
+    target_role: architecture
+    rubric:
+      version: "1.0"
+      text: >-
+        Проверка связности «PRD → архитектура». B обязан опираться на A: каждая значимая
+        сущность PRD (роль, функциональное требование, ключевое ограничение) либо
+        отражена в архитектуре (компонент, слой, механизм; синонимы засчитываются
+        и называются), либо исключена явно (out-of-scope с обоснованием), либо потеряна.
+        Разрыв = не менее одной потерянной значимой сущности. Выход строго: ВЕРДИКТ
+        (ok|break) / УВЕРЕННОСТЬ (high|medium|low) / СЧЁТЧИКИ (entities_checked =
+        entities_found + entities_excluded + entities_lost) / ТОЧКИ (до 5: сущность |
+        цитата A до 15 слов | что искал в B и почему не засчитал) / ЗАМЕТКИ до 3 строк.
   - source_role: prd
     target_role: data_model
     rubric:

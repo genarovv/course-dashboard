@@ -56,8 +56,8 @@
 |---------|-----|----------|
 | id | UUID | Первичный ключ |
 | lesson_id | UUID | → Lesson.id (FR-2: чек-лист «по каждому занятию») |
-| role | enum(interview, persona, user_story, prd, data_model, architecture, plan, code, tests) | Роль артефакта — метка матрицы и идентификатор для рёбер и рубрик шага |
-| expected_pattern | string | Глоб/путь для поиска файла (напр. `**/prd.md`); правила неточного сопоставления — BR-3 |
+| role | enum, 15 значений (см. домен artifact_role в §2) | Роль артефакта — метка матрицы и идентификатор для рёбер и рубрик шага |
+| expected_pattern | string | Глоб/путь для поиска файла (напр. `**/prd.md`); правила неточного сопоставления — BR-3. **Ключ идентичности дефа — (занятие, роль, паттерн)** (пакет «12 артефактов», решение CEO 2026-07-30): несколько дефов одной роли в занятии = альтернативные пути одного артефакта; в матрице и карточке роль представлена лучшим статусом (found > partial > not_found) |
 | template_relative_path | string, null | Путь в репозитории-шаблоне для детекта заготовки (FR-4 «частично», BR-3) |
 
 ### 1.5 EdgeDef — ребро связности: пара «роль источника → роль приёмника»
@@ -328,7 +328,7 @@ erDiagram
 | Домен | Значения | Требование |
 |-------|----------|------------|
 | git_host | GitLab, GitHub | BR-5 |
-| artifact_role | interview, persona, user_story, prd, data_model, architecture, plan, code, tests | FR-2, конвейер PRD §12 |
+| artifact_role | interview, persona, user_story, prd, data_model, architecture, plan, code, tests + jtbd, readme, changelog, adr, claude_md, roles_roster (пакет «12 артефактов», 2026-07-30) | FR-2, конвейер PRD §12; описание курса п.1–10 |
 | availability | available, unavailable | FR-6, NFR-2 (вычислимый домен: проекция последнего `sync_outcome`, в схеме не хранится — 2026-07-09) |
 | snapshot_status | found, partial, not_found | FR-4 |
 | partial_reason | inexact_name, wrong_place, template_copy (JSON-массив) | BR-3 |

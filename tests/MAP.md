@@ -2,7 +2,7 @@
 
 **Дата:** 2026-07-30 (обновлено в MR H1 #52: хуки/гейты)
 **Стек:** Python 3.13 · FastAPI · SQLAlchemy 2.x (Mapped) · SQLite (WAL) · Alembic · Jinja2+HTMX · bcrypt
-**Тестов:** 184, все ✅ · **Покрытие общее:** 98% (`pytest-cov`, гейт `fail_under = 90` в hooks/pre-push)
+**Тестов:** 238, все ✅ · **Покрытие общее:** 98% (`pytest-cov`, гейт `fail_under = 90` в hooks/pre-push)
 
 ---
 
@@ -20,6 +20,7 @@
 | `test_hooks.py` | интеграционный (tmp git-репо, subprocess) | H1 (#52): гейт commit-msg — правка/удаление существующих tests/ без «tests-change:» блокируется, с пометкой и для новых файлов проходит, не-тестовые правки свободны; coverage-гейт зафиксирован в pyproject |
 | `test_llm_client.py` | модульный (MockTransport, без сети) | C1 (#35): check_coherence — валидный ответ, 1 ретрай, двойной провал → None, HTTP/сеть → LLMUnavailableError; промпт-контракт; schema-check §5.2 (регистр, счётчики, ≤5 точек, fence) |
 | `test_coherence_analyzer.py` | модульный (фейки git/LLM) + интеграционный (TestClient) | C2 (#36): ensure_verdict — D25 «не мигаем», deferred пересчитывается, ok/break с полями §5.2, деградации (parse_error/llm_unavailable/git-сбой без записи), И2 (репо и роли), воркер в своей сессии + сериализация Lock, проводка /sync → verdict_worker |
+| `test_config_12_artifacts.py` | модульный + интеграционный (alembic, реальный config.yaml) | T3/#43 «12 артефактов»: +6 ролей enum, альтернативные пути на роль, мультистековые code/tests, ребро prd→architecture; реконсиляция хранит несколько паттернов (ключ занятие+роль+паттерн), агрегация best-wins внутри роли, карточка предпочитает found заготовке шаблона |
 | `test_matrix_builder.py` | модульный (session fixture + alembic) | FR-4 (D1 #12): матрица «репо × занятие» — статусы ячеек, partial_reason, последний снапшот побеждает, «актуально на», пустая БД |
 | `test_dashboard_matrix.py` | интеграционный (TestClient + реальная БД) | FR-4 (D1 #12): GET / рендерит матрицу — строка репозитория, колонка занятия, partial_reason, «Актуально на», редирект без сессии |
 | `test_migrations.py` | интеграционный (alembic upgrade + raw SQL) | DDL: все 12 таблиц созданы, сид system_user, downgrade без ошибок, И1 (XOR), И3 (quad unique), И4 (one active override), И5 (append-only триггеры), И6 (norm URL unique), И8 (snapshot CHECK), И9+И11 (уникальность тройки/пары), И10 (reference uniqueness) |

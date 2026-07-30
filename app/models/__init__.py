@@ -14,6 +14,14 @@ class ArtifactRole(StrEnum):
     plan = "plan"
     code = "code"
     tests = "tests"
+    # T3 (#43) + пакет «12 артефактов» (решение CEO 2026-07-30): роли для
+    # артефактов 1, 2, 7, 9 описания курса; enum хранится строкой — без миграции
+    jtbd = "jtbd"
+    readme = "readme"
+    changelog = "changelog"
+    adr = "adr"
+    claude_md = "claude_md"
+    roles_roster = "roles_roster"
 
 
 class GitHost(StrEnum):
@@ -25,6 +33,17 @@ class SnapshotStatus(StrEnum):
     found = "found"
     partial = "partial"
     not_found = "not_found"
+
+
+# Ранжирование статусов для альтернативных путей одной роли (пакет «12 артефактов»,
+# решение CEO 2026-07-30): лучший представитель роли в матрице и карточке.
+# Живёт рядом с доменом, а не в сервисе — иначе циркулярный импорт
+# matrix_builder ↔ evidence_chain (находка 9 ревью T3).
+SNAPSHOT_STATUS_RANK = {
+    SnapshotStatus.found: 0,
+    SnapshotStatus.partial: 1,
+    SnapshotStatus.not_found: 2,
+}
 
 
 class PartialReason(StrEnum):

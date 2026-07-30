@@ -10,7 +10,7 @@ from sqlalchemy.orm import Session
 
 from app import store, timeutil
 from app.config import settings
-from app.models import SnapshotStatus, SyncOutcome, VerdictValue
+from app.models import SNAPSHOT_STATUS_RANK, SnapshotStatus, SyncOutcome, VerdictValue
 from app.services import evidence_chain
 
 
@@ -61,15 +61,23 @@ def _blind_spots_and_signals(session: Session, repos: list, today: date) -> dict
 def _aggregate_cell(session: Session, repository_id: str, artifact_defs: list) -> dict:
     """Статус ячейки по последним снапшотам всех артефактов занятия (FR-4).
 
-    Детерминированное правило: все found → found; все not_found → not_found;
-    смесь или хотя бы один partial → partial. Причины partial — объединение
-    по всем partial-артефактам, без дублей. Нет ни одного снапшота → пустая ячейка.
+    Двухуровневое правило (пакет «12 артефактов», решение CEO 2026-07-30):
+    1. Внутри роли несколько дефов = АЛЬТЕРНАТИВНЫЕ пути одного артефакта
+       (product/prd.md ИЛИ REQUIREMENTS.md) — побеждает лучший статус;
+       partial_reason берётся только у представителя-победителя.
+    2. Между ролями занятия — прежнее строгое правило D1: все found → found;
+       все not_found → not_found; смесь или partial → partial.
+    Нет ни одного снапшота → пустая ячейка.
     """
-    snaps = [
-        snap
-        for adef in artifact_defs
-        if (snap := store.find_last_snapshot(session, repository_id, adef.id)) is not None
-    ]
+    best_by_role: dict = {}
+    for adef in artifact_defs:
+        snap = store.find_last_snapshot(session, repository_id, adef.id)
+        if snap is None:
+            continue
+        current = best_by_role.get(adef.role)
+        if current is None or SNAPSHOT_STATUS_RANK[snap.status] < SNAPSHOT_STATUS_RANK[current.status]:
+            best_by_role[adef.role] = snap
+    snaps = list(best_by_role.values())
     if not snaps:
         return {"status": None, "partial_reason": None, "content_hash": None}
 
