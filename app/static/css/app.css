@@ -42,17 +42,37 @@ table.matrix th, table.matrix td {
 table.matrix thead th { background: #fff; font-weight: 600; white-space: nowrap; }
 td.repo-url { max-width: 16rem; overflow-wrap: anywhere; }
 
-/* ── Цветовое кодирование ячеек (макет: зелёный / оранжевый / красный) ── */
+/* ── Ячейки: инверсия сигнала (D13, решение CEO 2026-07-30) ──────────────
+   Наличие — тихие светлые подложки (светофор как фон), единственный
+   насыщенный элемент экрана — чип разрыва. Статус всегда есть словом. */
 .acell { cursor: pointer; min-width: 7rem; max-width: 12rem; }
-.acell:hover { filter: brightness(0.93); }
-.acell-found { background: #4cc26b; color: #10321b; }
-.acell-partial { background: #f5a34b; color: #4a2b05; }
-.acell-not_found { background: #bb1111; color: #fff; }
+.acell:hover { filter: brightness(0.95); }
+.acell-found { background: #dff0e3; color: #14532d; }
+.acell-partial { background: #fbebd2; color: #713f12; }
+.acell-not_found { background: #f6dcdc; color: #7f1d1d; }
 .acell-none { background: #f2f3f6; color: #8a90a0; cursor: default; }
 /* D9 (FR-12): канал сдачи — MR; приглушённая, не тревожная (это не «нет») */
 .acell-mr { background: #eef1f7; color: #445566; font-style: italic; }
-/* Найден, но участвует в неснятом разрыве связности — ядро продукта, видно сразу */
-.acell-break { box-shadow: inset 0 0 0 3px #8f0f0f; font-weight: 600; }
+.acell-break { box-shadow: inset 0 0 0 2px rgba(143, 15, 15, 0.35); }
+.presence { display: block; }
+/* Чип разрыва — подпись прибора: высокая уверенность — полный,
+   средняя/низкая — контурный с подписью словами (риск PRD §11) */
+.break-chip {
+    display: inline-block;
+    margin-top: 0.3rem;
+    padding: 0.12rem 0.5rem;
+    border-radius: 4px;
+    font-size: 0.78rem;
+    font-weight: 600;
+    background: #8f0f0f;
+    color: #fff;
+}
+.chip-medium, .chip-low {
+    background: transparent;
+    color: #8f0f0f;
+    border: 2px solid #8f0f0f;
+    font-weight: 500;
+}
 
 /* D8: второй блок под матрицей — разрывы связности и процесс сдачи */
 .matrix-extras h2 { font-size: 1.05rem; margin: 1.75rem 0 0.25rem; }

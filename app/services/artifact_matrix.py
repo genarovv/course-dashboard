@@ -21,6 +21,9 @@ from app.services.matrix_builder import blind_spots_and_signals
 # D10 (#54), US-A3: обход старше этого срока — явный флаг устаревания на стикере
 STALE_AFTER = timedelta(hours=48)
 
+# D13 (#57): ранжирование уверенности FR-5; неизвестное значение деградирует до «низкой»
+CONFIDENCE_RANK = {"high": 0, "medium": 1, "low": 2}
+
 ROLE_TITLES: dict[ArtifactRole, str] = {
     ArtifactRole.interview: "Интервью",
     ArtifactRole.persona: "Персоны",
@@ -89,38 +92,55 @@ def _cell(
     ]
     oks = [e for e in touching if e["state"] == "done" and e["verdict"] == VerdictValue.ok]
 
-    def break_tail() -> str:
+    # D13 (#57): структурированный чип разрыва — сущность, счётчик, наивысшая уверенность
+    break_info = None
+    if breaks:
         first_point = next((p for e in breaks for p in e["points"]), None)
-        lost = f": потеряна «{first_point['entity']}»" if first_point else ""
+        top_conf = min(
+            (str(e["confidence"]) for e in breaks),
+            key=lambda c: CONFIDENCE_RANK.get(c, 3),
+        )
+        break_info = {
+            "count": len(breaks),
+            "entity": first_point["entity"] if first_point else None,
+            "confidence": top_conf if top_conf in CONFIDENCE_RANK else "low",
+        }
+
+    def break_tail() -> str:
+        lost = f": потеряна «{break_info['entity']}»" if break_info["entity"] else ""
         count = f" ×{len(breaks)}" if len(breaks) > 1 else ""
         return f"разрыв{count}{lost}"
 
-    # Приоритет свода (спека D11): разрыв > проверяется > помечен ложным > ок > статус
+    # Приоритет свода (спека D11): разрыв > проверяется > помечен ложным > ок > статус;
+    # presence — та же строка без хвоста разрыва (хвост в UI живёт в чипе, D13)
     if mr_channel:
-        summary = "сдача через MR"
+        presence = summary = "сдача через MR"
     elif snap is None:
-        summary = None
+        presence = summary = None
     elif snap.status == SnapshotStatus.not_found:
-        summary = "нет"
+        presence = summary = "нет"
     elif snap.status == SnapshotStatus.partial:
         reasons = [PARTIAL_LABELS.get(r, r) for r in (snap.partial_reason or [])]
-        base = "частично · " + ", ".join(reasons) if reasons else "частично"
-        summary = f"{base} · {break_tail()}" if breaks else base
+        presence = "частично · " + ", ".join(reasons) if reasons else "частично"
+        summary = f"{presence} · {break_tail()}" if breaks else presence
     elif breaks:
+        presence = "есть"
         summary = f"есть · {break_tail()}"
     elif pending:
-        summary = "есть · связность проверяется"
+        presence = summary = "есть · связность проверяется"
     elif overridden:
-        summary = "есть · помечен ложным"
+        presence = summary = "есть · помечен ложным"
     elif oks:
-        summary = "есть · связность ок"
+        presence = summary = "есть · связность ок"
     else:
-        summary = "есть"
+        presence = summary = "есть"
 
     return {
         "status": snap.status if snap else None,
         "partial_reason": snap.partial_reason if snap else None,
         "summary": summary,
+        "presence": presence,
+        "break": break_info,
         "mr_channel": mr_channel,
         "break_count": len(breaks),
         "pending_count": len(pending),

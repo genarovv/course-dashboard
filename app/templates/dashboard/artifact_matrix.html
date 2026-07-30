@@ -62,11 +62,16 @@
             <td class="repo-url"><a href="/students/{{ repo.id }}" title="{{ repo.repo_url }}">{{ repo.name }}</a></td>
             {% for role in matrix.roles %}
             {% set cell = matrix.cells[repo.id][role.key] %}
-            <td class="acell acell-{{ 'mr' if cell.mr_channel else (cell.status or 'none') }}{% if cell.break_count %} acell-break{% endif %}"
+            <td class="acell acell-{{ 'mr' if cell.mr_channel else (cell.status or 'none') }}{% if cell.break %} acell-break{% endif %}"
                 hx-get="/artifacts/{{ repo.id }}/{{ role.key }}"
                 hx-target="#modal-root" hx-swap="innerHTML"
                 role="button" tabindex="0"
-                title="{{ role.title }} — подробности">{{ cell.summary or "—" }}</td>
+                title="{{ role.title }} — подробности">
+                {%- if cell.presence -%}<span class="presence">{{ cell.presence }}</span>{%- else -%}—{%- endif -%}
+                {%- if cell.break -%}
+                <span class="break-chip chip-{{ cell.break.confidence }}">⚠ {% if cell.break.count > 1 %}разрыв ×{{ cell.break.count }}{% if cell.break.entity %}: потеряна «{{ cell.break.entity }}»{% endif %}{% elif cell.break.entity %}потеряна «{{ cell.break.entity }}»{% else %}разрыв{% endif %}{% if cell.break.confidence != "high" %} · уверенность {{ CONFIDENCE_LABELS.get(cell.break.confidence, cell.break.confidence) }}{% endif %}</span>
+                {%- endif -%}
+            </td>
             {% endfor %}
         </tr>
         {% endfor %}
