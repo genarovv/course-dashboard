@@ -178,12 +178,14 @@
 
 **Основание:** отчёт `../../digital-twin/staging/ux-фокус-группы-скриншоты-2026-07-31.md`; спеки — **`доводки-ux-2026-07-31.md`**. Ветка: `C4-iter4` (worktree `../cd-iter4`).
 
-| Порядок | Задача | Тикет | Приоритет |
-|:--:|---|:--:|:--:|
-| 1 | **C4 — русский выход ядра** (промпт + перепрогон golden set) | [#64](https://github.com/genarovv/course-dashboard/issues/64) | P0 |
-| 2 | **D19 — дело защиты v2** (хронология по коммитам, вехи-дедлайны, MR + погашенные свёрнуто) | [#65](https://github.com/genarovv/course-dashboard/issues/65) | P0 |
-| 3 | D20 — сводная колонка строки + две сортировки | [#66](https://github.com/genarovv/course-dashboard/issues/66) | P1 |
-| 4 | D21 — честная ячейка + видимое курирование | [#67](https://github.com/genarovv/course-dashboard/issues/67) | P1 |
-| 5 | D22 — полировка | [#68](https://github.com/genarovv/course-dashboard/issues/68) | P2 |
+| Порядок | Задача | Тикет | Приоритет | Статус |
+|:--:|---|:--:|:--:|:--:|
+| 1 | **C4 — русский выход ядра** (промпт + перепрогон golden set) | [#64](https://github.com/genarovv/course-dashboard/issues/64) | P0 | ✅ 2026-07-31 (golden set 2/2) |
+| 2 | **D19 — дело защиты v2** (хронология по коммитам, вехи-дедлайны, MR + погашенные свёрнуто) | [#65](https://github.com/genarovv/course-dashboard/issues/65) | P0 | ✅ 2026-07-31 (миграция c7d19a4e5b02) |
+| 3 | D20 — сводная колонка строки + две сортировки | [#66](https://github.com/genarovv/course-dashboard/issues/66) | P1 | ✅ 2026-07-31 |
+| 4 | D21 — честная ячейка + видимое курирование | [#67](https://github.com/genarovv/course-dashboard/issues/67) | P1 | ✅ 2026-07-31 |
+| 5 | D22 — полировка | [#68](https://github.com/genarovv/course-dashboard/issues/68) | P2 | ✅ 2026-07-31 |
 
 **Не делаем:** псевдонимы (решение CEO 2026-07-31 — названия репо не ПДн, PRD §7).
+
+**Итог (2026-07-31):** все 5 тикетов реализованы tests-first циклами в ветке `C4-iter4`; сьюта 326 → 379, ruff чист; верификация живой петлёй на копии боевой БД (скриншоты — scratchpad сессии). После merge: `alembic upgrade head` на боевой БД (миграция c7d19a4e5b02) и перезапуск uvicorn.
