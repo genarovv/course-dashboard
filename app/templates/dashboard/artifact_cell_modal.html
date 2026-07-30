@@ -1,0 +1,68 @@
+<div class="modal-overlay" onclick="if (event.target === this) this.remove()">
+    <div class="modal" role="dialog" aria-label="{{ details.title }} — подробности">
+        <header class="modal-header">
+            <h2>{{ details.title }}</h2>
+            <p class="repo-url">{{ details.repository.repo_url }}</p>
+            <button type="button" class="modal-close" aria-label="Закрыть"
+                    onclick="this.closest('.modal-overlay').remove()">×</button>
+        </header>
+
+        <section class="modal-files">
+            <h3>Файлы</h3>
+            <ul>
+                {% for f in details.files %}
+                <li>
+                    {% if f.file_path %}
+                    <code>{{ f.file_path }}</code>
+                    <span class="file-status file-{{ f.status }}">{{
+                        {"found": "есть", "partial": "частично", "not_found": "нет"}[f.status | string]
+                    }}</span>
+                    {% if f.partial_reason %}<span class="partial-reason">{{ f.partial_reason | join(", ") }}</span>{% endif %}
+                    {% if f.source_commit_sha %}<span class="sha">@{{ f.source_commit_sha[:8] }}</span>{% endif %}
+                    {% else %}
+                    <code>{{ f.expected_pattern }}</code>
+                    <span class="file-status file-none">{% if f.status %}нет{% else %}не наблюдался{% endif %}</span>
+                    {% endif %}
+                </li>
+                {% endfor %}
+            </ul>
+        </section>
+
+        <section class="modal-edges">
+            <h3>Связи с другими артефактами</h3>
+            {% for edge in details.edges %}
+            <article class="edge edge-{{ edge.state }}{% if edge.override_active %} edge-overridden{% endif %}">
+                <h4>{{ edge.source_role }} → {{ edge.target_role }}</h4>
+                {% if edge.state == "no_data" %}
+                <p class="state">нет данных: не наблюдались обе стороны ребра</p>
+                {% elif edge.state == "pending" %}
+                <p class="state">проверяется</p>
+                {% else %}
+                <p class="verdict verdict-{{ edge.verdict }}">
+                    {{ "разрыв" if edge.verdict == "break" else "связно" }}
+                    <span class="confidence">уверенность: {{ edge.confidence }}</span>
+                    {% if edge.override_active %}<span class="override">отмечен как ложный</span>{% endif %}
+                </p>
+                {% if edge.points %}
+                <ul class="points">
+                    {% for point in edge.points %}
+                    <li><b>{{ point.entity }}</b> — «{{ point.quote }}» — {{ point.why }}</li>
+                    {% endfor %}
+                </ul>
+                {% endif %}
+                {% if edge.notes %}<p class="notes">Заметка преподавателю: {{ edge.notes }}</p>{% endif %}
+                {% if edge.verdict == "break" %}
+                <form method="post" action="/verdicts/{{ edge.verdict_id }}/override-toggle">
+                    <button type="submit">
+                        {{ "снять отметку «ложный разрыв»" if edge.override_active else "ложный разрыв" }}
+                    </button>
+                </form>
+                {% endif %}
+                {% endif %}
+            </article>
+            {% else %}
+            <p class="state">рёбра связности для этой роли не настроены (config.yaml, FR-2)</p>
+            {% endfor %}
+        </section>
+    </div>
+</div>

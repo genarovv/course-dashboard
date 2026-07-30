@@ -35,7 +35,9 @@ PASSWORD = "correct-horse"
 
 
 @pytest.fixture()
-def engine(tmp_path):
+def engine(tmp_path, monkeypatch):
+    # пароль — до миграций: сид system_user читает CD_ADMIN_PASSWORD
+    monkeypatch.setenv("CD_ADMIN_PASSWORD", PASSWORD)
     db_path = tmp_path / "test.db"
     cfg = Config("alembic.ini")
     cfg.set_main_option("sqlalchemy.url", f"sqlite:///{db_path}")
@@ -46,9 +48,7 @@ def engine(tmp_path):
 
 
 @pytest.fixture()
-def client(engine, monkeypatch):
-    monkeypatch.setenv("CD_ADMIN_PASSWORD", PASSWORD)
-
+def client(engine):
     def override_session():
         with Session(engine) as s:
             yield s

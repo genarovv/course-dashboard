@@ -4,7 +4,10 @@
 <header class="matrix-header">
     <h1>Матрица «репозиторий × занятие»</h1>
     <p class="as-of">Актуально на {{ matrix.as_of }}</p>
-    <a href="/logout">Выйти</a>
+    <nav class="matrix-nav">
+        <a href="/artifacts">матрица артефактов</a>
+        <a href="/logout">Выйти</a>
+    </nav>
 </header>
 {% if matrix.auth_banner %}
 <div class="auth-banner"><b>Обнови токен:</b> часть репозиториев отвечает «доступ запрещён» — это проблема нашего токена, не студентов.</div>

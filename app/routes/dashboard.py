@@ -1,4 +1,6 @@
-"""Дашборд: GET / — матрица (D1, #12; FR-4); GET /students/{id} — карточка (D4, #14; FR-9)."""
+"""Дашборд: GET / — матрица занятий (D1, #12; FR-4); GET /artifacts — матрица
+артефактов с модальными деталями (D7, макет CEO); GET /students/{id} — карточка
+(D4, #14; FR-9)."""
 
 from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import RedirectResponse
@@ -6,6 +8,7 @@ from sqlalchemy.orm import Session
 
 from app import store
 from app.routes import get_session, templates
+from app.services.artifact_matrix import build_artifact_matrix, build_cell_details
 from app.services.evidence_chain import build_student_card
 from app.services.matrix_builder import build_matrix
 
@@ -18,6 +21,30 @@ async def dashboard(request: Request, session: Session = Depends(get_session)):
         return RedirectResponse("/login", status_code=303)
     matrix = build_matrix(session)
     return templates.TemplateResponse(request, "dashboard/matrix.html", {"matrix": matrix})
+
+
+@router.get("/artifacts")
+async def artifact_matrix_page(request: Request, session: Session = Depends(get_session)):
+    """D7: матрица «репозиторий × артефакт» по макету CEO."""
+    if "user_id" not in request.session:  # BR-4: teacher-only
+        return RedirectResponse("/login", status_code=303)
+    matrix = build_artifact_matrix(session)
+    return templates.TemplateResponse(request, "dashboard/artifact_matrix.html", {"matrix": matrix})
+
+
+@router.get("/artifacts/{repository_id}/{role}")
+async def artifact_cell_modal(
+    repository_id: str, role: str, request: Request, session: Session = Depends(get_session)
+):
+    """D7: детали ячейки — HTMX-партиал модального окна."""
+    if "user_id" not in request.session:  # BR-4: teacher-only
+        return RedirectResponse("/login", status_code=303)
+    details = build_cell_details(session, repository_id, role)
+    if details is None:
+        raise HTTPException(status_code=404, detail="репозиторий или роль не найдены")
+    return templates.TemplateResponse(
+        request, "dashboard/artifact_cell_modal.html", {"details": details}
+    )
 
 
 @router.post("/verdicts/{verdict_id}/override-toggle")
