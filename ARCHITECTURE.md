@@ -7,7 +7,7 @@
 > - Вычеркнуты 9 механизмов: TaskTracker + сущность-очередь; кеш-колонки Repository; append-only-триггеры на всех таблицах (остались на 2 доказательных); рудимент `processing=0`/SKIP LOCKED; И10-CHECK с подзапросом; `encrypted_token` + крипто в БД; APScheduler; 3 ретрая с эскалацией промпта; `step_quality_card.py` в v1-коде. К каждому — запись «почему не строим» по месту.
 > - LLM-проверки: дельта-принцип «только changed» заменён идемпотентным сводом-реконсиляцией (§5.1)
 > - Носитель FR-8 — системный cron/systemd timer (§5.5)
-> - Раздел «журнал vs состояние» — честный контракт store.py: `register_*` + 4 узких `update_*` (§3.5)
+> - Раздел «журнал vs состояние» — честный контракт store.py: `register_*` + 5 узких `update_*` (§3.5; 5-й добавлен тикетом #50)
 > - Градация инвариантов DDL/код (§4)
 > - Модель ядра: `deepseek-v4-flash` — ADR-004 (D38), цена по расчёту
 >
@@ -90,7 +90,7 @@
 | Язык | Python 3.12+ | D39: максимальная предсказуемость для LLM-агента |
 | Backend | FastAPI | Async из коробки (D33); Pydantic — валидация enum-доменов |
 | СУБД | SQLite (WAL-mode) | D37: нулевой оверхед, нет отдельного процесса, constraints покрывают DDL-часть И1–И12 (§4) |
-| ORM | SQLAlchemy 2.x (Mapped) | D18: журнальные сущности — insert + select; мутации — только по трёхчастному контракту §3.5 (4 узких `update_*` состояния + конфиг-реконсиляция для config_manager). Unit-of-work и change-tracking не используются — легковесный mapper: Mapped + session.add() / session.execute(select()) |
+| ORM | SQLAlchemy 2.x (Mapped) | D18: журнальные сущности — insert + select; мутации — только по трёхчастному контракту §3.5 (5 узких `update_*` состояния + конфиг-реконсиляция для config_manager). Unit-of-work и change-tracking не используются — легковесный mapper: Mapped + session.add() / session.execute(select()) |
 | Миграции | Alembic | Единственный стандарт для SQLAlchemy |
 | Фронтенд | Jinja2 + HTMX | D37: серверный рендеринг, не нужен отдельный API; HTMX обновляет матрицу без JS-фреймворка |
 | Аутентификация | bcrypt + sessions | D10: один пользователь — готовое решение тяжелее задачи |
@@ -143,7 +143,7 @@ app/
 │   ├── coherence_verdict.py #   CoherenceVerdict — FR-5
 │   └── override.py          #   Override — FR-10
 │
-├── store.py                 # Data access: register_* (журнал) + 4 узких update_* + конфиг-реконсиляция (§3.5) + select
+├── store.py                 # Data access: register_* (журнал) + 5 узких update_* + конфиг-реконсиляция (§3.5) + select
 │
 ├── services/
 │   ├── sync_orchestrator.py #   Цикл обхода FR-8 + свод-реконсиляция LLM-пар (§5.1) + детект заготовки (D35)
@@ -304,6 +304,9 @@ class EnumColumn(types.TypeDecorator):
 POST /sync  →  sync_orchestrator.run_sync()
 
   → register_sync_run(status=in_progress)        # INSERT SyncRun
+
+  → for each Repository: branch_detect.refresh_default_branch()   # сверка ветки (ADR-006, #50);
+      # null/ошибка API — пропуск; мутация только через store.update_repository_default_branch
 
   → for each Repository (where archived_at IS NULL):
       → git_client.get_tree() + get_file_content(default_branch)
