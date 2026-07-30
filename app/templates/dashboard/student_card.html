@@ -25,7 +25,7 @@
         {% else %}
         <p class="verdict verdict-{{ edge.verdict }}">
             {{ "разрыв" if edge.verdict == "break" else "связно" }}
-            <span class="confidence">уверенность: {{ edge.confidence }}</span>
+            <span class="confidence">уверенность: {{ CONFIDENCE_LABELS.get(edge.confidence, edge.confidence) }}</span>
             {% if edge.override_active %}<span class="override">отмечен как ложный</span>{% endif %}
         </p>
         {% if edge.points %}
@@ -88,8 +88,8 @@
             <tr>
                 <td>{{ entry.observed_at }}</td>
                 <td>{{ entry.role }}</td>
-                <td class="cell-{{ entry.status }}">{{ entry.status }}
-                    {% if entry.partial_reason %}({{ entry.partial_reason | join(", ") }}){% endif %}</td>
+                <td class="cell-{{ entry.status }}">{{ STATUS_LABELS.get(entry.status, entry.status) }}
+                    {% if entry.partial_reason %}({% for r in entry.partial_reason %}{{ PARTIAL_LABELS.get(r, r) }}{% if not loop.last %}, {% endif %}{% endfor %}){% endif %}</td>
                 <td>{{ entry.file_path or "—" }}</td>
                 <td class="sha">{{ (entry.source_commit_sha or "—")[:8] }}</td>
             </tr>

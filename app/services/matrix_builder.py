@@ -12,6 +12,7 @@ from app import store, timeutil
 from app.config import settings
 from app.models import SNAPSHOT_STATUS_RANK, SnapshotStatus, SyncOutcome, VerdictValue
 from app.services import evidence_chain
+from app.services.labels import PARTIAL_LABELS, STATUS_LABELS, repo_short_name
 
 
 def _blind_spots_and_signals(session: Session, repos: list, today: date) -> dict:
@@ -127,6 +128,11 @@ def build_matrix(session: Session, llm_model: str | None = None, today: date | N
                 lesson.submission_channel == "mr"
                 and cell["status"] in (None, SnapshotStatus.not_found)
             )
+            # D8: подписи по-русски; сырой enum остаётся для CSS-классов
+            cell["status_label"] = STATUS_LABELS.get(cell["status"])
+            cell["partial_reason_labels"] = [
+                PARTIAL_LABELS.get(r, r) for r in (cell["partial_reason"] or [])
+            ] or None
             cells[repo.id][lesson.number] = cell
 
     # FR-10 (O2, #16): разрывы по рёбрам конвейера — точки для кнопки «ложный разрыв»
@@ -155,15 +161,35 @@ def build_matrix(session: Session, llm_model: str | None = None, today: date | N
 
     # Время последнего обхода
     last_run = store.find_last_sync_run(session)
-    # #32: в БД наивный UTC, показываем местное время с меткой зоны
+    # #32: в БД наивный UTC, показываем местное время с меткой зоны;
+    # D8: с датой (решение CEO 2026-07-30, как на макете)
     as_of = (
-        f"{timeutil.to_display(last_run.started_at):%H:%M} ({timeutil.offset_label()})"
+        f"{timeutil.to_display(last_run.started_at):%d.%m %H:%M} ({timeutil.offset_label()})"
         if last_run else "—:—"
     )
 
+    # D8: разрывы и процесс — вторым блоком под матрицей; только строки, где есть что смотреть
+    extras = [
+        {
+            "id": repo.id,
+            "repo_url": repo.repo_url,
+            "name": repo_short_name(repo.repo_url),
+            "breaks": breaks.get(repo.id) or [],
+            "process": process.get(repo.id),
+        }
+        for repo in repos
+        if (breaks.get(repo.id))
+        or ((p := process.get(repo.id)) and (p["ready"] or p["opened"] or p["merged"]))
+    ]
+
     return {
         "repositories": [
-            {"id": r.id, "repo_url": r.repo_url, "git_host": r.git_host}
+            {
+                "id": r.id,
+                "repo_url": r.repo_url,
+                "name": repo_short_name(r.repo_url),
+                "git_host": r.git_host,
+            }
             for r in repos
         ],
         "lessons": [
@@ -173,6 +199,7 @@ def build_matrix(session: Session, llm_model: str | None = None, today: date | N
         "cells": cells,
         "breaks": breaks,
         "process": process,
+        "extras": extras,
         "as_of": as_of,
         # #31: пустой реестр — видимое состояние, не молчаливо пустая матрица
         "registry_count": len(active_repos),

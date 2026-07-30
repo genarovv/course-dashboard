@@ -198,10 +198,10 @@ def test_timestamp_present(session):
 
     assert "as_of" in matrix
     assert isinstance(matrix["as_of"], str)
-    # Формат «ЧЧ:ММ (зона)» — контракт расширен меткой зоны тикетом #32
+    # Формат «ДД.ММ ЧЧ:ММ (зона)» — метка зоны тикетом #32, дата решением CEO 2026-07-30 (D8)
     import re
 
-    assert re.fullmatch(r"\d{2}:\d{2} \(UTC[+-]?[\d:]*\)", matrix["as_of"])
+    assert re.fullmatch(r"\d{2}\.\d{2} \d{2}:\d{2} \(UTC[+-]?[\d:]*\)", matrix["as_of"])
 
 
 # ── AC#2: агрегация нескольких артефактов одного занятия ──────────────────

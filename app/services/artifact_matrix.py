@@ -13,6 +13,7 @@ from app import store, timeutil
 from app.config import settings
 from app.models import SNAPSHOT_STATUS_RANK, ArtifactRole, SnapshotStatus, VerdictValue
 from app.services import evidence_chain
+from app.services.labels import PARTIAL_LABELS, repo_short_name
 
 ROLE_TITLES: dict[ArtifactRole, str] = {
     ArtifactRole.interview: "Интервью",
@@ -32,11 +33,7 @@ ROLE_TITLES: dict[ArtifactRole, str] = {
     ArtifactRole.roles_roster: "Ростер ролей",
 }
 
-PARTIAL_LABELS = {
-    "template_copy": "заготовка из шаблона",
-    "inexact_name": "неточное имя файла",
-    "wrong_place": "не в ожидаемом месте",
-}
+# PARTIAL_LABELS переехали в labels.py (D8) — общие для обеих матриц и модалки
 
 
 def _best_snapshot(session: Session, repository_id: str, defs: list):
@@ -151,7 +148,10 @@ def build_artifact_matrix(
             {"key": str(role), "title": ROLE_TITLES.get(role, str(role))}
             for role in defs_by_role
         ],
-        "repositories": [{"id": r.id, "repo_url": r.repo_url} for r in repos],
+        "repositories": [
+            {"id": r.id, "repo_url": r.repo_url, "name": repo_short_name(r.repo_url)}
+            for r in repos
+        ],
         "cells": cells,
         "as_of": as_of,
         "registry_count": len(active_repos),
