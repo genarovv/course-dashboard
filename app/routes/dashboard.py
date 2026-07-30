@@ -31,12 +31,12 @@ async def artifact_matrix_page(
 ):
     """D7/D14 (#58): матрица «репозиторий × артефакт» — главный экран (решение CEO 2026-07-30).
 
-    D15 (#59): ?sort=breaks — «сначала проблемные»; сортировка живёт в URL,
-    поэтому переживает POST-редиректы по referer (отметки FR-10).
+    D15 (#59) / D20 (#66): ?sort=breaks — «по разрывам», ?sort=lag — «по отставанию»;
+    сортировка живёт в URL, поэтому переживает POST-редиректы по referer (отметки FR-10).
     """
     if "user_id" not in request.session:  # BR-4: teacher-only
         return RedirectResponse("/login", status_code=303)
-    matrix = build_artifact_matrix(session, sort=sort if sort == "breaks" else None)
+    matrix = build_artifact_matrix(session, sort=sort if sort in ("breaks", "lag") else None)
     return templates.TemplateResponse(request, "dashboard/artifact_matrix.html", {"matrix": matrix})
 
 

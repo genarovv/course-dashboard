@@ -62,20 +62,27 @@
 <table class="matrix amatrix">
     <thead>
         <tr>
-            <th class="col-repo">Репозиторий</th>
+            <th class="col-repo">Репозиторий
+                <span class="sort-links">
+                    {% if matrix.sort == "breaks" %}<a href="?">по разрывам ▼</a>{% else %}<a href="?sort=breaks">по разрывам</a>{% endif %}
+                    {% if matrix.sort == "lag" %}<a href="?">по отставанию ▼</a>{% else %}<a href="?sort=lag">по отставанию</a>{% endif %}
+                </span>
+            </th>
             {% for role in matrix.roles %}
             <th>{{ role.title }}</th>
             {% endfor %}
-            <th class="col-breaks" title="Уникальные рёбра-разрывы репозитория; клик — сначала проблемные">
-                {% if matrix.sort == "breaks" %}<a href="?">Разрывы ▼</a>{% else %}<a href="?sort=breaks">Разрывы</a>{% endif %}
-            </th>
         </tr>
     </thead>
     <tbody>
         {% for repo in matrix.repositories %}
         <tr>
             <td class="repo-url"><a href="/students/{{ repo.id }}" title="{{ repo.repo_url }}">{{ repo.name }}</a>
-                <a class="defense-link" href="/students/{{ repo.id }}/defense" title="Режим защиты: дело одного студента, только уверенные разрывы">защита</a></td>
+                <a class="defense-link" href="/students/{{ repo.id }}/defense" title="Режим защиты: дело одного студента, только уверенные разрывы">защита</a>
+                <span class="row-summary">
+                    {%- if matrix.row_breaks[repo.id] %}<span class="row-breaks-chip" title="уникальные рёбра-разрывы репозитория">⚠ {{ matrix.row_breaks[repo.id] }}</span>{% endif -%}
+                    <span class="row-progress" title="сдано ролей из ожидаемых (частично — тоже сдано)">{{ matrix.row_submitted[repo.id].x }}/{{ matrix.row_submitted[repo.id].m }}</span>
+                    {%- if matrix.row_no_review[repo.id] %}<span class="no-review" title="merge request смержен без вердикта ревьюера">мимо ревью: {{ matrix.row_no_review[repo.id] }}</span>{% endif -%}
+                </span></td>
             {% for role in matrix.roles %}
             {% set cell = matrix.cells[repo.id][role.key] %}
             <td class="acell acell-{{ 'mr' if cell.mr_channel else (cell.status or 'none') }}{% if cell.break %} acell-break{% endif %}"
@@ -89,7 +96,6 @@
                 {%- endif -%}
             </td>
             {% endfor %}
-            <td class="row-breaks{% if matrix.row_breaks[repo.id] %} row-breaks-warm{% endif %}">{{ matrix.row_breaks[repo.id] or "—" }}</td>
         </tr>
         {% endfor %}
     </tbody>

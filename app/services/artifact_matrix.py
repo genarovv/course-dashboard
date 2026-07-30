@@ -194,8 +194,9 @@ def build_artifact_matrix(
 ) -> dict:
     """Матрица «репозиторий × артефакт» для GET /artifacts.
 
-    sort="breaks" — «сначала проблемные» (D15, #59): по числу уникальных
-    рёбер-разрывов, стабильно относительно порядка реестра.
+    sort="breaks" — «по разрывам» (D15, #59): по числу уникальных
+    рёбер-разрывов; sort="lag" — «по отставанию» (D20, #66): по возрастанию
+    доли сданного X/M. Обе стабильны относительно порядка реестра.
     """
     resolved_model = llm_model or settings.deepseek_model
     checked_ids = store.find_checked_repository_ids(session)
@@ -214,6 +215,8 @@ def build_artifact_matrix(
 
     cells: dict[str, dict[str, dict]] = {}
     row_breaks: dict[str, int] = {}
+    row_submitted: dict[str, dict] = {}
+    row_no_review: dict[str, int] = {}
     for repo in repos:
         edges = evidence_chain.edge_states(session, repo.id, resolved_model)
         cells[repo.id] = {
@@ -226,8 +229,33 @@ def build_artifact_matrix(
             if e["state"] == "done" and e["verdict"] == VerdictValue.break_
             and not e["override_active"]
         )
+        # D20 (#66): «X/M» — сдано ролей из ожидаемых файлами; found+partial = сдано
+        # (BR-3: partial и есть «сдано криво»); роли «сдача через MR» — вне знаменателя
+        expected = [c for c in cells[repo.id].values() if not c["mr_channel"]]
+        row_submitted[repo.id] = {
+            "x": sum(
+                1 for c in expected
+                if c["status"] in (SnapshotStatus.found, SnapshotStatus.partial)
+            ),
+            "m": len(expected),
+        }
+        # D20: «мимо ревью» — сигнал процесса с матрицы занятий (FR-12, порядок 2026-07-29)
+        row_no_review[repo.id] = sum(
+            1 for r in store.find_latest_mr_observations(session, repo.id)
+            if r.state == "merged" and not r.reviewer_approved
+        )
     if sort == "breaks":
         repos = sorted(repos, key=lambda r: -row_breaks[r.id])  # sorted стабилен — реестр внутри
+    elif sort == "lag":
+        # D20: «по отставанию» — по возрастанию доли сданного; пустая строка первой;
+        # M=0 (все роли через MR) — не отстаёт
+        repos = sorted(
+            repos,
+            key=lambda r: (
+                row_submitted[r.id]["x"] / row_submitted[r.id]["m"]
+                if row_submitted[r.id]["m"] else 1.0
+            ),
+        )
 
     # Макет: «Время и дата последнего анализа: День.Месяц ЧЧ:ММ» (местное время, #32)
     as_of = (
@@ -251,6 +279,8 @@ def build_artifact_matrix(
         ],
         "cells": cells,
         "row_breaks": row_breaks,
+        "row_submitted": row_submitted,
+        "row_no_review": row_no_review,
         "sort": sort,
         "as_of": as_of,
         "registry_count": len(active_repos),
