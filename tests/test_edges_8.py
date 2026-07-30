@@ -178,3 +178,86 @@ def test_multifile_side_sends_path_listing_to_llm(tmp_path):
         assert "lib/z_payments.dart" in captured["target"]
         assert "plan.md" not in captured["target"]  # чужие файлы в связку не попадают
     engine.dispose()
+
+
+def test_multifile_side_unions_all_role_bundles(tmp_path):
+    """Решение CEO 2026-07-30 (№2): список путей мультифайловой стороны — объединение
+    ВСЕХ связок роли (lib + functions + …), а не одной связки пары: иначе каждая
+    пара «теряла» задачи другой половины кодовой базы."""
+    import asyncio
+    from datetime import datetime
+
+    from app import store
+    from app.models import GitHost, SnapshotStatus, SyncTrigger
+    from app.models.artifact_def import ArtifactDef
+    from app.models.lesson import Lesson
+    from app.services.coherence_analyzer import ensure_verdict
+    from app.services.sync_orchestrator import PendingPair
+
+    db_path = tmp_path / "union.db"
+    cfg = Config("alembic.ini")
+    cfg.set_main_option("sqlalchemy.url", f"sqlite:///{db_path}")
+    command.upgrade(cfg, "head")
+    engine = create_engine(f"sqlite:///{db_path}")
+    with Session(engine) as s:
+        lesson8 = Lesson(number=8, title="План", date=datetime(2026, 7, 9).date())
+        lesson9 = Lesson(number=9, title="Код", date=datetime(2026, 7, 14).date())
+        s.add_all([lesson8, lesson9])
+        s.flush()
+        adef_plan = ArtifactDef(lesson_id=lesson8.id, role="plan", expected_pattern="plan.md")
+        adef_lib = ArtifactDef(lesson_id=lesson9.id, role="code", expected_pattern="lib/**/*.dart")
+        adef_fn = ArtifactDef(lesson_id=lesson9.id, role="code", expected_pattern="functions/**/*.js")
+        s.add_all([adef_plan, adef_lib, adef_fn])
+        rubric = store.register_rubric(s, type="edge", version="1.2", text="план → код")
+        s.flush()
+        edge = store.config_create_edge_def(
+            s, source_role="plan", target_role="code", rubric_id=rubric.id
+        )
+        repo = store.register_repository(
+            s, repo_url="https://github.com/u/r", git_host=GitHost.GitHub
+        )
+        run = store.register_sync_run(s, triggered_by=SyncTrigger.manual)
+        s.flush()
+        snap_plan = store.register_snapshot(
+            s, sync_run_id=run.id, repository_id=repo.id, artifact_def_id=adef_plan.id,
+            status=SnapshotStatus.found, content_hash="a" * 64,
+            file_path="plan.md", source_commit_sha="c" * 40,
+        )
+        snap_lib = store.register_snapshot(
+            s, sync_run_id=run.id, repository_id=repo.id, artifact_def_id=adef_lib.id,
+            status=SnapshotStatus.found, content_hash="b" * 64,
+            file_path="lib/auth.dart", source_commit_sha="c" * 40,
+        )
+        s.flush()
+        pair = PendingPair(
+            edge_def_id=edge.id, repository_id=repo.id,
+            source_snapshot_id=snap_plan.id, target_snapshot_id=snap_lib.id,
+            source_content_hash="a" * 64, target_content_hash="b" * 64,
+            rubric_id=rubric.id, llm_model="deepseek-v4-flash",
+        )
+
+        class TreeGit:
+            async def get_tree(self, repo_url, git_host, ref="main"):
+                return ["plan.md", "lib/auth.dart", "lib/chat.dart", "functions/payments.js"]
+
+            async def get_file_content(self, repo_url, git_host, file_path, ref="main"):
+                return "# план"
+
+        captured = {}
+
+        class SpyLLM:
+            async def check_coherence(self, source_text, target_text, rubric_text, model=None):
+                captured["target"] = target_text
+                return {
+                    "verdict": "ok", "confidence": "high",
+                    "entities_checked": 1, "entities_found": 1,
+                    "entities_excluded": 0, "entities_lost": 0,
+                    "points": [], "notes": "",
+                }
+
+        asyncio.run(ensure_verdict(s, TreeGit(), SpyLLM(), pair))
+        # объединение: пара построена по lib-связке, но список включает и functions
+        assert "lib/auth.dart" in captured["target"]
+        assert "lib/chat.dart" in captured["target"]
+        assert "functions/payments.js" in captured["target"]
+    engine.dispose()
