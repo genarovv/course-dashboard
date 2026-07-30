@@ -14,6 +14,14 @@ class ArtifactRole(StrEnum):
     plan = "plan"
     code = "code"
     tests = "tests"
+    # T3 (#43) + пакет «12 артефактов» (решение CEO 2026-07-30): роли для
+    # артефактов 1, 2, 7, 9 описания курса; enum хранится строкой — без миграции
+    jtbd = "jtbd"
+    readme = "readme"
+    changelog = "changelog"
+    adr = "adr"
+    claude_md = "claude_md"
+    roles_roster = "roles_roster"
 
 
 class GitHost(StrEnum):
