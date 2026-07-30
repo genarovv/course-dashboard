@@ -1,6 +1,6 @@
 import uuid
 
-from sqlalchemy import ForeignKey, String
+from sqlalchemy import JSON, ForeignKey, String
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.models import ArtifactRole, Base, EnumColumn
@@ -14,3 +14,6 @@ class ArtifactDef(Base):
     role: Mapped[ArtifactRole] = mapped_column(EnumColumn(ArtifactRole))
     expected_pattern: Mapped[str] = mapped_column(String(200))
     template_relative_path: Mapped[str | None] = mapped_column(String(200), nullable=True)
+    # T2 (#44): пробы содержимого — [{key, contains?, not_contains?, label}];
+    # только объявленные требования курса, статус ячейки не меняют (BR-3)
+    content_probes: Mapped[dict | None] = mapped_column(JSON, nullable=True)

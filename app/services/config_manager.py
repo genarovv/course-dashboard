@@ -19,10 +19,24 @@ from app.config import settings
 from app.models import ArtifactRole, GitHost, RubricType
 
 
+class ProbeConfig(BaseModel):
+    """T2 (#44): проба содержимого — только объявленные требования курса.
+
+    contains — finding, если regex НЕ найден (обязательный раздел отсутствует);
+    not_contains — finding, если regex найден (маркер незаполненного шаблона).
+    """
+
+    key: str
+    label: str
+    contains: str | None = None
+    not_contains: str | None = None
+
+
 class ArtifactConfig(BaseModel):
     role: ArtifactRole
     expected_pattern: str
     template_relative_path: str | None = None
+    content_probes: list[ProbeConfig] | None = None
 
 
 class LessonConfig(BaseModel):
@@ -117,6 +131,10 @@ def reconcile(session: Session, config: ConfigYAML) -> ReloadSummary:
                 role=artifact_cfg.role,
                 expected_pattern=artifact_cfg.expected_pattern,
                 template_relative_path=artifact_cfg.template_relative_path,
+                content_probes=(
+                    [probe.model_dump() for probe in artifact_cfg.content_probes]
+                    if artifact_cfg.content_probes else None
+                ),
             )
             _count(summary, "artifact_defs", adef_outcome)
 

@@ -103,6 +103,25 @@ async def _fetch_template_hashes(git_client, template_repo) -> frozenset[str]:
         return frozenset()
 
 
+def _run_probes(probes, content: str) -> list[dict]:
+    """T2 (#44): пробы содержимого — узкая редакция.
+
+    contains — finding, если regex НЕ найден (обязательный раздел отсутствует);
+    not_contains — finding, если regex найден (маркер незаполненного шаблона).
+    Битый regex пробы — warning, проба пропускается (конфиг не роняет обход, NFR-2).
+    """
+    findings: list[dict] = []
+    for probe in probes or []:
+        try:
+            if probe.get("contains") and not re.search(probe["contains"], content, re.I | re.M):
+                findings.append({"key": probe["key"], "label": probe.get("label", probe["key"])})
+            elif probe.get("not_contains") and re.search(probe["not_contains"], content, re.I | re.M):
+                findings.append({"key": probe["key"], "label": probe.get("label", probe["key"])})
+        except re.error as exc:
+            logger.warning("Проба %s: битый regex (%s) — пропущена", probe.get("key"), exc)
+    return findings
+
+
 def _outcome_for_error(exc: GitClientError) -> SyncOutcome:
     if isinstance(exc, GitAuthFailedError):
         return SyncOutcome.auth_failed
@@ -144,6 +163,7 @@ async def _observe_artifact(
 ) -> bool:
     """Наблюдение одного артефакта; True — наблюдение изменилось (записан новый снапшот)."""
     matches = _match_artifact(artifact_def, tree)
+    probe_findings = None  # T2 (#44): пробы применимы только там, где читается контент
     if matches and len(matches) == 1:
         file_path = matches[0]
         content = await git_client.get_file_content(
@@ -155,9 +175,11 @@ async def _observe_artifact(
             status, partial_reason = SnapshotStatus.partial, ["template_copy"]
         else:
             status, partial_reason = SnapshotStatus.found, None
+        probe_findings = _run_probes(artifact_def.content_probes, content) or None
     elif matches:
         # мульти-файловое наблюдение: хеш связки, с шаблоном не сравнивается
-        # by construction (см. issue #10); представитель — первый по алфавиту
+        # by construction (см. issue #10); представитель — первый по алфавиту;
+        # пробы не применяются (цельного контента нет)
         file_path = matches[0]
         content_hash = await _hash_matches(git_client, repo, matches)
         status, partial_reason = SnapshotStatus.found, None
@@ -173,17 +195,19 @@ async def _observe_artifact(
         else:
             partial_reason = ["wrong_place"]
         status = SnapshotStatus.partial
+        probe_findings = _run_probes(artifact_def.content_probes, content) or None
     else:
         status, partial_reason, file_path, content_hash = (
             SnapshotStatus.not_found, None, None, None  # И8: у not_found нет file_path/sha
         )
 
     last = store.find_last_snapshot(session, repo.id, artifact_def.id)
-    observed = (status, content_hash, file_path, partial_reason)
+    observed = (status, content_hash, file_path, partial_reason, probe_findings)
     if last is not None and observed == (
-        last.status, last.content_hash, last.file_path, last.partial_reason or None
+        last.status, last.content_hash, last.file_path, last.partial_reason or None,
+        last.probe_findings or None,
     ):
-        return False  # D28: наблюдение (включая причины и место) не изменилось — снапшот не пишем
+        return False  # D28: наблюдение (включая причины, место и пробы) не изменилось
 
     fields = dict(
         sync_run_id=sync_run_id,
@@ -192,6 +216,7 @@ async def _observe_artifact(
         status=status,
         file_path=file_path,
         content_hash=content_hash,
+        probe_findings=probe_findings,
         # FR-9: SHA головы ветки — свидетельство «такая версия существовала» (C4)
         source_commit_sha=head_sha if status != SnapshotStatus.not_found else None,
     )

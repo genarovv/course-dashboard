@@ -197,13 +197,14 @@ def config_upsert_lesson(
 
 def config_upsert_artifact_def(
     session: Session, *, lesson_id: str, role, expected_pattern: str,
-    template_relative_path: str | None = None,
+    template_relative_path: str | None = None, content_probes: list | None = None,
 ) -> tuple[ArtifactDef, str]:
     """FR-2: ожидаемый артефакт занятия. Возвращает (artifact_def, 'created'|'updated'|'unchanged').
 
     Ключ идентичности — (занятие, роль, паттерн): несколько паттернов одной роли =
     альтернативные пути артефакта (пакет «12 артефактов», решение CEO 2026-07-30);
     со старым ключом (занятие, роль) второй паттерн затирал первый.
+    content_probes — пробы содержимого T2 (#44), часть конфига.
     """
     adef = session.scalar(
         select(ArtifactDef).where(
@@ -215,12 +216,15 @@ def config_upsert_artifact_def(
     if adef is None:
         adef = ArtifactDef(
             lesson_id=lesson_id, role=role, expected_pattern=expected_pattern,
-            template_relative_path=template_relative_path,
+            template_relative_path=template_relative_path, content_probes=content_probes,
         )
         session.add(adef)
         return adef, "created"
-    if adef.template_relative_path != template_relative_path:
+    if (adef.template_relative_path, adef.content_probes or None) != (
+        template_relative_path, content_probes or None
+    ):
         adef.template_relative_path = template_relative_path
+        adef.content_probes = content_probes
         return adef, "updated"
     return adef, "unchanged"
 

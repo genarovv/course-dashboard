@@ -38,4 +38,7 @@ class ArtifactSnapshot(Base):
     file_path: Mapped[str | None] = mapped_column(String(500), nullable=True)
     source_commit_sha: Mapped[str | None] = mapped_column(String(40), nullable=True)
     content_hash: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    # T2 (#44): сработавшие пробы содержимого — [{key, label}]; признак карточки,
+    # статус не меняет (BR-3); входит в наблюдение D28
+    probe_findings: Mapped[dict | None] = mapped_column(JSON, nullable=True)
     observed_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)

@@ -29,6 +29,17 @@ lessons:
     artifacts:
       - role: claude_md
         expected_pattern: "CLAUDE.md"
+        # T2 (#44), узкая редакция: пробы только к объявленным требованиям курса
+        content_probes:
+          - key: doc_standard
+            label: "раздел «Стандарт документации» (задание занятия 10)"
+            contains: "Стандарт документации"
+          - key: testing_standard
+            label: "раздел «Стандарт тестирования» (задание занятия 11)"
+            contains: "Стандарт тестирования"
+          - key: template_stub_stack
+            label: "незаполненная строка стека из шаблона («Стек: <»)"
+            not_contains: "Стек:\\s*<"
       - role: claude_md
         expected_pattern: "AGENTS.md"
   - number: 3
@@ -78,6 +89,10 @@ lessons:
     artifacts:
       - role: architecture
         expected_pattern: "ARCHITECTURE.md"
+        content_probes:
+          - key: template_open_questions
+            label: "шаблонная секция «Уточняющие вопросы» не разобрана"
+            not_contains: "Уточняющие вопросы"
       - role: adr
         expected_pattern: "decisions/*.md"
   - number: 8

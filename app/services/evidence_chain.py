@@ -128,9 +128,26 @@ def build_student_card(
         }
         for row in store.find_latest_mr_observations(session, repository_id)
     ]
+    # T2 (#44): признаки проб содержимого — по последним снапшотам артефактов с пробами;
+    # статус ячеек не меняют (BR-3), это отдельный сигнал «объявленное требование не найдено»
+    probe_rows = []
+    for lesson in store.find_all_lessons(session):
+        for adef in store.find_artifact_defs_by_lesson(session, lesson.id):
+            if not adef.content_probes:
+                continue
+            snap = store.find_last_snapshot(session, repository_id, adef.id)
+            for finding in (snap.probe_findings or []) if snap else []:
+                probe_rows.append({
+                    "role": str(adef.role),
+                    "file_path": snap.file_path,
+                    "key": finding.get("key"),
+                    "label": finding.get("label", finding.get("key", "?")),
+                })
+
     return {
         "repository": {"id": repo.id, "repo_url": repo.repo_url, "git_host": repo.git_host},
         "timeline": timeline,
         "edges": edges,
         "mrs": mrs,
+        "probe_findings": probe_rows,
     }

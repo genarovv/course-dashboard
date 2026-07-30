@@ -42,6 +42,18 @@
     {% endfor %}
 </section>
 
+{% if card.probe_findings %}
+<section class="probes">
+    <h2>Пробы содержимого</h2>
+    <p class="muted">Объявленные требования курса, не найденные в файлах (статус ячеек не меняют — T2):</p>
+    <ul>
+        {% for probe in card.probe_findings %}
+        <li><code>{{ probe.file_path }}</code> — {{ probe.label }}</li>
+        {% endfor %}
+    </ul>
+</section>
+{% endif %}
+
 {% if card.mrs %}
 <section class="mrs">
     <h2>Запросы на слияние (канал сдачи)</h2>

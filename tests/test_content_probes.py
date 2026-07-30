@@ -172,6 +172,6 @@ async def test_probe_findings_visible_in_student_card(session):
     session.flush()
 
     (repo_row,) = session.scalars(select(ArtifactSnapshot))
-    card = build_student_card(session, repo_row.repository_id, "deepseek-v4-flash")
+    card = build_student_card(session, repo_row.repository_id, llm_model="deepseek-v4-flash")
     probe_rows = card.get("probe_findings") or []
     assert any("незаполненная строка стека" in row["label"] for row in probe_rows)
