@@ -11,19 +11,29 @@ from sqlalchemy.orm import Session
 from app import store
 from app.config import settings
 from app.models import VerdictValue
+from app.services.matrix_builder import _STATUS_RANK
 
 MAX_POINTS = 5  # AC 2 / PRD §5.1: не более 5 подсвеченных точек на разрыв
 
 
 def _latest_snapshot_for_role(session: Session, repository_id: str, role):
-    """Последний (по observed_at) снапшот роли с content_hash среди всех её артефактов."""
+    """Снапшот-представитель роли среди её альтернативных артефактов.
+
+    Пакет «12 артефактов» (fix по ревью T3): сперва лучший статус (found важнее
+    partial-заготовки — иначе вердикт на защите считался бы по свежей копии
+    шаблона), при равном статусе — последний по observed_at.
+    """
     candidates = [
         snap
         for adef in store.find_artifact_defs_by_role(session, role)
         if (snap := store.find_last_snapshot(session, repository_id, adef.id)) is not None
         and snap.content_hash
     ]
-    return max(candidates, key=lambda snap: snap.observed_at, default=None)
+    return min(
+        candidates,
+        key=lambda snap: (_STATUS_RANK[snap.status], -snap.observed_at.timestamp()),
+        default=None,
+    )
 
 
 def _edge_card(session: Session, repository_id: str, edge, llm_model: str) -> dict:
