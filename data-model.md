@@ -121,6 +121,7 @@
 | partial_reason | json, null | JSON-массив причин «частично»: `["inexact_name", "wrong_place", "template_copy"]`. Пустой массив `[]` = нет причин (не partial). Несколько причин не теряются (C3, ARCHITECTURE v2 §6). |
 | file_path | string, null | Фактический путь в репозитории |
 | source_commit_sha | string, null | SHA коммита — устойчивость хронологии к `force-push` (FR-9) |
+| source_commit_date | datetime, null | D19 (#65): дата головного коммита из Git API — «когда сделано» против «когда увидели» (хронология защиты). NULL у снапшотов до миграции и при сбое даты — UI показывает дату наблюдения с пометкой «зафиксировано обходом» |
 | content_hash | string, null | Хеш содержимого — инкрементальный обход (FR-8) и «версия документа» в четвёрке FR-5 / тройке FR-11 |
 | probe_findings | json, null | T2 (#44): сработавшие пробы `[{key, label}]` — признак карточки, статус НЕ меняет (BR-3); входит в наблюдение D28 |
 | observed_at | datetime | Момент наблюдения |

@@ -151,6 +151,22 @@ async def _hash_matches(git_client, repo: Repository, matches: list[str]) -> str
     return _content_hash("\0".join(parts))
 
 
+async def _head_commit_date(git_client, repo: Repository):
+    """D19 (#65): дата головного коммита — NULL при любом сбое (негативный AC).
+
+    Клиент без метода (старые фейки в тестах) или ошибка API не валят обход:
+    дата — свидетельство «в плюс», не обязательное условие наблюдения.
+    """
+    getter = getattr(git_client, "get_head_commit_date", None)
+    if getter is None:
+        return None
+    try:
+        raw = await getter(repo.repo_url, repo.git_host, ref=repo.default_branch)
+    except GitClientError:
+        return None
+    return _parse_host_datetime(raw) if raw else None
+
+
 async def _observe_artifact(
     session: Session,
     git_client,
@@ -159,6 +175,7 @@ async def _observe_artifact(
     artifact_def: ArtifactDef,
     tree: list[str],
     head_sha: str | None,
+    head_date,
     template_hashes: frozenset[str],
 ) -> bool:
     """Наблюдение одного артефакта; True — наблюдение изменилось (записан новый снапшот)."""
@@ -218,6 +235,8 @@ async def _observe_artifact(
         content_hash=content_hash,
         # FR-9: SHA головы ветки — свидетельство «такая версия существовала» (C4)
         source_commit_sha=head_sha if status != SnapshotStatus.not_found else None,
+        # D19 (#65): дата коммита — «когда сделано» против «когда увидели»
+        source_commit_date=head_date if status != SnapshotStatus.not_found else None,
     )
     if probe_findings is not None:
         # как и у partial_reason: явный None стал бы json-'null' вместо SQL NULL (D6)
@@ -242,11 +261,12 @@ async def _sync_one_repo(
         head_sha = await git_client.get_head_sha(
             repo.repo_url, repo.git_host, ref=repo.default_branch
         )
+        head_date = await _head_commit_date(git_client, repo)  # D19: NULL — не сбой
         changed = False
         for artifact_def in artifact_defs:
             changed |= await _observe_artifact(
                 session, git_client, sync_run_id, repo, artifact_def, tree, head_sha,
-                template_hashes,
+                head_date, template_hashes,
             )
         return SyncOutcome.ok_changed if changed else SyncOutcome.ok_unchanged, None
     except GitClientError as exc:  # NFR-2: ошибка репозитория — исход, не крах обхода

@@ -3,15 +3,19 @@
 from fastapi.templating import Jinja2Templates
 
 from app.config import settings
-from app.services.labels import CONFIDENCE_LABELS, PARTIAL_LABELS, STATUS_LABELS
+from app.services.labels import CONFIDENCE_LABELS, PARTIAL_LABELS, STATUS_LABELS, repo_short_name
 from app.store import SessionLocal
+from app.timeutil import fmt_dt
 
 templates = Jinja2Templates(directory=settings.template_dir)
-# D8: русские подписи — общие для всех шаблонов (labels.py, один факт в одном месте)
+# D8: русские подписи — общие для всех шаблонов (labels.py, один факт в одном месте);
+# D19: короткое имя репо и формат времени ДД.ММ ЧЧ:ММ — тоже общие
 templates.env.globals.update(
     STATUS_LABELS=STATUS_LABELS,
     PARTIAL_LABELS=PARTIAL_LABELS,
     CONFIDENCE_LABELS=CONFIDENCE_LABELS,
+    repo_short_name=repo_short_name,
+    fmt_dt=fmt_dt,
 )
 
 

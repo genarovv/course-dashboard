@@ -184,3 +184,15 @@ table.extras { width: auto; min-width: 60%; }
 .override { color: #667; font-size: 0.8rem; margin-left: 0.5rem; }
 .points { margin: 0.25rem 0; padding-left: 1.25rem; font-size: 0.85rem; }
 .notes { font-size: 0.85rem; color: #444d61; background: #f6f7fa; padding: 0.4rem 0.6rem; border-radius: 4px; }
+
+/* D19 (#65): дело защиты v2 */
+.repo-url-small { font-size: 0.78rem; color: #667; margin: 0.1rem 0; }
+.defense-opened { font-size: 0.78rem; color: #667; margin: 0.1rem 0 0.4rem; }
+.defense-notes { font-size: 1.05rem; line-height: 1.5; color: #1c2333; margin: 0.4rem 0; }
+.points-details summary,
+.timeline-full summary,
+.defense-mrs summary,
+.defense-muted summary { cursor: pointer; font-size: 0.85rem; color: #445; }
+.defense-mrs, .defense-muted, .timeline-full { margin: 0.8rem 0; }
+.lesson-milestone td { background: #eef1f6; color: #333c50; font-size: 0.82rem; font-weight: 600; }
+.obs-note { font-size: 0.72rem; color: #778; white-space: nowrap; }
