@@ -10,7 +10,7 @@ from sqlalchemy.orm import Session
 
 from app import store, timeutil
 from app.config import settings
-from app.models import SnapshotStatus, SyncOutcome, VerdictValue
+from app.models import SNAPSHOT_STATUS_RANK, SnapshotStatus, SyncOutcome, VerdictValue
 from app.services import evidence_chain
 
 
@@ -58,13 +58,6 @@ def _blind_spots_and_signals(session: Session, repos: list, today: date) -> dict
     }
 
 
-_STATUS_RANK = {  # лучший статус для альтернатив внутри роли (пакет «12 артефактов»)
-    SnapshotStatus.found: 0,
-    SnapshotStatus.partial: 1,
-    SnapshotStatus.not_found: 2,
-}
-
-
 def _aggregate_cell(session: Session, repository_id: str, artifact_defs: list) -> dict:
     """Статус ячейки по последним снапшотам всех артефактов занятия (FR-4).
 
@@ -82,7 +75,7 @@ def _aggregate_cell(session: Session, repository_id: str, artifact_defs: list) -
         if snap is None:
             continue
         current = best_by_role.get(adef.role)
-        if current is None or _STATUS_RANK[snap.status] < _STATUS_RANK[current.status]:
+        if current is None or SNAPSHOT_STATUS_RANK[snap.status] < SNAPSHOT_STATUS_RANK[current.status]:
             best_by_role[adef.role] = snap
     snaps = list(best_by_role.values())
     if not snaps:

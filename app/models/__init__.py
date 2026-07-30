@@ -35,6 +35,17 @@ class SnapshotStatus(StrEnum):
     not_found = "not_found"
 
 
+# Ранжирование статусов для альтернативных путей одной роли (пакет «12 артефактов»,
+# решение CEO 2026-07-30): лучший представитель роли в матрице и карточке.
+# Живёт рядом с доменом, а не в сервисе — иначе циркулярный импорт
+# matrix_builder ↔ evidence_chain (находка 9 ревью T3).
+SNAPSHOT_STATUS_RANK = {
+    SnapshotStatus.found: 0,
+    SnapshotStatus.partial: 1,
+    SnapshotStatus.not_found: 2,
+}
+
+
 class PartialReason(StrEnum):
     inexact_name = "inexact_name"
     wrong_place = "wrong_place"

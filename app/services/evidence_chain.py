@@ -10,8 +10,7 @@ from sqlalchemy.orm import Session
 
 from app import store
 from app.config import settings
-from app.models import VerdictValue
-from app.services.matrix_builder import _STATUS_RANK
+from app.models import SNAPSHOT_STATUS_RANK, VerdictValue
 
 MAX_POINTS = 5  # AC 2 / PRD §5.1: не более 5 подсвеченных точек на разрыв
 
@@ -31,7 +30,7 @@ def _latest_snapshot_for_role(session: Session, repository_id: str, role):
     ]
     return min(
         candidates,
-        key=lambda snap: (_STATUS_RANK[snap.status], -snap.observed_at.timestamp()),
+        key=lambda snap: (SNAPSHOT_STATUS_RANK[snap.status], -snap.observed_at.timestamp()),
         default=None,
     )
 
