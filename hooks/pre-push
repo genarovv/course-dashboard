@@ -1,7 +1,107 @@
 #!/bin/sh
 # H1 (#52): гейт перед push — линт + полная suite с порогом покрытия
 # (fail_under — pyproject [tool.coverage.report]). «Политика в тексте ≠ машинный гейт».
+# H2 (#XX): гейт документации — код и документация в одном MR (CLAUDE.md, стандарт документации).
 # Активация: git config core.hooksPath hooks   (README §Хуки и гейты)
+
+# ---------------------------------------------------------------------------
+# H2: Документационный гейт
+# CLAUDE.md, стандарт документации п.1 + п.4:
+#   «Код и документация — один MR. <…> Если изменение документацию не
+#    затрагивает, в описании MR пишется: "докам обновление не требуется,
+#    потому что …".»
+#
+# Ловит: push, где есть изменения вне doc-файлов, но нет изменений doc-файлов
+#        И ни один коммит не содержит waiver «докам обновление не требуется».
+# Пропускает: push только из doc-файлов; push с изменением и кода, и доков;
+#             push с waiver в commit message.
+# Обход: написать в любом коммите push'а «докам обновление не требуется,
+#         потому что <причина>». Это сознательный обход — гейт требует
+#         осознанного решения, что доки правда не затронуты.
+# memory/MEMORY.md исключён из проверки (явно выведен из стандарта в CLAUDE.md).
+# ---------------------------------------------------------------------------
+
+zero_sha="0000000000000000000000000000000000000000"
+
+DOCK='README.md INDEX.md ARCHITECTURE.md CLAUDE.md data-model.md CHANGELOG.md'
+DOCDIR='docs/ .claude/ product/ decisions/'
+
+is_doc_file() {
+  f="$1"
+  for d in $DOCK; do
+    case "$f" in
+      "$d"|*/"$d") return 0 ;;
+    esac
+  done
+  for d in $DOCDIR; do
+    case "$f" in
+      "$d"*|*/"$d"*) return 0 ;;
+    esac
+  done
+  return 1
+}
+
+while read local_ref local_sha remote_ref remote_sha; do
+  if [ "$local_sha" = "$zero_sha" ]; then
+    continue
+  fi
+
+  if [ "$remote_sha" = "$zero_sha" ]; then
+    base=$(git merge-base HEAD origin/main 2>/dev/null || echo "")
+    if [ -n "$base" ]; then
+      range="$base..$local_sha"
+    else
+      range="$local_sha"
+    fi
+  else
+    range="$remote_sha..$local_sha"
+  fi
+
+  all=$(git diff --name-only "$range" 2>/dev/null) || continue
+  [ -z "$all" ] && continue
+
+  has_doc=0
+  has_non_doc=0
+
+  for f in $all; do
+    [ -z "$f" ] && continue
+    case "$f" in
+      memory/MEMORY.md|memory/*) continue ;;
+    esac
+    if is_doc_file "$f"; then
+      has_doc=1
+    else
+      has_non_doc=1
+    fi
+  done
+
+  [ "$has_non_doc" = 0 ] && continue
+  [ "$has_doc" = 1 ] && continue
+
+  messages=$(git log --format="%s%n%b" "$range" 2>/dev/null)
+  echo "$messages" | grep -q "докам обновление не требуется" && continue
+
+  echo ""
+  echo "❌  BLOCKED: изменены файлы, но не обновлена документация."
+  echo ""
+  echo "    Изменённые файлы:"
+  echo "$all" | sed 's/^/      /'
+  echo ""
+  echo "    Требуется (CLAUDE.md, стандарт документации п.1, п.4):"
+  echo "    • дополнить push обновлением хотя бы одного:"
+  echo "        $DOCK"
+  echo "        $DOCDIR"
+  echo "    • ИЛИ указать в commit message:"
+  echo "        докам обновление не требуется, потому что <причина>"
+  echo ""
+  echo "    ref: $(echo "$local_sha" | cut -c1-7), range: $range"
+  echo ""
+  exit 1
+done
+
+# ---------------------------------------------------------------------------
+# H1: линт + тесты
+# ---------------------------------------------------------------------------
 
 if [ -x ".venv/Scripts/python.exe" ]; then
     PY=".venv/Scripts/python.exe"
