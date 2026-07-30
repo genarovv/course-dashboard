@@ -225,22 +225,57 @@ def test_validate_rejects_non_dict_point():
 # ── копилка: probe_findings — SQL NULL, а не json-null ──────────────────────
 
 
-def test_probe_findings_absent_is_sql_null(session):
-    _seed_edge_pair(session)
+@pytest.mark.anyio
+async def test_probe_findings_absent_is_sql_null(session):
+    """Fix D6-3: проверяем боевой путь записи (_observe_artifact), не ручной сид."""
+    from app.services.sync_orchestrator import run_sync
+
+    lesson = Lesson(number=5, title="PRD", date=datetime(2026, 6, 30).date())
+    session.add(lesson)
+    session.flush()
+    adef = ArtifactDef(lesson_id=lesson.id, role="prd", expected_pattern="product/prd.md")
+    session.add(adef)  # без content_probes
+    store.register_repository(
+        session, repo_url="https://github.com/u/nullcheck", git_host=GitHost.GitHub
+    )
+    session.flush()
+
+    class Git:
+        async def get_tree(self, repo_url, git_host, ref="main"):
+            return ["product/prd.md"]
+
+        async def get_file_content(self, repo_url, git_host, file_path, ref="main"):
+            return "# prd"
+
+        async def get_head_sha(self, repo_url, git_host, ref="main"):
+            return "a" * 40
+
+        async def fetch_default_branch(self, repo_url, git_host):
+            return "main"
+
+    await run_sync(session, Git(), triggered_by=SyncTrigger.manual)
     session.commit()
+
     raw = session.execute(
         text("SELECT COUNT(*) FROM artifact_snapshot WHERE probe_findings IS NULL")
     ).scalar()
     total = session.execute(text("SELECT COUNT(*) FROM artifact_snapshot")).scalar()
-    assert raw == total  # без проб колонка — настоящий SQL NULL
+    assert total == 1 and raw == total  # боевой путь пишет настоящий SQL NULL
 
 
 # ── блокер ревью D6: артефактная матрица и модалка знают про deferred ───────
 
 
 def _seed_deferred_for_artifacts(session):
+    from app.models import SyncOutcome
+
     edge, repo, rubric, snaps = _seed_edge_pair(session)
     _register_deferred(session, edge, rubric, snaps, "llm_unavailable")
+    # матрица показывает только репо с исходом обхода (checked_ids)
+    run = store.find_last_sync_run(session)
+    store.register_sync_outcome(
+        session, sync_run_id=run.id, repository_id=repo.id, outcome=SyncOutcome.ok_changed
+    )
     session.commit()
     return repo
 
@@ -263,10 +298,10 @@ def test_artifact_modal_renders_deferred_not_svyazno(session):
     import jinja2
 
     from app.models import ArtifactRole
-    from app.services.artifact_matrix import artifact_cell_details
+    from app.services.artifact_matrix import build_cell_details
 
     repo = _seed_deferred_for_artifacts(session)
-    details = artifact_cell_details(session, repo.id, ArtifactRole.prd, llm_model=LLM_MODEL)
+    details = build_cell_details(session, repo.id, ArtifactRole.prd, llm_model=LLM_MODEL)
     (edge_card,) = [e for e in details["edges"] if e["state"] == "deferred"]
     assert edge_card["deferred_reason"] == "llm_unavailable"
 

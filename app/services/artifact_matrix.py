@@ -70,6 +70,7 @@ def _cell(session: Session, repository_id: str, defs: list, edges: list[dict]) -
         if e["state"] == "done" and e["verdict"] == VerdictValue.break_ and not e["override_active"]
     ]
     pending = [e for e in touching if e["state"] == "pending"]
+    deferred = [e for e in touching if e["state"] == "deferred"]  # D6 (#37)
     oks = [
         e for e in touching
         if e["state"] == "done" and (e["verdict"] == VerdictValue.ok or e["override_active"])
@@ -87,6 +88,8 @@ def _cell(session: Session, repository_id: str, defs: list, edges: list[dict]) -
         lost = f": потеряна «{first_point['entity']}»" if first_point else ""
         count = f" ×{len(breaks)}" if len(breaks) > 1 else ""
         summary = f"есть · разрыв{count}{lost}"
+    elif deferred:
+        summary = "есть · проверка отложена"  # D6: LLM недоступна / ответ не распарсился
     elif pending:
         summary = "есть · связность проверяется"
     elif oks:
@@ -100,6 +103,7 @@ def _cell(session: Session, repository_id: str, defs: list, edges: list[dict]) -
         "summary": summary,
         "break_count": len(breaks),
         "pending_count": len(pending),
+        "deferred_count": len(deferred),
         "ok_count": len(oks),
     }
 

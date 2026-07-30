@@ -37,6 +37,12 @@
                 <p class="state">нет данных: не наблюдались обе стороны ребра</p>
                 {% elif edge.state == "pending" %}
                 <p class="state">проверяется</p>
+                {% elif edge.state == "deferred" %}
+                <p class="state state-deferred">отложено:
+                    {% if edge.deferred_reason == "llm_unavailable" %}LLM недоступна — перепроверится следующим обходом
+                    {% elif edge.deferred_reason == "parse_error" %}ответ модели не распарсился — перепроверится следующим обходом
+                    {% else %}причина не записана{% endif %}
+                </p>
                 {% else %}
                 <p class="verdict verdict-{{ edge.verdict }}">
                     {{ "разрыв" if edge.verdict == "break" else "связно" }}

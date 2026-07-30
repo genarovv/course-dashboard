@@ -436,7 +436,7 @@ def _wire_client(tmp_path, monkeypatch, llm_override):
 def test_sync_route_builds_verdict_worker_when_llm_available(tmp_path, monkeypatch):
     """C2 (#36): /sync собирает воркер из get_llm_client и передаёт его в run_sync."""
     client, captured, app, engine = _wire_client(
-        tmp_path, monkeypatch, lambda: FakeLLM(result=dict(VALID_VERDICT))
+        tmp_path, monkeypatch, lambda: (lambda: FakeLLM(result=dict(VALID_VERDICT)))
     )
     try:
         assert client.post("/sync").status_code == 200
