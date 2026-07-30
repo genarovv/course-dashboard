@@ -93,3 +93,42 @@ def test_import_requires_auth(client_and_engine):
     client, _ = client_and_engine
     client.get("/logout")
     assert client.post("/import-csv", content=b"x").status_code == 401
+
+
+def test_import_null_default_branch_keeps_main(tmp_path, monkeypatch):
+    """#48: пустой GitLab-проект (default_branch: null) — импорт не падает, ветка остаётся main."""
+    monkeypatch.setenv("CD_ADMIN_PASSWORD", PASSWORD)
+    db_path = tmp_path / "null.db"
+    cfg = Config("alembic.ini")
+    cfg.set_main_option("sqlalchemy.url", f"sqlite:///{db_path}")
+    command.upgrade(cfg, "head")
+    engine = create_engine(f"sqlite:///{db_path}")
+
+    def override_session():
+        with Session(engine) as session:
+            yield session
+            session.commit()
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        if "/api/v4/projects/" in request.url.path and "/repository/" not in request.url.path:
+            return httpx.Response(200, json={"default_branch": None})  # пустой проект
+        return httpx.Response(404)  # дерева нет
+
+    transport = httpx.MockTransport(handler)
+    git_client = GitClient(http=httpx.AsyncClient(transport=transport))
+    app.dependency_overrides[get_session] = override_session
+    app.dependency_overrides[get_git_client] = lambda: git_client
+    try:
+        with TestClient(app) as client:
+            client.post("/login", data={"username": "admin", "password": PASSWORD})
+            response = client.post(
+                "/import-csv",
+                content="ФИО,Репозиторий\nПустов Пётр,https://gitlab.com/pustov/empty\n".encode(),
+            )
+            assert response.status_code == 200
+            assert response.json()["unavailable"] == 1
+    finally:
+        app.dependency_overrides.clear()
+    with Session(engine) as s:
+        repo = s.scalar(select(Repository))
+        assert repo.default_branch == "main"  # None не записан в NOT NULL колонку
