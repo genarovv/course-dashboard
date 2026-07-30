@@ -43,6 +43,8 @@ td.repo-url { max-width: 16rem; overflow-wrap: anywhere; }
 .acell-partial { background: #f5a34b; color: #4a2b05; }
 .acell-not_found { background: #bb1111; color: #fff; }
 .acell-none { background: #f2f3f6; color: #8a90a0; cursor: default; }
+/* D9 (FR-12): канал сдачи — MR; приглушённая, не тревожная (это не «нет») */
+.acell-mr { background: #eef1f7; color: #445566; font-style: italic; }
 /* Найден, но участвует в неснятом разрыве связности — ядро продукта, видно сразу */
 .acell-break { box-shadow: inset 0 0 0 3px #8f0f0f; font-weight: 600; }
 

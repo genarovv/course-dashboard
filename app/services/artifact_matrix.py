@@ -58,10 +58,19 @@ def _edges_touching(edges: list[dict], role: ArtifactRole) -> list[dict]:
     return [e for e in edges if role in (e["source_role"], e["target_role"])]
 
 
-def _cell(session: Session, repository_id: str, defs: list, edges: list[dict]) -> dict:
+def _cell(
+    session: Session, repository_id: str, defs: list, edges: list[dict],
+    mr_lesson_ids: set[str] | None = None,
+) -> dict:
     """Ячейка: статус + усечённый результат анализа (summary) + счётчики рёбер."""
     snap = _best_snapshot(session, repository_id, defs)
     touching = _edges_touching(edges, defs[0].role)
+    # D9 (#53), FR-12/US-B7: best-wins не нашёл артефакт, а роль ожидается
+    # в MR-занятии — честная плашка вместо красного «нет»
+    mr_channel = (
+        (snap is None or snap.status == SnapshotStatus.not_found)
+        and any(adef.lesson_id in (mr_lesson_ids or set()) for adef in defs)
+    )
     breaks = [
         e for e in touching
         if e["state"] == "done" and e["verdict"] == VerdictValue.break_ and not e["override_active"]
@@ -72,7 +81,9 @@ def _cell(session: Session, repository_id: str, defs: list, edges: list[dict]) -
         if e["state"] == "done" and (e["verdict"] == VerdictValue.ok or e["override_active"])
     ]
 
-    if snap is None:
+    if mr_channel:
+        summary = "сдача через MR"
+    elif snap is None:
         summary = None
     elif snap.status == SnapshotStatus.not_found:
         summary = "нет"
@@ -95,9 +106,19 @@ def _cell(session: Session, repository_id: str, defs: list, edges: list[dict]) -
         "status": snap.status if snap else None,
         "partial_reason": snap.partial_reason if snap else None,
         "summary": summary,
+        "mr_channel": mr_channel,
         "break_count": len(breaks),
         "pending_count": len(pending),
         "ok_count": len(oks),
+    }
+
+
+def _mr_lesson_ids(session: Session) -> set[str]:
+    """Занятия с каналом сдачи «запрос на слияние» (FR-12)."""
+    return {
+        lesson.id
+        for lesson in store.find_all_lessons(session)
+        if lesson.submission_channel == "mr"
     }
 
 
@@ -123,12 +144,13 @@ def build_artifact_matrix(
     active_repos = store.find_active_repositories(session)
     repos = [r for r in active_repos if r.id in checked_ids]
     defs_by_role = _defs_by_role_in_course_order(session)
+    mr_lesson_ids = _mr_lesson_ids(session)
 
     cells: dict[str, dict[str, dict]] = {}
     for repo in repos:
         edges = evidence_chain.edge_states(session, repo.id, resolved_model)
         cells[repo.id] = {
-            str(role): _cell(session, repo.id, defs, edges)
+            str(role): _cell(session, repo.id, defs, edges, mr_lesson_ids)
             for role, defs in defs_by_role.items()
         }
 
@@ -188,10 +210,16 @@ def build_cell_details(
     edges = _edges_touching(
         evidence_chain.edge_states(session, repository_id, resolved_model), role_enum
     )
+    best = _best_snapshot(session, repository_id, defs)
+    mr_channel = (
+        (best is None or best.status == SnapshotStatus.not_found)
+        and any(adef.lesson_id in _mr_lesson_ids(session) for adef in defs)
+    )
     return {
         "repository": {"id": repo.id, "repo_url": repo.repo_url},
         "role": str(role_enum),
         "title": ROLE_TITLES.get(role_enum, str(role_enum)),
         "files": files,
         "edges": edges,
+        "mr_channel": mr_channel,
     }

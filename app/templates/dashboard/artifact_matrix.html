@@ -32,7 +32,7 @@
             <td class="repo-url"><a href="/students/{{ repo.id }}" title="{{ repo.repo_url }}">{{ repo.name }}</a></td>
             {% for role in matrix.roles %}
             {% set cell = matrix.cells[repo.id][role.key] %}
-            <td class="acell acell-{{ cell.status or 'none' }}{% if cell.break_count %} acell-break{% endif %}"
+            <td class="acell acell-{{ 'mr' if cell.mr_channel else (cell.status or 'none') }}{% if cell.break_count %} acell-break{% endif %}"
                 hx-get="/artifacts/{{ repo.id }}/{{ role.key }}"
                 hx-target="#modal-root" hx-swap="innerHTML"
                 role="button" tabindex="0"
