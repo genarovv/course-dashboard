@@ -166,7 +166,7 @@ def test_mr_note_rendered_with_card_link(tmp_path, monkeypatch):
     try:
         client = TestClient(app)
         client.post("/login", data={"username": "admin", "password": "pw"})
-        html = client.get("/").text
+        html = client.get("/lessons").text
     finally:
         app.dependency_overrides.clear()
         engine.dispose()

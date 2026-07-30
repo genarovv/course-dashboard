@@ -106,7 +106,7 @@ def test_ui_renders_mr_block_and_process_column(engine):
         client = TestClient(app)
         client.post("/login", data={"username": "admin", "password": "pw"})
         card_html = client.get(f"/students/{repo_id}").text
-        matrix_html = client.get("/").text
+        matrix_html = client.get("/lessons").text
     finally:
         app.dependency_overrides.clear()
         engine.dispose()
