@@ -54,6 +54,15 @@
                     {% if edge.override_active %}<span class="override">отмечен как ложный</span>{% endif %}
                     <a class="edge-card-link" href="/students/{{ details.repository.id }}#edge-{{ edge.source_role }}-{{ edge.target_role }}">открыть в карточке →</a>
                 </p>
+                {% if edge.verdict == "break" %}
+                {# D21 (#67): курирование — видимая кнопка-действие в блоке разрыва #}
+                <form method="post" action="/verdicts/{{ edge.verdict_id }}/override-toggle" class="override-form">
+                    <button type="submit" class="override-button">
+                        {{ "снять отметку «ложный разрыв»" if edge.override_active else "ложный разрыв" }}
+                    </button>
+                    <span class="override-note">отметка обратима</span>
+                </form>
+                {% endif %}
                 {% if edge.points %}
                 <ul class="points">
                     {% for point in edge.points %}
@@ -62,13 +71,6 @@
                 </ul>
                 {% endif %}
                 {% if edge.notes %}<p class="notes">Заметка преподавателю: {{ edge.notes }}</p>{% endif %}
-                {% if edge.verdict == "break" %}
-                <form method="post" action="/verdicts/{{ edge.verdict_id }}/override-toggle">
-                    <button type="submit">
-                        {{ "снять отметку «ложный разрыв»" if edge.override_active else "ложный разрыв" }}
-                    </button>
-                </form>
-                {% endif %}
                 {% endif %}
             </article>
             {% else %}

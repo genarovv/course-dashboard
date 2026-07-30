@@ -102,9 +102,14 @@ def _cell(
             (str(e["confidence"]) for e in breaks),
             key=lambda c: CONFIDENCE_RANK.get(c, 3),
         )
+        # D21 (#67): в чипе сущность усечена до ~80 символов (полный текст — в модалке);
+        # обрезка по строкам — CSS line-clamp
+        entity = first_point["entity"] if first_point else None
+        if entity and len(entity) > 80:
+            entity = entity[:80] + "…"
         break_info = {
             "count": len(breaks),
-            "entity": first_point["entity"] if first_point else None,
+            "entity": entity,
             "confidence": top_conf if top_conf in CONFIDENCE_RANK else "low",
             # D16 (#60): вердикт впервые вычислен в последнем обходе (D25: перепрогон
             # той же четвёрки не создаёт новой записи — метка не «мигает»)
@@ -134,8 +139,9 @@ def _cell(
         presence = "частично · " + ", ".join(reasons) if reasons else "частично"
         summary = f"{presence} · {break_tail()}" if breaks else presence
     elif breaks:
-        presence = "есть"
-        summary = f"есть · {break_tail()}"
+        # D21 (#67): словесный итог снимает конфликт «зелёное + бордовое»
+        presence = "сдано, но разрыв"
+        summary = f"сдано, но {break_tail()}"
     elif deferred:
         # D6: LLM недоступна / ответ не распарсился — честнее «проверяется»
         presence = summary = "есть · проверка отложена"
