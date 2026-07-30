@@ -29,6 +29,7 @@ from app.models import GitHost, SnapshotStatus, SyncOutcome, SyncStatus, SyncTri
 from app.models.artifact_def import ArtifactDef
 from app.models.artifact_snapshot import ArtifactSnapshot
 from app.models.lesson import Lesson
+from app.models.repository import Repository
 from app.models.sync_run import SyncRun
 from app.models.sync_run_repository import SyncRunRepository
 from app.routes import get_session
@@ -547,3 +548,26 @@ def test_sync_route_wrong_token_401(client_env, monkeypatch):
     client, _ = client_env
     monkeypatch.setattr(settings, "sync_token", "cron-secret")
     assert client.post("/sync", headers={"X-Sync-Token": "wrong"}).status_code == 401
+
+
+# ── #48: пустой проект (default_branch=null от GitLab API) не роняет обход ──
+
+
+class NullDefaultBranchClient(FakeGitClient):
+    """Пустой GitLab-проект: API отдаёт default_branch: null (#48)."""
+
+    async def fetch_default_branch(self, repo_url, git_host):
+        return None
+
+
+@pytest.mark.anyio
+async def test_null_default_branch_does_not_crash_sync(session):
+    """NFR-2 (#48): один пустой проект не валит весь обход; None не пишется в NOT NULL."""
+    _seed(session)
+    client = NullDefaultBranchClient({"https://github.com/s1/r": {"product/prd.md": "# PRD"}})
+
+    run = await _sync(session, client)  # не должно бросить TypeError/IntegrityError
+
+    assert run.status == SyncStatus.completed
+    repo = session.scalar(select(Repository))
+    assert repo.default_branch == "main"  # прежняя ветка сохранена, None не записан
