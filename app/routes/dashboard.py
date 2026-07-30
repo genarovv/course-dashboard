@@ -9,7 +9,7 @@ from sqlalchemy.orm import Session
 from app import store
 from app.routes import get_session, templates
 from app.services.artifact_matrix import build_artifact_matrix, build_cell_details
-from app.services.evidence_chain import build_student_card
+from app.services.evidence_chain import build_defense_card, build_student_card
 from app.services.matrix_builder import build_matrix
 
 router = APIRouter()
@@ -26,11 +26,17 @@ async def dashboard(request: Request, session: Session = Depends(get_session)):
 
 @router.get("/")
 @router.get("/artifacts")
-async def artifact_matrix_page(request: Request, session: Session = Depends(get_session)):
-    """D7/D14 (#58): матрица «репозиторий × артефакт» — главный экран (решение CEO 2026-07-30)."""
+async def artifact_matrix_page(
+    request: Request, session: Session = Depends(get_session), sort: str | None = None
+):
+    """D7/D14 (#58): матрица «репозиторий × артефакт» — главный экран (решение CEO 2026-07-30).
+
+    D15 (#59): ?sort=breaks — «сначала проблемные»; сортировка живёт в URL,
+    поэтому переживает POST-редиректы по referer (отметки FR-10).
+    """
     if "user_id" not in request.session:  # BR-4: teacher-only
         return RedirectResponse("/login", status_code=303)
-    matrix = build_artifact_matrix(session)
+    matrix = build_artifact_matrix(session, sort=sort if sort == "breaks" else None)
     return templates.TemplateResponse(request, "dashboard/artifact_matrix.html", {"matrix": matrix})
 
 
@@ -66,6 +72,19 @@ async def override_toggle(
             session, coherence_verdict_id=verdict_id, reason="отмечено преподавателем в UI"
         )
     return RedirectResponse(request.headers.get("referer", "/"), status_code=303)
+
+
+@router.get("/students/{repository_id}/defense")
+async def defense_mode(
+    repository_id: str, request: Request, session: Session = Depends(get_session)
+):
+    """D18 (#62), US-C2: режим защиты — дело одного студента, только уверенные разрывы."""
+    if "user_id" not in request.session:  # BR-4: teacher-only
+        return RedirectResponse("/login", status_code=303)
+    card = build_defense_card(session, repository_id)
+    if card is None:
+        raise HTTPException(status_code=404, detail="репозиторий не найден")
+    return templates.TemplateResponse(request, "dashboard/defense.html", {"card": card})
 
 
 @router.get("/students/{repository_id}")

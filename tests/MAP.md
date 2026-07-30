@@ -2,7 +2,7 @@
 
 **Дата:** 2026-07-30 (обновлено в MR D7: матрица «репозиторий × артефакт»)
 **Стек:** Python 3.13 · FastAPI · SQLAlchemy 2.x (Mapped) · SQLite (WAL) · Alembic · Jinja2+HTMX · bcrypt
-**Тестов:** 305, все ✅ · **Покрытие общее:** 98% (`pytest-cov`, гейт `fail_under = 90` в hooks/pre-push)
+**Тестов:** 326, все ✅ · **Покрытие общее:** 98% (`pytest-cov`, гейт `fail_under = 90` в hooks/pre-push)
 
 ---
 
@@ -33,6 +33,10 @@
 | `test_artifact_cell_honest.py` | модульный (session fixture) | D11 #55 (FR-5/FR-10/BR-2): свод называет разрыв и в «частично», override=«помечен ложным» (не «связность ок»), приоритет свода, новая четвёрка не наследует отметку |
 | `test_artifact_inversion.py` | модульный + интеграционный (TestClient) | D13 #57 (риск §11): чип разрыва {сущность, счётчик, уверенность}, наивысшая уверенность при нескольких разрывах, разрыв без точек, подпись «уверенность низкая» до клика, статус словом |
 | `test_artifact_legend.py` | интеграционный (TestClient) | D12 #56 (BR-3): легенда — все состояния ячейки, обе градации чипа, пояснение «частично» по наведению |
+| `test_artifact_row_breaks.py` | модульный + интеграционный (TestClient) | D15 #59: уникальный счётчик рёбер-разрывов строки (без удвоения), сортировка ?sort=breaks стабильная, sticky-обёртка |
+| `test_artifact_freshness.py` | модульный + интеграционный (TestClient) | D16 #60: «новое» по computed_at последнего обхода (D25 не мигает), точка свежести снапшота, первый обход без меток |
+| `test_artifact_modal_polish.py` | интеграционный (TestClient) | D17 #61: бейдж уверенности conf-*, якорная ссылка в карточку (+id рёбер), фокусируемость модалки и скрипт фокуса |
+| `test_defense_mode.py` | модульный + интеграционный (TestClient) | D18 #62 (FR-13/US-C2): фильтр high+не погашенные, даты и sha обеих сторон, «разрывов для показа нет», слепая зона, без FR-10-кнопок, auth/404, входы из матрицы и карточки |
 | `test_migrations.py` | интеграционный (alembic upgrade + raw SQL) | DDL: все 12 таблиц созданы, сид system_user, downgrade без ошибок, И1 (XOR), И3 (quad unique), И4 (one active override), И5 (append-only триггеры), И6 (norm URL unique), И8 (snapshot CHECK), И9+И11 (уникальность тройки/пары), И10 (reference uniqueness) |
 | `test_sync_orchestrator.py` | модульный (FakeGitClient) + интеграционный (TestClient) | FR-8/FR-4 (G2 #9): классификация found/not_found, sha256 (в т.ч. мульти-совпадение паттерна и `**`-глоб), source_commit_sha (FR-9), инкрементальность D28, исходы всех 5 видов + detail, статусы SyncRun, архивные репо пропущены, POST /sync (сессия / X-Sync-Token / 401) |
 | `test_override_ui.py` | интеграционный (TestClient + реальная БД) | FR-10 (O2 #16): toggle создаёт/снимает Override (revoked_at, история строк), auth, 404, кнопка «ложный разрыв» в матрице и карточке, гашение подсветки, новая четвёрка не наследует отметку |

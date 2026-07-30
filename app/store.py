@@ -330,6 +330,13 @@ def find_last_sync_run(session: Session) -> SyncRun | None:
     return session.scalar(select(SyncRun).order_by(SyncRun.started_at.desc()).limit(1))
 
 
+def find_previous_sync_run(session: Session) -> SyncRun | None:
+    """D16 (#60): обход перед последним — метки свежести существуют только при нём."""
+    return session.scalar(
+        select(SyncRun).order_by(SyncRun.started_at.desc()).offset(1).limit(1)
+    )
+
+
 def find_credential(session: Session, git_host: GitHost) -> GitCredential | None:
     """FR-3: запись валидности токена хостинга."""
     return session.scalar(select(GitCredential).where(GitCredential.git_host == git_host))

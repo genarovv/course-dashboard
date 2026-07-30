@@ -58,19 +58,24 @@
     <span class="legend-item">«помечен ложным» — твоя отметка, разрыв погашен</span>
 </div>
 
+<div class="matrix-wrap">
 <table class="matrix amatrix">
     <thead>
         <tr>
-            <th>Репозиторий</th>
+            <th class="col-repo">Репозиторий</th>
             {% for role in matrix.roles %}
             <th>{{ role.title }}</th>
             {% endfor %}
+            <th class="col-breaks" title="Уникальные рёбра-разрывы репозитория; клик — сначала проблемные">
+                {% if matrix.sort == "breaks" %}<a href="?">Разрывы ▼</a>{% else %}<a href="?sort=breaks">Разрывы</a>{% endif %}
+            </th>
         </tr>
     </thead>
     <tbody>
         {% for repo in matrix.repositories %}
         <tr>
-            <td class="repo-url"><a href="/students/{{ repo.id }}" title="{{ repo.repo_url }}">{{ repo.name }}</a></td>
+            <td class="repo-url"><a href="/students/{{ repo.id }}" title="{{ repo.repo_url }}">{{ repo.name }}</a>
+                <a class="defense-link" href="/students/{{ repo.id }}/defense" title="Режим защиты: дело одного студента, только уверенные разрывы">защита</a></td>
             {% for role in matrix.roles %}
             {% set cell = matrix.cells[repo.id][role.key] %}
             <td class="acell acell-{{ 'mr' if cell.mr_channel else (cell.status or 'none') }}{% if cell.break %} acell-break{% endif %}"
@@ -78,23 +83,49 @@
                 hx-target="#modal-root" hx-swap="innerHTML"
                 role="button" tabindex="0"
                 title="{{ role.title }} — подробности">
-                {%- if cell.presence -%}<span class="presence">{{ cell.presence }}</span>{%- else -%}—{%- endif -%}
+                {%- if cell.presence -%}<span class="presence">{{ cell.presence }}{% if cell.fresh %}<span class="fresh-dot" title="изменился в последнем обходе"></span>{% endif %}</span>{%- else -%}—{%- endif -%}
                 {%- if cell.break -%}
-                <span class="break-chip chip-{{ cell.break.confidence }}">⚠ {% if cell.break.count > 1 %}разрыв ×{{ cell.break.count }}{% if cell.break.entity %}: потеряна «{{ cell.break.entity }}»{% endif %}{% elif cell.break.entity %}потеряна «{{ cell.break.entity }}»{% else %}разрыв{% endif %}{% if cell.break.confidence != "high" %} · уверенность {{ CONFIDENCE_LABELS.get(cell.break.confidence, cell.break.confidence) }}{% endif %}</span>
+                <span class="break-chip chip-{{ cell.break.confidence }}">⚠ {% if cell.break.count > 1 %}разрыв ×{{ cell.break.count }}{% if cell.break.entity %}: потеряна «{{ cell.break.entity }}»{% endif %}{% elif cell.break.entity %}потеряна «{{ cell.break.entity }}»{% else %}разрыв{% endif %}{% if cell.break.confidence != "high" %} · уверенность {{ CONFIDENCE_LABELS.get(cell.break.confidence, cell.break.confidence) }}{% endif %}{% if cell.break.new %} · новое{% endif %}</span>
                 {%- endif -%}
             </td>
             {% endfor %}
+            <td class="row-breaks{% if matrix.row_breaks[repo.id] %} row-breaks-warm{% endif %}">{{ matrix.row_breaks[repo.id] or "—" }}</td>
         </tr>
         {% endfor %}
     </tbody>
 </table>
+</div>
 
 <div id="modal-root"></div>
 <script>
+    // D17 (#61): управление фокусом — модалка забирает фокус, Esc возвращает ячейке
+    var lastFocusedCell = null;
+    document.addEventListener("htmx:afterSwap", function (e) {
+        if (e.target.id === "modal-root") {
+            lastFocusedCell = document.activeElement;
+            var modal = document.querySelector(".modal");
+            if (modal) modal.focus();
+        }
+    });
+    function closeModal() {
+        var overlay = document.querySelector(".modal-overlay");
+        if (overlay) overlay.remove();
+        if (lastFocusedCell) lastFocusedCell.focus();
+    }
     document.addEventListener("keydown", function (e) {
-        if (e.key === "Escape") {
+        if (e.key === "Escape") closeModal();
+        // ловушка Tab внутри модалки
+        if (e.key === "Tab") {
             var overlay = document.querySelector(".modal-overlay");
-            if (overlay) overlay.remove();
+            if (!overlay) return;
+            var focusables = overlay.querySelectorAll("a, button, [tabindex='-1']");
+            if (!focusables.length) return;
+            var first = focusables[0], last = focusables[focusables.length - 1];
+            if (e.shiftKey && document.activeElement === first) {
+                e.preventDefault(); last.focus();
+            } else if (!e.shiftKey && document.activeElement === last) {
+                e.preventDefault(); first.focus();
+            }
         }
     });
 </script>

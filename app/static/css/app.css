@@ -31,6 +31,17 @@ body {
 .unchecked { color: #667; font-size: 0.85rem; }
 
 /* ── Таблицы матриц ───────────────────────────────────────────────────── */
+/* D15 (#59): закреплённые шапка и первая колонка при прокрутке */
+.matrix-wrap { overflow: auto; max-height: 78vh; margin-top: 1rem; }
+.matrix-wrap table.matrix { margin-top: 0; }
+.matrix-wrap thead th { position: sticky; top: 0; background: #fff; z-index: 3; }
+.matrix-wrap td.repo-url, .matrix-wrap th.col-repo {
+    position: sticky; left: 0; background: #fff; z-index: 2;
+}
+.matrix-wrap thead th.col-repo { z-index: 4; }
+.row-breaks { text-align: center; color: #8a90a0; }
+.row-breaks-warm { color: #8f0f0f; font-weight: 700; }
+.col-breaks a { color: inherit; text-decoration: none; border-bottom: 1px dashed #99a; }
 table.matrix { border-collapse: collapse; width: 100%; margin-top: 1rem; }
 table.matrix th, table.matrix td {
     border: 1px solid #c9ced8;
@@ -55,6 +66,15 @@ td.repo-url { max-width: 16rem; overflow-wrap: anywhere; }
 .acell-mr { background: #eef1f7; color: #445566; font-style: italic; }
 .acell-break { box-shadow: inset 0 0 0 2px rgba(143, 15, 15, 0.35); }
 .presence { display: block; }
+/* D16 (#60): точка свежести — артефакт изменился в последнем обходе */
+.fresh-dot {
+    display: inline-block;
+    width: 7px; height: 7px;
+    border-radius: 50%;
+    background: #2563eb;
+    margin-left: 0.35rem;
+    vertical-align: middle;
+}
 /* Чип разрыва — подпись прибора: высокая уверенность — полный,
    средняя/низкая — контурный с подписью словами (риск PRD §11) */
 .break-chip {
@@ -144,7 +164,22 @@ table.extras { width: auto; min-width: 60%; }
 .verdict { margin: 0 0 0.35rem; font-size: 0.9rem; }
 .verdict-break { color: #a01212; font-weight: 600; }
 .verdict-ok { color: #157a37; }
-.confidence { font-weight: 400; color: #667; font-size: 0.8rem; margin-left: 0.5rem; }
+/* D17 (#61): уверенность — заметный бейдж по уровню, а не мелкий серый текст */
+.confidence {
+    font-weight: 600; font-size: 0.85rem;
+    margin-left: 0.5rem; padding: 0.1rem 0.45rem; border-radius: 4px;
+}
+.conf-high { background: #e2f5e8; color: #14532d; }
+.conf-medium { background: #fdeeda; color: #713f12; }
+.conf-low { background: #f9dede; color: #7c1010; }
+.edge-card-link { margin-left: 0.6rem; font-size: 0.82rem; white-space: nowrap; }
+
+/* D18 (#62): режим защиты */
+.defense-link { display: inline-block; font-size: 0.75rem; color: #556; margin-left: 0.3rem; }
+.defense-header h1 { color: #14532d; }
+.evidence-meta { display: block; font-weight: 400; font-size: 0.8rem; color: #556; margin-top: 0.2rem; }
+.defense-breaks .edge { border-left: 4px solid #8f0f0f; }
+.defense-ok ul { margin: 0; padding-left: 1.25rem; font-size: 0.9rem; }
 .edge-overridden .verdict-break { color: #778; text-decoration: line-through; }
 .override { color: #667; font-size: 0.8rem; margin-left: 0.5rem; }
 .points { margin: 0.25rem 0; padding-left: 1.25rem; font-size: 0.85rem; }
