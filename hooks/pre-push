@@ -1,0 +1,20 @@
+#!/bin/sh
+# H1 (#52): гейт перед push — линт + полная suite с порогом покрытия
+# (fail_under — pyproject [tool.coverage.report]). «Политика в тексте ≠ машинный гейт».
+# Активация: git config core.hooksPath hooks   (README §Хуки и гейты)
+
+if [ -x ".venv/Scripts/python.exe" ]; then
+    PY=".venv/Scripts/python.exe"
+elif [ -x ".venv/bin/python" ]; then
+    PY=".venv/bin/python"
+else
+    PY="python"
+fi
+
+echo "pre-push: ruff…" >&2
+"$PY" -m ruff check . || exit 1
+
+echo "pre-push: pytest + coverage-гейт…" >&2
+"$PY" -m pytest -q --cov=app || exit 1
+
+exit 0
