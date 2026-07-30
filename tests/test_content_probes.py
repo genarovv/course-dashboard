@@ -175,3 +175,37 @@ async def test_probe_findings_visible_in_student_card(session):
     card = build_student_card(session, repo_row.repository_id, llm_model="deepseek-v4-flash")
     probe_rows = card.get("probe_findings") or []
     assert any("незаполненная строка стека" in row["label"] for row in probe_rows)
+
+
+# ── fix по ревью T2: валидация проб и обновление конфига ────────────────────
+
+
+def test_probe_requires_exactly_one_condition():
+    import pytest as _pytest
+
+    with _pytest.raises(Exception):
+        config_manager.ProbeConfig(key="x", label="x")  # ни одного условия
+    with _pytest.raises(Exception):
+        config_manager.ProbeConfig(key="x", label="x", contains="a", not_contains="b")  # оба
+
+
+def test_reconcile_updates_probes_on_config_change(session):
+    def cfg_with(probes):
+        return config_manager.ConfigYAML.model_validate({
+            "lessons": [{
+                "number": 2, "title": "Контекст", "date": "2026-06-18",
+                "artifacts": [{
+                    "role": "claude_md", "expected_pattern": "CLAUDE.md",
+                    "content_probes": probes,
+                }],
+            }],
+            "edges": [],
+        })
+
+    config_manager.reconcile(session, cfg_with(PROBES[:1]))
+    session.flush()
+    summary = config_manager.reconcile(session, cfg_with(PROBES))
+    session.flush()
+    assert summary.artifact_defs_updated == 1  # смена набора проб = updated
+    (adef,) = session.scalars(select(ArtifactDef))
+    assert len(adef.content_probes) == 2

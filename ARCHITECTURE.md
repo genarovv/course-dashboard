@@ -148,7 +148,8 @@ app/
 ├── services/
 │   ├── sync_orchestrator.py #   Цикл обхода FR-8 + свод-реконсиляция LLM-пар (§5.1) + детект заготовки (D35)
 │   ├── coherence_analyzer.py#   Ядро FR-5: ensure_verdict по §5.2 + воркер свода (C2/#36; гейт Фазы 0 снят 2026-07-30, ADR-004 Accepted)
-│   ├── matrix_builder.py    #   Проекция матрицы FR-4/6/7
+│   ├── matrix_builder.py    #   Проекция матрицы занятий FR-4/6/7
+│   ├── artifact_matrix.py   #   Матрица «репозиторий × артефакт» + модалка деталей (D7, макет CEO 2026-07-30)
 │   ├── evidence_chain.py    #   Хронология FR-9
 │   ├── csv_importer.py      #   Импорт CSV → Repository (FR-1)
 │   ├── branch_detect.py     #   Детект default-ветки — общий шаг импорта и обхода (ADR-006, #50)
@@ -160,7 +161,7 @@ app/
 │
 ├── routes/                  # FastAPI HTML-роуты (Jinja2)
 │   ├── auth.py              #   GET/POST /login, GET /logout (FR-0)
-│   ├── dashboard.py         #   GET / — матрица; GET /students/{id} — карточка (FR-9); POST /verdicts/{id}/override-toggle (FR-10)
+│   ├── dashboard.py         #   GET / — матрица занятий; GET /artifacts — матрица артефактов (D7, макет CEO) + модалка; GET /students/{id} — карточка (FR-9); POST /verdicts/{id}/override-toggle (FR-10)
 │   ├── health.py            #   GET /health — счётчики из БД (вычислимый запрос, без in-memory состояния)
 │   └── admin.py             #   POST /sync, POST /import-csv, POST /credential (FR-1,3,8)
 │

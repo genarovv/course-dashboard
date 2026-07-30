@@ -22,9 +22,35 @@ from app.clients.git_client import GitClientError
 from app.clients.llm_client import LLMUnavailableError
 from app.models import DeferredReason, VerdictValue
 from app.models.coherence_verdict import CoherenceVerdict
-from app.services.sync_orchestrator import PendingPair
+from app.services.sync_orchestrator import PendingPair, _match_artifact
 
 logger = logging.getLogger(__name__)
+
+MULTIFILE_HEADER = (
+    "Артефакт — связка файлов; ниже список путей всех файлов связки "
+    "(решение CEO 2026-07-30: для мультифайловой стороны суждение по именам "
+    "модулей и файлов, содержимое не передаётся):"
+)
+
+
+async def _side_text(session: Session, git_client, repo, snap, tree_cache: dict) -> str:
+    """Текст стороны пары для LLM.
+
+    Одиночный артефакт — содержимое файла. Мультифайловый (паттерн с глобом,
+    ≥2 совпадений на ревизии снапшота) — список путей связки: контент
+    «представителя» давал ложные break (боевой прогон #42, решение CEO 2026-07-30).
+    """
+    adef = store.find_artifact_def_by_id(session, snap.artifact_def_id)
+    ref = snap.source_commit_sha or repo.default_branch
+    if adef is not None and any(ch in adef.expected_pattern for ch in "*?"):
+        if ref not in tree_cache:
+            tree_cache[ref] = await git_client.get_tree(repo.repo_url, repo.git_host, ref=ref)
+        matches = _match_artifact(adef, tree_cache[ref])
+        if len(matches) > 1:
+            return MULTIFILE_HEADER + "\n" + "\n".join(matches)
+    return await git_client.get_file_content(
+        repo.repo_url, repo.git_host, snap.file_path, ref=ref
+    )
 
 
 def _check_i2(session: Session, pair: PendingPair, snap_a, snap_b) -> None:
@@ -84,14 +110,9 @@ async def ensure_verdict(
     repo = store.find_repository_by_id(session, pair.repository_id)
     rubric = store.find_rubric_by_id(session, pair.rubric_id)
     try:
-        source_text = await git_client.get_file_content(
-            repo.repo_url, repo.git_host, snap_a.file_path,
-            ref=snap_a.source_commit_sha or repo.default_branch,
-        )
-        target_text = await git_client.get_file_content(
-            repo.repo_url, repo.git_host, snap_b.file_path,
-            ref=snap_b.source_commit_sha or repo.default_branch,
-        )
+        tree_cache: dict = {}  # дерево ревизии тянется максимум раз на пару
+        source_text = await _side_text(session, git_client, repo, snap_a, tree_cache)
+        target_text = await _side_text(session, git_client, repo, snap_b, tree_cache)
     except GitClientError as exc:
         logger.warning("Пара %s→%s: репозиторий недоступен (%s) — вердикт отложен до "
                        "следующего свода", snap_a.file_path, snap_b.file_path, exc)

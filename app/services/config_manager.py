@@ -11,7 +11,7 @@ from pathlib import Path
 from typing import Literal
 
 import yaml
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
 from sqlalchemy.orm import Session
 
 from app import store
@@ -24,12 +24,21 @@ class ProbeConfig(BaseModel):
 
     contains — finding, если regex НЕ найден (обязательный раздел отсутствует);
     not_contains — finding, если regex найден (маркер незаполненного шаблона).
+    Ровно одно из двух полей (fix по ревью T2: два поля давали неочевидную семантику).
     """
 
     key: str
     label: str
     contains: str | None = None
     not_contains: str | None = None
+
+    @model_validator(mode="after")
+    def _exactly_one_condition(self):
+        if bool(self.contains) == bool(self.not_contains):
+            raise ValueError(
+                f"проба {self.key}: ровно одно из contains/not_contains (конфиг fail-fast)"
+            )
+        return self
 
 
 class ArtifactConfig(BaseModel):
