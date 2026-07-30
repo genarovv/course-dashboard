@@ -16,7 +16,7 @@ from app.config import settings
 from app.models import SNAPSHOT_STATUS_RANK, ArtifactRole, SnapshotStatus, VerdictValue
 from app.services import evidence_chain
 from app.services.labels import PARTIAL_LABELS, repo_short_name
-from app.services.matrix_builder import blind_spots_and_signals
+from app.services.matrix_builder import blind_spots_and_signals, merged_no_review_count
 
 # D10 (#54), US-A3: обход старше этого срока — явный флаг устаревания на стикере
 STALE_AFTER = timedelta(hours=48)
@@ -246,9 +246,8 @@ def build_artifact_matrix(
             "m": len(expected),
         }
         # D20: «мимо ревью» — сигнал процесса с матрицы занятий (FR-12, порядок 2026-07-29)
-        row_no_review[repo.id] = sum(
-            1 for r in store.find_latest_mr_observations(session, repo.id)
-            if r.state == "merged" and not r.reviewer_approved
+        row_no_review[repo.id] = merged_no_review_count(
+            store.find_latest_mr_observations(session, repo.id)
         )
     if sort == "breaks":
         repos = sorted(repos, key=lambda r: -row_breaks[r.id])  # sorted стабилен — реестр внутри

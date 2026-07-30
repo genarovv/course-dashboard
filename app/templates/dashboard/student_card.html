@@ -70,7 +70,7 @@
     <ul>
         {% for mr in card.mrs %}
         <li class="mr mr-{{ mr.state }}">
-            <b>{{ mr.title }}</b> — ветка {{ mr.source_branch }}, {{ mr.state }}{% if mr.updated_at %}, обновлён {{ mr.updated_at[:10] }}{% endif %}
+            <b>{{ mr.title }}</b> — ветка {{ mr.source_branch }}, {{ mr.state }}{% if mr.updated_at %}, обновлён {{ fmt_dt(mr.updated_at) }}{% endif %}
             {% if mr.ready_for_merge %}<span class="ready">принят ревьюером, ждёт merge</span>{% endif %}
             {% if mr.state == "merged" and not mr.reviewer_approved %}<span class="no-review">смержен мимо ревью</span>{% endif %}
             {% for key, marker in mr.markers.items() %}

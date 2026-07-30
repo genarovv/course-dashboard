@@ -209,8 +209,7 @@ def test_non_contiguous_empty_mr_columns_listed_not_ranged(client, engine):
         _seed(s, mr_lessons=(11, 12, 13), mr_files=False)
         # займём занятие 12 файлом — 11 и 13 остаются пустыми, несмежными
         s.flush()
-        from app.models.artifact_def import ArtifactDef as AD
-        adef12 = s.query(AD).join(Lesson, AD.lesson_id == Lesson.id).filter(
+        adef12 = s.query(ArtifactDef).join(Lesson, ArtifactDef.lesson_id == Lesson.id).filter(
             Lesson.number == 12
         ).one()
         run = store.register_sync_run(s, triggered_by=SyncTrigger.schedule)

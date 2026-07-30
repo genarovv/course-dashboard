@@ -221,7 +221,9 @@ def _defense_events(session: Session, repository_id: str) -> list[dict]:
             "label": label,
             "from_status": prev,
             "to_status": snap.status,
-            "when": snap.source_commit_date or snap.observed_at,
+            # #32 + ревью итерации 4 (находка 1): в БД UTC, показ и сортировка —
+            # в местном времени, иначе даты съезжают рядом с местными вехами занятий
+            "when": to_display(snap.source_commit_date or snap.observed_at),
             "by_observation": snap.source_commit_date is None,
             "file_path": snap.file_path,
             "sha": snap.source_commit_sha,

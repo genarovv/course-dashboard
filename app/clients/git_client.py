@@ -126,7 +126,8 @@ class GitClient:
                 f"https://api.github.com/repos/{path}/commits/{quote(ref)}",
                 self._github_headers(),
             )
-            return (data.get("commit") or {}).get("committer", {}).get("date")
+            # "committer": null у коммитов без учётки GitHub — None, не AttributeError
+            return ((data.get("commit") or {}).get("committer") or {}).get("date")
         data = await self._request_json(
             f"https://{host}/api/v4/projects/{quote(path, safe='')}"
             f"/repository/commits/{quote(ref, safe='')}",
