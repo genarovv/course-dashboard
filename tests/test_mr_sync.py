@@ -225,17 +225,27 @@ async def test_stale_approval_after_force_push(session):
 
 @pytest.mark.anyio
 async def test_new_approval_after_force_push_counts(session):
-    """Новая нота «принято» после смены головы — валидна."""
+    """Новая нота «принято» после смены головы — валидна.
+
+    Дата ноты вычисляется относительно текущего времени (тикет #49): хардкод
+    «2026-07-29» протухал по календарю — cutoff сравнивается с wall-clock
+    observed_at первого наблюдения, и нота из прошлого переставала засчитываться.
+    """
+    from datetime import timedelta
+
     from app.clients.git_client import NoteInfo
+    from app.timeutil import utcnow
 
     repo = _repo(session)
     client = FakeGitNotes(mrs=[_mr(7)], notes_info={7: [NoteInfo("REWORK", "2026-07-27T10:00:00Z")]})
     await _sync(session, client)
 
+    # нота гарантированно позже observed_at первого наблюдения (cutoff ADR-007 сц. 5)
+    after_cutoff = (utcnow() + timedelta(hours=1)).strftime("%Y-%m-%dT%H:%M:%SZ")
     client.mrs = [MrInfo(number=7, title="MR 7", source_branch="S5-auth", state="opened",
                          head_sha="f" * 40, updated_at="2026-07-28T12:00:00Z", description="")]
     client.notes_info = {7: [NoteInfo("REWORK", "2026-07-27T10:00:00Z"),
-                             NoteInfo("Принято", "2026-07-29T09:00:00Z")]}
+                             NoteInfo("Принято", after_cutoff)]}
     run2 = await _sync(session, client)
 
     (second,) = store.find_mr_observations(session, repo.id, run2.id)
