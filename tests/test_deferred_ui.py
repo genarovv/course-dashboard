@@ -233,3 +233,46 @@ def test_probe_findings_absent_is_sql_null(session):
     ).scalar()
     total = session.execute(text("SELECT COUNT(*) FROM artifact_snapshot")).scalar()
     assert raw == total  # без проб колонка — настоящий SQL NULL
+
+
+# ── блокер ревью D6: артефактная матрица и модалка знают про deferred ───────
+
+
+def _seed_deferred_for_artifacts(session):
+    edge, repo, rubric, snaps = _seed_edge_pair(session)
+    _register_deferred(session, edge, rubric, snaps, "llm_unavailable")
+    session.commit()
+    return repo
+
+
+def test_artifact_cell_summary_shows_deferred(session):
+    """Ячейка артефактной матрицы: deferred ≠ немое «есть» и ≠ «связность ок»."""
+    from app.services.artifact_matrix import build_artifact_matrix
+
+    repo = _seed_deferred_for_artifacts(session)
+    matrix = build_artifact_matrix(session, llm_model=LLM_MODEL)
+    cells = matrix["cells"][repo.id]
+    prd_cell = cells["prd"]
+    assert prd_cell["deferred_count"] == 1
+    assert "отложена" in (prd_cell["summary"] or "")
+    assert "ок" not in (prd_cell["summary"] or "")
+
+
+def test_artifact_modal_renders_deferred_not_svyazno(session):
+    """Модалка деталей: deferred-ребро — «отложено», а не ложное «связно · None»."""
+    import jinja2
+
+    from app.models import ArtifactRole
+    from app.services.artifact_matrix import artifact_cell_details
+
+    repo = _seed_deferred_for_artifacts(session)
+    details = artifact_cell_details(session, repo.id, ArtifactRole.prd, llm_model=LLM_MODEL)
+    (edge_card,) = [e for e in details["edges"] if e["state"] == "deferred"]
+    assert edge_card["deferred_reason"] == "llm_unavailable"
+
+    env = jinja2.Environment(
+        loader=jinja2.FileSystemLoader("app/templates"), autoescape=True
+    )
+    html = env.get_template("dashboard/artifact_cell_modal.html").render(details=details)
+    assert "отложено" in html
+    assert "связно" not in html
