@@ -188,14 +188,24 @@ def test_sort_lag_puts_empty_row_first(engine):
 
 
 def test_sort_lag_stable_for_equal_ratio(engine):
-    """Равные X/M сохраняют порядок реестра (стабильность)."""
+    """Равные X/M сохраняют порядок реестра (стабильность) — ревью итерации 4,
+    находка 5: в сиде есть пара репозиториев с одинаковой долей."""
     with Session(engine) as s:
-        (r1, r2, r3), _, _ = _seed(s)
-        s.commit()
+        (r1, r2, r3), run, _ = _seed(s)
+        r4 = store.register_repository(
+            s, repo_url="https://github.com/s/r4", git_host=GitHost.GitHub
+        )
+        s.flush()
+        store.register_sync_outcome(
+            s, sync_run_id=run.id, repository_id=r4.id, outcome=SyncOutcome.ok_changed
+        )
+        s.commit()  # r4 пуст, как r3 (0/2): равные доли, r3 раньше в реестре
         by_lag = build_artifact_matrix(s, llm_model=LLM_MODEL, sort="lag")
+        order = [r["id"] for r in by_lag["repositories"]]
         ratios = [
             matrix_ratio(by_lag["row_submitted"][r["id"]]) for r in by_lag["repositories"]
         ]
+    assert order.index(r3.id) < order.index(r4.id)  # стабильность при равной доле
     assert ratios == sorted(ratios)
 
 

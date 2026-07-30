@@ -202,6 +202,33 @@ def test_single_empty_mr_column_not_collapsed(client, engine):
     assert "11. Тема 11" in html
 
 
+def test_non_contiguous_empty_mr_columns_listed_not_ranged(client, engine):
+    """Ревью итерации 4, находка 2: пустые MR-занятия 11 и 13 при занятом 12
+    подписываются перечислением, а не лживым диапазоном «11–13»."""
+    with Session(engine) as s:
+        _seed(s, mr_lessons=(11, 12, 13), mr_files=False)
+        # займём занятие 12 файлом — 11 и 13 остаются пустыми, несмежными
+        s.flush()
+        from app.models.artifact_def import ArtifactDef as AD
+        adef12 = s.query(AD).join(Lesson, AD.lesson_id == Lesson.id).filter(
+            Lesson.number == 12
+        ).one()
+        run = store.register_sync_run(s, triggered_by=SyncTrigger.schedule)
+        repo = store.find_active_repositories(s)[0]
+        s.flush()
+        store.register_snapshot(
+            s, sync_run_id=run.id, repository_id=repo.id, artifact_def_id=adef12.id,
+            status=SnapshotStatus.found, content_hash="d" * 64,
+            file_path="tests/l12/test_x.py", source_commit_sha="c" * 40,
+        )
+        s.commit()
+    _login(client)
+    html = client.get("/lessons").text
+    assert "занятия 11, 13: сдача через MR" in html
+    assert "занятия 11–13" not in html
+    assert "12. Тема 12" in html  # занятая колонка живёт отдельно
+
+
 def test_mr_column_with_files_not_collapsed(client, engine):
     with Session(engine) as s:
         _seed(s, mr_lessons=(11, 12), mr_files=True)

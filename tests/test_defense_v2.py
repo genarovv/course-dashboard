@@ -39,6 +39,15 @@ LLM_MODEL = "deepseek-v4-flash"
 PASSWORD = "correct-horse"
 
 
+@pytest.fixture(autouse=True)
+def _utc_display(monkeypatch):
+    """Хронология защиты показывается в местном времени (#32, ревью итерации 4);
+    для детерминизма тестов смещение зафиксировано в 0 (кроме явного теста зоны)."""
+    from app.config import settings as cfg
+
+    monkeypatch.setattr(cfg, "tz_offset_minutes", 0)
+
+
 @pytest.fixture()
 def engine(tmp_path, monkeypatch):
     monkeypatch.setenv("CD_ADMIN_PASSWORD", PASSWORD)
@@ -195,6 +204,17 @@ async def test_head_commit_date_missing_in_answer_is_none():
     assert raw is None  # API не отдал дату — None, не падение
 
 
+@pytest.mark.anyio
+async def test_head_commit_date_null_committer_is_none():
+    """Ревью итерации 4, находка 4: GitHub отдаёт "committer": null у коммитов
+    без учётки — None, а не AttributeError мимо except (иначе падал бы весь обход)."""
+    def handler(request):
+        return httpx.Response(200, json={"sha": "f" * 40, "commit": {"committer": None}})
+
+    raw = await _gc(handler).get_head_commit_date("https://github.com/s/x", "GitHub", ref="main")
+    assert raw is None
+
+
 # ── обход собирает дату; сбой даты не валит обход ─────────────────────────
 
 
@@ -289,6 +309,40 @@ def test_transition_date_prefers_commit_date(engine):
     assert prd["when"] == datetime(2026, 6, 28, 10, 0) and not prd["by_observation"]
     dm = rows[("data_model", "появился")]
     assert dm["when"] == datetime(2026, 7, 1, 9, 1) and dm["by_observation"]
+
+
+def test_transitions_shown_in_local_time(engine, monkeypatch):
+    """Ревью итерации 4, находка 1 (серьёзное): переходы хранятся в UTC, но
+    показываются в местном времени (#32) — иначе даты съезжают на день рядом
+    с местными вехами занятий на экране, который доказывает даты."""
+    from app.config import settings as cfg
+
+    monkeypatch.setattr(cfg, "tz_offset_minutes", 240)  # UTC+4
+    with Session(engine) as s:
+        _, repo = _seed_transitions(s)
+        s.commit()
+        card = build_defense_card(s, repo.id, llm_model=LLM_MODEL)
+    rows = {(str(r["role"]), r["label"]): r for r in _transitions(card)}
+    assert rows[("prd", "появился")]["when"] == datetime(2026, 6, 28, 14, 0)
+
+
+def test_same_commit_chronology_single_hash(engine):
+    """Негативный сценарий спеки D19: все снапшоты одного коммита — хронология
+    честно показывает один и тот же хеш, различий не выдумывает."""
+    with Session(engine) as s:
+        adefs, repo = _seed_roles(s)
+        r1 = _run(s, datetime(2026, 7, 1, 9, 0))
+        _snap(s, r1, repo, adefs["prd"], SnapshotStatus.found, "a",
+              datetime(2026, 7, 1, 9, 0))
+        _snap(s, r1, repo, adefs["data_model"], SnapshotStatus.found, "a",
+              datetime(2026, 7, 1, 9, 1))
+        store.register_sync_outcome(
+            s, sync_run_id=r1.id, repository_id=repo.id, outcome=SyncOutcome.ok_changed
+        )
+        s.commit()
+        card = build_defense_card(s, repo.id, llm_model=LLM_MODEL)
+    shas = {r["sha"] for r in _transitions(card)}
+    assert shas == {("a" * 40)[:40]}
 
 
 # ── HTML: шапка, notes крупно, details, секции, формат времени ────────────
