@@ -14,9 +14,7 @@
                 <li>
                     {% if f.file_path %}
                     <code>{{ f.file_path }}</code>
-                    <span class="file-status file-{{ f.status }}">{{
-                        {"found": "есть", "partial": "частично", "not_found": "нет"}[f.status | string]
-                    }}</span>
+                    <span class="file-status file-{{ f.status }}">{{ STATUS_LABELS.get(f.status, f.status) }}</span>
                     {% if f.partial_reason %}<span class="partial-reason">{{ f.partial_reason | join(", ") }}</span>{% endif %}
                     {% if f.source_commit_sha %}<span class="sha">@{{ f.source_commit_sha[:8] }}</span>{% endif %}
                     {% else %}
@@ -40,7 +38,7 @@
                 {% else %}
                 <p class="verdict verdict-{{ edge.verdict }}">
                     {{ "разрыв" if edge.verdict == "break" else "связно" }}
-                    <span class="confidence">уверенность: {{ edge.confidence }}</span>
+                    <span class="confidence">уверенность: {{ CONFIDENCE_LABELS.get(edge.confidence, edge.confidence) }}</span>
                     {% if edge.override_active %}<span class="override">отмечен как ложный</span>{% endif %}
                 </p>
                 {% if edge.points %}

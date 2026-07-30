@@ -3,7 +3,7 @@
 {% block content %}
 <header class="matrix-header">
     <h1>Матрица «репозиторий × занятие»</h1>
-    <p class="as-of">Актуально на {{ matrix.as_of }}</p>
+    <p class="as-of as-of-note">Актуально на {{ matrix.as_of }}</p>
     <nav class="matrix-nav">
         <a href="/artifacts">матрица артефактов</a>
         <a href="/logout">Выйти</a>
@@ -52,55 +52,75 @@
             {% for lesson in matrix.lessons %}
             <th title="{{ lesson.title }}">{{ lesson.number }}. {{ lesson.title }}</th>
             {% endfor %}
-            <th>Разрывы связности</th>
-            <th>Процесс</th>
         </tr>
     </thead>
     <tbody>
         {% for repo in matrix.repositories %}
         <tr>
-            <td class="repo-url"><a href="/students/{{ repo.id }}">{{ repo.repo_url }}</a></td>
+            <td class="repo-url"><a href="/students/{{ repo.id }}" title="{{ repo.repo_url }}">{{ repo.name }}</a></td>
             {% for lesson in matrix.lessons %}
             {% set cell = matrix.cells[repo.id][lesson.number] %}
             <td class="cell cell-{{ cell.status or 'none' }}{% if cell.mr_channel %} cell-mr-channel{% endif %}">
                 {% if cell.mr_channel %}
                 <a class="status status-mr" href="/students/{{ repo.id }}" title="Канал сдачи этого занятия — запрос на слияние; наблюдение MR появится с FR-12">сдача через MR, не наблюдается</a>
                 {% elif cell.status %}
-                <span class="status">{{ cell.status }}</span>
-                {% if cell.partial_reason %}
-                <span class="partial-reason">{{ cell.partial_reason | join(", ") }}</span>
+                <span class="status">{{ cell.status_label }}</span>
+                {% if cell.partial_reason_labels %}
+                <span class="partial-reason">{{ cell.partial_reason_labels | join(", ") }}</span>
                 {% endif %}
                 {% else %}
                 <span class="status status-empty">—</span>
                 {% endif %}
             </td>
             {% endfor %}
-            <td class="breaks">
-                {% for break_card in matrix.breaks.get(repo.id, []) %}
-                <div class="break{% if break_card.override_active %} break-overridden{% endif %}">
-                    {{ break_card.source_role }}→{{ break_card.target_role }}
-                    {% if break_card.override_active %}
-                    <span class="override">отмечен как ложный</span>
-                    {% endif %}
-                    <form method="post" action="/verdicts/{{ break_card.verdict_id }}/override-toggle">
-                        <button type="submit">
-                            {{ "снять отметку «ложный разрыв»" if break_card.override_active
-                               else "ложный разрыв" }}
-                        </button>
-                    </form>
-                </div>
-                {% else %}
-                <span class="no-breaks">—</span>
-                {% endfor %}
-            </td>
-            {% set proc = matrix.process.get(repo.id) %}
-            <td class="process">
-                {% if proc and (proc.ready or proc.opened or proc.merged) %}
-                {% if proc.accepted %}<b>{{ proc.accepted }} сдано</b> · {% endif %}{% if proc.ready %}{{ proc.ready }} принят, ждёт merge · {% endif %}{{ proc.opened }} откр.{% if proc.merged_no_review %} · <span class="no-review">{{ proc.merged_no_review }} мимо ревью</span>{% endif %}
-                {% else %}—{% endif %}
-            </td>
         </tr>
         {% endfor %}
     </tbody>
 </table>
+
+{% if matrix.extras %}
+<section class="matrix-extras">
+    <h2>Разрывы связности и процесс сдачи</h2>
+    <table class="matrix extras">
+        <thead>
+            <tr>
+                <th>Репозиторий</th>
+                <th>Разрывы связности</th>
+                <th>Процесс</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for row in matrix.extras %}
+            <tr>
+                <td class="repo-url"><a href="/students/{{ row.id }}" title="{{ row.repo_url }}">{{ row.name }}</a></td>
+                <td class="breaks">
+                    {% for break_card in row.breaks %}
+                    <div class="break{% if break_card.override_active %} break-overridden{% endif %}">
+                        {{ break_card.source_role }}→{{ break_card.target_role }}
+                        {% if break_card.override_active %}
+                        <span class="override">отмечен как ложный</span>
+                        {% endif %}
+                        <form method="post" action="/verdicts/{{ break_card.verdict_id }}/override-toggle">
+                            <button type="submit">
+                                {{ "снять отметку «ложный разрыв»" if break_card.override_active
+                                   else "ложный разрыв" }}
+                            </button>
+                        </form>
+                    </div>
+                    {% else %}
+                    <span class="no-breaks">—</span>
+                    {% endfor %}
+                </td>
+                {% set proc = row.process %}
+                <td class="process">
+                    {% if proc and (proc.ready or proc.opened or proc.merged) %}
+                    {% if proc.accepted %}<b>{{ proc.accepted }} сдано</b> · {% endif %}{% if proc.ready %}{{ proc.ready }} принят, ждёт merge · {% endif %}{{ proc.opened }} откр.{% if proc.merged_no_review %} · <span class="no-review">{{ proc.merged_no_review }} мимо ревью</span>{% endif %}
+                    {% else %}—{% endif %}
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</section>
+{% endif %}
 {% endblock %}
