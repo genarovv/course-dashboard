@@ -97,7 +97,8 @@ def test_dashboard_shows_partial_reason(client_and_engine):
     _seed(engine)
     _login(client)
     response = client.get("/")
-    assert "template_copy" in response.text  # AC 3
+    # AC 3; требование изменено решением CEO 2026-07-30 (D8): причины — по-русски
+    assert "заготовка из шаблона" in response.text
 
 
 def test_dashboard_shows_as_of_time(client_and_engine):

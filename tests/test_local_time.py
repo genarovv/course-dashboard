@@ -62,4 +62,5 @@ def test_matrix_as_of_in_local_time_with_label(session, monkeypatch):
 
     matrix = build_matrix(session)
 
-    assert matrix["as_of"] == "20:07 (UTC+4)"  # местное время + явная метка зоны
+    # местное время + явная метка зоны; дата добавлена решением CEO 2026-07-30 (D8)
+    assert matrix["as_of"] == "28.07 20:07 (UTC+4)"
