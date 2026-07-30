@@ -82,11 +82,20 @@ def _cell(
         if e["state"] == "done" and e["verdict"] == VerdictValue.break_ and not e["override_active"]
     ]
     pending = [e for e in touching if e["state"] == "pending"]
-    oks = [
+    # D11 (#55), BR-2: решение преподавателя (override) не маскируется под вердикт агента
+    overridden = [
         e for e in touching
-        if e["state"] == "done" and (e["verdict"] == VerdictValue.ok or e["override_active"])
+        if e["state"] == "done" and e["verdict"] == VerdictValue.break_ and e["override_active"]
     ]
+    oks = [e for e in touching if e["state"] == "done" and e["verdict"] == VerdictValue.ok]
 
+    def break_tail() -> str:
+        first_point = next((p for e in breaks for p in e["points"]), None)
+        lost = f": потеряна «{first_point['entity']}»" if first_point else ""
+        count = f" ×{len(breaks)}" if len(breaks) > 1 else ""
+        return f"разрыв{count}{lost}"
+
+    # Приоритет свода (спека D11): разрыв > проверяется > помечен ложным > ок > статус
     if mr_channel:
         summary = "сдача через MR"
     elif snap is None:
@@ -95,14 +104,14 @@ def _cell(
         summary = "нет"
     elif snap.status == SnapshotStatus.partial:
         reasons = [PARTIAL_LABELS.get(r, r) for r in (snap.partial_reason or [])]
-        summary = "частично · " + ", ".join(reasons) if reasons else "частично"
+        base = "частично · " + ", ".join(reasons) if reasons else "частично"
+        summary = f"{base} · {break_tail()}" if breaks else base
     elif breaks:
-        first_point = next((p for e in breaks for p in e["points"]), None)
-        lost = f": потеряна «{first_point['entity']}»" if first_point else ""
-        count = f" ×{len(breaks)}" if len(breaks) > 1 else ""
-        summary = f"есть · разрыв{count}{lost}"
+        summary = f"есть · {break_tail()}"
     elif pending:
         summary = "есть · связность проверяется"
+    elif overridden:
+        summary = "есть · помечен ложным"
     elif oks:
         summary = "есть · связность ок"
     else:
@@ -115,6 +124,7 @@ def _cell(
         "mr_channel": mr_channel,
         "break_count": len(breaks),
         "pending_count": len(pending),
+        "overridden_count": len(overridden),
         "ok_count": len(oks),
     }
 
