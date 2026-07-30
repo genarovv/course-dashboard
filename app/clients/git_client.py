@@ -102,8 +102,11 @@ class GitClient:
                 self._github_headers(),
             )
             return data["sha"]
+        # #51: ref — путевой сегмент, слэши веток вида feat/x обязаны кодироваться (%2F),
+        # иначе GitLab отвечает 404; в query-параметрах (?ref=) слэш допустим
         data = await self._request_json(
-            f"https://{host}/api/v4/projects/{quote(path, safe='')}/repository/commits/{quote(ref)}",
+            f"https://{host}/api/v4/projects/{quote(path, safe='')}"
+            f"/repository/commits/{quote(ref, safe='')}",
             self._gitlab_headers(),
         )
         return data["id"]
