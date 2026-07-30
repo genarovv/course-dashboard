@@ -131,6 +131,17 @@ def test_build_prompt_contains_rubric_texts_and_contract_fields():
         assert fieldname in prompt
 
 
+def test_build_prompt_requires_russian_free_text():
+    """C4 (#64): свободнотекстовые поля выхода (notes, why) — на русском языке;
+    цитаты — дословные, на языке документа студента, их не переводим.
+    Контрактный тест инструкции: язык не валидируется схемой (LLM вернула
+    английский — вердикт валиден, деградация приемлема)."""
+    prompt = build_prompt("П", "А", "Б")
+    assert "на русском" in prompt
+    assert "дословн" in prompt
+    assert "не перевод" in prompt
+
+
 # --- validate_llm_response (schema-check §5.2) ---
 
 
