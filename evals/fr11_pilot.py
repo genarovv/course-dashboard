@@ -33,6 +33,7 @@ README_RUBRIC = """Рубрика качества README v1.0. Оцени до�
 Критерий met только при явном подтверждении текстом. Суди ТОЛЬКО по тексту README."""
 
 VERDICTS = ("годно", "с оговорками", "негодно")
+CRITERIA_KEYS = ("purpose", "run", "structure", "status", "honesty")
 
 PROMPT_TEMPLATE = """Ты — методист курса, оцениваешь КАЧЕСТВО README студенческого проекта строго по рубрике.
 
@@ -81,7 +82,22 @@ def validate_response(raw: str) -> dict | None:
             return None
         if not isinstance(item["met"], bool):
             return None
+    # находка 4 ревью: ровно 5 критериев, ключи — домен рубрики, без дублей
+    keys = [item["key"] for item in criteria]
+    if sorted(keys) != sorted(CRITERIA_KEYS):
+        return None
     return data
+
+
+def rule_verdict(criteria: list[dict]) -> str:
+    """Находка 1 ревью: вердикт считается КОДОМ по механическому правилу —
+    слово модели используется только для сверки (расхождение = пометка в отчёте)."""
+    met = sum(1 for c in criteria if c.get("met"))
+    if met == 5:
+        return "годно"
+    if met >= 3:
+        return "с оговорками"
+    return "негодно"
 
 
 def render_report(rows: list[dict], llm_model: str) -> str:
@@ -98,16 +114,26 @@ def render_report(rows: list[dict], llm_model: str) -> str:
         "| Репо | Вердикт | purpose | run | structure | status | honesty |",
         "|---|---|---|---|---|---|---|",
     ]
-    order = ("purpose", "run", "structure", "status", "honesty")
+    order = CRITERIA_KEYS
+    none_labels = {  # находки 2–3 ревью: сбой инфраструктуры — не оценка студента
+        "no_readme": "README не найден",
+        "llm_unavailable": "нет вердикта: LLM недоступна",
+        "parse_error": "нет вердикта: ответ не распарсился",
+    }
     for row in rows:
         if row["verdict"] is None:
-            lines.append(f"| {row['repo_label']} | README не найден | — | — | — | — | — |")
+            label = none_labels.get(row.get("reason"), "README не найден")
+            lines.append(f"| {row['repo_label']} | {label} | — | — | — | — | — |")
             continue
         by_key = {c["key"]: c for c in row["criteria"]}
         marks = " | ".join(
             ("✅" if by_key[k]["met"] else "❌") if k in by_key else "?" for k in order
         )
-        lines.append(f"| {row['repo_label']} | {row['verdict']} | {marks} |")
+        verdict = row["verdict"]
+        model_verdict = row.get("model_verdict")
+        if model_verdict and model_verdict != verdict:
+            verdict = f"{verdict} (модель: {model_verdict} — расхождение)"
+        lines.append(f"| {row['repo_label']} | {verdict} | {marks} |")
     lines.append("")
     for row in rows:
         if row["verdict"] is None:
@@ -146,7 +172,7 @@ async def run_pilot() -> None:
     with SessionLocal() as session:
         from app.models.repository import Repository
 
-        repos = list(session.scalars(select(Repository)))
+        repos = [r for r in session.scalars(select(Repository)) if r.archived_at is None]
         readme_defs = store.find_artifact_defs_by_role(session, ArtifactRole.readme)
         for idx, repo in enumerate(repos, start=1):
             snap = None
@@ -171,7 +197,7 @@ async def run_pilot() -> None:
             for target in targets:
                 if target["file_path"] is None:
                     rows.append({"repo_label": target["label"], "verdict": None,
-                                 "criteria": [], "notes": None})
+                                 "reason": "no_readme", "criteria": [], "notes": None})
                     continue
                 try:
                     content = await git.get_file_content(
@@ -181,35 +207,45 @@ async def run_pilot() -> None:
                 except GitClientError as exc:
                     print(f"{target['label']}: репозиторий недоступен ({exc})", flush=True)
                     rows.append({"repo_label": target["label"], "verdict": None,
-                                 "criteria": [], "notes": None})
+                                 "reason": "no_readme", "criteria": [], "notes": None})
                     continue
                 print(f"оценка {target['label']}…", flush=True)
-                try:
-                    response = await http.post(
-                        f"{settings.deepseek_base_url.rstrip('/')}/chat/completions",
-                        headers={"Authorization": f"Bearer {settings.deepseek_api_key}"},
-                        json={
-                            "model": settings.deepseek_model,
-                            "messages": [{"role": "user", "content": build_prompt(content)}],
-                            "response_format": {"type": "json_object"},
-                            "temperature": 0.0,
-                        },
-                    )
-                    response.raise_for_status()
-                    raw = response.json()["choices"][0]["message"]["content"]
-                except httpx.HTTPError as exc:  # пилот вне продукта: не падаем, фиксируем
-                    print(f"  {target['label']}: LLM недоступна ({exc})", flush=True)
-                    rows.append({"repo_label": target["label"], "verdict": None,
-                                 "criteria": [], "notes": "LLM недоступна"})
+                validated, failed = None, False
+                for _ in range(2):  # 1 ретрай — канон §5.2/мини-эвала (находка 2)
+                    try:
+                        response = await http.post(
+                            f"{settings.deepseek_base_url.rstrip('/')}/chat/completions",
+                            headers={"Authorization": f"Bearer {settings.deepseek_api_key}"},
+                            json={
+                                "model": settings.deepseek_model,
+                                "messages": [{"role": "user", "content": build_prompt(content)}],
+                                "response_format": {"type": "json_object"},
+                                "temperature": 0.0,
+                            },
+                        )
+                        response.raise_for_status()
+                        raw = response.json()["choices"][0]["message"]["content"]
+                    except (httpx.HTTPError, KeyError, ValueError) as exc:
+                        print(f"  {target['label']}: LLM недоступна ({exc})", flush=True)
+                        rows.append({"repo_label": target["label"], "verdict": None,
+                                     "reason": "llm_unavailable", "criteria": [], "notes": None})
+                        failed = True
+                        break
+                    validated = validate_response(raw)
+                    if validated is not None:
+                        break
+                if failed:
                     continue
-                validated = validate_response(raw)
                 if validated is None:
-                    rows.append({"repo_label": target["label"], "verdict": "негодно",
-                                 "criteria": [], "notes": "ответ модели не распарсился"})
+                    # находка 2: сбой парсинга — не оценка студента
+                    rows.append({"repo_label": target["label"], "verdict": None,
+                                 "reason": "parse_error", "criteria": [], "notes": None})
                     continue
+                computed = rule_verdict(validated["criteria"])  # находка 1: правило в коде
                 rows.append({
                     "repo_label": target["label"],
-                    "verdict": validated["verdict"],
+                    "verdict": computed,
+                    "model_verdict": validated["verdict"],
                     "criteria": validated["criteria"],
                     "notes": validated.get("notes"),
                 })
