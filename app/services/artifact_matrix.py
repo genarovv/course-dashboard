@@ -70,6 +70,7 @@ def _edges_touching(edges: list[dict], role: ArtifactRole) -> list[dict]:
 def _cell(
     session: Session, repository_id: str, defs: list, edges: list[dict],
     mr_lesson_ids: set[str] | None = None,
+    fresh_since: datetime | None = None,
 ) -> dict:
     """Ячейка: статус + усечённый результат анализа (summary) + счётчики рёбер."""
     snap = _best_snapshot(session, repository_id, defs)
@@ -105,6 +106,14 @@ def _cell(
             "count": len(breaks),
             "entity": first_point["entity"] if first_point else None,
             "confidence": top_conf if top_conf in CONFIDENCE_RANK else "low",
+            # D16 (#60): вердикт впервые вычислен в последнем обходе (D25: перепрогон
+            # той же четвёрки не создаёт новой записи — метка не «мигает»)
+            "new": bool(
+                fresh_since is not None
+                and any(
+                    e["computed_at"] and e["computed_at"] >= fresh_since for e in breaks
+                )
+            ),
         }
 
     def break_tail() -> str:
@@ -145,6 +154,8 @@ def _cell(
         "summary": summary,
         "presence": presence,
         "break": break_info,
+        # D16 (#60): артефакт наблюдался заново в последнем обходе — точка свежести
+        "fresh": bool(fresh_since is not None and snap and snap.observed_at >= fresh_since),
         "mr_channel": mr_channel,
         "break_count": len(breaks),
         "pending_count": len(pending),
@@ -192,13 +203,21 @@ def build_artifact_matrix(
     repos = [r for r in active_repos if r.id in checked_ids]
     defs_by_role = _defs_by_role_in_course_order(session)
     mr_lesson_ids = _mr_lesson_ids(session)
+    # D16 (#60): порог свежести — начало последнего обхода; без предыдущего обхода
+    # меток нет (первый обход пометил бы «новым» весь экран)
+    last_run = store.find_last_sync_run(session)
+    fresh_since = (
+        last_run.started_at
+        if last_run and store.find_previous_sync_run(session) is not None
+        else None
+    )
 
     cells: dict[str, dict[str, dict]] = {}
     row_breaks: dict[str, int] = {}
     for repo in repos:
         edges = evidence_chain.edge_states(session, repo.id, resolved_model)
         cells[repo.id] = {
-            str(role): _cell(session, repo.id, defs, edges, mr_lesson_ids)
+            str(role): _cell(session, repo.id, defs, edges, mr_lesson_ids, fresh_since)
             for role, defs in defs_by_role.items()
         }
         # D15 (#59): уникальные рёбра-разрывы — ребро видно в двух ячейках, считается раз
@@ -210,7 +229,6 @@ def build_artifact_matrix(
     if sort == "breaks":
         repos = sorted(repos, key=lambda r: -row_breaks[r.id])  # sorted стабилен — реестр внутри
 
-    last_run = store.find_last_sync_run(session)
     # Макет: «Время и дата последнего анализа: День.Месяц ЧЧ:ММ» (местное время, #32)
     as_of = (
         f"{timeutil.to_display(last_run.started_at):%d.%m %H:%M} ({timeutil.offset_label()})"

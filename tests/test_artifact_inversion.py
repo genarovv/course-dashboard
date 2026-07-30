@@ -127,7 +127,8 @@ def test_break_chip_structure_low_confidence(engine):
         _verdict(s, pack1, confidence="low")
         s.commit()
         cell = _cell(s, repo)
-    assert cell["break"] == {"count": 1, "entity": "Оксана", "confidence": "low"}
+    # поле new добавлено D16 (#60): один обход в сиде — метка свежести выключена
+    assert cell["break"] == {"count": 1, "entity": "Оксана", "confidence": "low", "new": False}
 
 
 def test_no_break_chip_when_clean(engine):

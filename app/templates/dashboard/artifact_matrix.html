@@ -82,9 +82,9 @@
                 hx-target="#modal-root" hx-swap="innerHTML"
                 role="button" tabindex="0"
                 title="{{ role.title }} — подробности">
-                {%- if cell.presence -%}<span class="presence">{{ cell.presence }}</span>{%- else -%}—{%- endif -%}
+                {%- if cell.presence -%}<span class="presence">{{ cell.presence }}{% if cell.fresh %}<span class="fresh-dot" title="изменился в последнем обходе"></span>{% endif %}</span>{%- else -%}—{%- endif -%}
                 {%- if cell.break -%}
-                <span class="break-chip chip-{{ cell.break.confidence }}">⚠ {% if cell.break.count > 1 %}разрыв ×{{ cell.break.count }}{% if cell.break.entity %}: потеряна «{{ cell.break.entity }}»{% endif %}{% elif cell.break.entity %}потеряна «{{ cell.break.entity }}»{% else %}разрыв{% endif %}{% if cell.break.confidence != "high" %} · уверенность {{ CONFIDENCE_LABELS.get(cell.break.confidence, cell.break.confidence) }}{% endif %}</span>
+                <span class="break-chip chip-{{ cell.break.confidence }}">⚠ {% if cell.break.count > 1 %}разрыв ×{{ cell.break.count }}{% if cell.break.entity %}: потеряна «{{ cell.break.entity }}»{% endif %}{% elif cell.break.entity %}потеряна «{{ cell.break.entity }}»{% else %}разрыв{% endif %}{% if cell.break.confidence != "high" %} · уверенность {{ CONFIDENCE_LABELS.get(cell.break.confidence, cell.break.confidence) }}{% endif %}{% if cell.break.new %} · новое{% endif %}</span>
                 {%- endif -%}
             </td>
             {% endfor %}

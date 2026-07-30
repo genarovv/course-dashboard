@@ -48,6 +48,7 @@ def _edge_card(session: Session, repository_id: str, edge, llm_model: str) -> di
         "verdict_id": None,
         "override_active": False,
         "deferred_reason": None,
+        "computed_at": None,
     }
     snap_a = _latest_snapshot_for_role(session, repository_id, edge.source_role)
     snap_b = _latest_snapshot_for_role(session, repository_id, edge.target_role)
@@ -78,6 +79,7 @@ def _edge_card(session: Session, repository_id: str, edge, llm_model: str) -> di
         notes=verdict.notes,
         verdict_id=verdict.id,
         override_active=store.find_active_override_for_verdict(session, verdict.id) is not None,
+        computed_at=verdict.computed_at,  # D16 (#60): метка «новое с прошлого обхода»
     )
     return card
 
