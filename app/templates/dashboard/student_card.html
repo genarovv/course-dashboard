@@ -2,11 +2,11 @@
 {% block title %}Карточка студента — Course Dashboard{% endblock %}
 {% block content %}
 <header class="card-header">
-    <h1>Карточка студента</h1>
-    <p class="repo-url">{{ card.repository.repo_url }}</p>
+    <h1>Карточка студента: {{ repo_short_name(card.repository.repo_url) }}</h1>
+    <p class="repo-url"><a href="{{ card.repository.repo_url }}" title="{{ card.repository.repo_url }}">открыть репозиторий</a></p>
     <nav class="matrix-nav">
         <a href="/">← к матрице</a>
-        <a class="defense-link" href="/students/{{ card.repository.id }}/defense">режим защиты</a>
+        <a class="defense-link" href="/students/{{ card.repository.id }}/defense">защита проекта</a>
     </nav>
 </header>
 
@@ -90,7 +90,7 @@
         <tbody>
             {% for entry in card.timeline %}
             <tr>
-                <td>{{ entry.observed_at }}</td>
+                <td>{{ fmt_dt(entry.observed_at) }}</td>
                 <td>{{ entry.role }}</td>
                 <td class="cell-{{ entry.status }}">{{ STATUS_LABELS.get(entry.status, entry.status) }}
                     {% if entry.partial_reason %}({% for r in entry.partial_reason %}{{ PARTIAL_LABELS.get(r, r) }}{% if not loop.last %}, {% endif %}{% endfor %}){% endif %}</td>

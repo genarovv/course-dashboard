@@ -183,6 +183,21 @@ def build_matrix(session: Session, llm_model: str | None = None, today: date | N
         or ((p := process.get(repo.id)) and (p["ready"] or p["opened"] or p["merged"]))
     ]
 
+    # D22 (#68): пустые MR-колонки (везде «сдача через MR, не наблюдается») схлопываются
+    # в одну «занятия N–M: сдача через MR»; одна такая колонка живёт как есть
+    empty_mr_numbers = [
+        lesson.number
+        for lesson in lessons
+        if lesson.submission_channel == "mr" and repos
+        and all(cells[r.id][lesson.number]["mr_channel"] for r in repos)
+    ]
+    collapsed_mr = None
+    if len(empty_mr_numbers) > 1:
+        collapsed_mr = {
+            "numbers": empty_mr_numbers,
+            "label": f"занятия {min(empty_mr_numbers)}–{max(empty_mr_numbers)}: сдача через MR",
+        }
+
     return {
         "repositories": [
             {
@@ -197,6 +212,7 @@ def build_matrix(session: Session, llm_model: str | None = None, today: date | N
             {"id": les.id, "number": les.number, "title": les.title}
             for les in lessons
         ],
+        "collapsed_mr": collapsed_mr,
         "cells": cells,
         "breaks": breaks,
         "process": process,

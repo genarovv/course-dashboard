@@ -3,7 +3,9 @@
 {% block content %}
 <header class="matrix-header">
     <h1>Матрица «репозиторий × артефакт»</h1>
-    <p class="as-of as-of-note{% if matrix.stale %} as-of-stale{% endif %}">Актуально на {{ matrix.as_of }}{% if matrix.stale %} — <b>обход старше 48 часов, данные могли устареть</b>{% endif %}</p>
+    <p class="as-of as-of-note{% if matrix.stale %} as-of-stale{% endif %}">Актуально на {{ matrix.as_of }}{% if matrix.stale %} — <b>обход старше 48 часов, данные могли устареть</b>{% endif %}
+        <button type="button" class="sync-now"
+                onclick="if (confirm('Запустить обход сейчас? Займёт до пары минут.')) { this.disabled = true; this.textContent = 'обход идёт…'; fetch('/sync', {method: 'POST'}).then(function () { location.reload(); }); }">обновить сейчас</button></p>
     <nav class="matrix-nav">
         <a href="/lessons">матрица занятий</a>
         <a href="/logout">Выйти</a>
@@ -51,8 +53,8 @@
     <span class="legend-item"><span class="swatch acell-found"></span>есть</span>
     <span class="legend-item" title="Правило «частично»: неточное имя файла, не в ожидаемой папке или нетронутая заготовка из шаблона"><span class="swatch acell-partial"></span>частично&nbsp;ⓘ</span>
     <span class="legend-item"><span class="swatch acell-not_found"></span>нет</span>
-    <span class="legend-item"><span class="swatch acell-none"></span>не наблюдался</span>
-    <span class="legend-item"><span class="swatch acell-mr"></span>сдача через MR</span>
+    <span class="legend-item"><span class="swatch acell-none"></span>нет данных</span>
+    <span class="legend-item"><span class="swatch acell-mr"></span>сдача через merge request (запрос на слияние)</span>
     <span class="legend-item"><span class="break-chip chip-high">⚠ разрыв</span> потеряна мысль источника (уверенность высокая)</span>
     <span class="legend-item"><span class="break-chip chip-low">⚠ разрыв</span> уверенность средняя/низкая — перепроверь</span>
     <span class="legend-item">«помечен ложным» — твоя отметка, разрыв погашен</span>
@@ -77,7 +79,7 @@
         {% for repo in matrix.repositories %}
         <tr>
             <td class="repo-url"><a href="/students/{{ repo.id }}" title="{{ repo.repo_url }}">{{ repo.name }}</a>
-                <a class="defense-link" href="/students/{{ repo.id }}/defense" title="Режим защиты: дело одного студента, только уверенные разрывы">защита</a>
+                <a class="defense-link" href="/students/{{ repo.id }}/defense" title="Режим защиты: дело одного студента, только уверенные разрывы">защита проекта</a>
                 <span class="row-summary">
                     {%- if matrix.row_breaks[repo.id] %}<span class="row-breaks-chip" title="уникальные рёбра-разрывы репозитория">⚠ {{ matrix.row_breaks[repo.id] }}</span>{% endif -%}
                     <span class="row-progress" title="сдано ролей из ожидаемых (частично — тоже сдано)">{{ matrix.row_submitted[repo.id].x }}/{{ matrix.row_submitted[repo.id].m }}</span>

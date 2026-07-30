@@ -39,6 +39,22 @@ body {
     position: sticky; left: 0; background: #fff; z-index: 2;
 }
 .matrix-wrap thead th.col-repo { z-index: 4; }
+/* D22 (#68): переносы в колонке репо — по границам слов, не в случайном месте */
+.repo-url { overflow-wrap: break-word; word-break: normal; }
+/* D22 (#68): кнопка обхода на стикере актуальности (POST /sync с подтверждением) */
+.sync-now {
+    margin-left: 0.6rem;
+    padding: 0.15rem 0.6rem;
+    border: 1px solid #99a;
+    border-radius: 4px;
+    background: #fff;
+    color: #445;
+    font-size: 0.78rem;
+    cursor: pointer;
+}
+.sync-now:hover { border-color: #445; }
+.sync-now:disabled { opacity: 0.6; cursor: wait; }
+
 /* D20 (#66): сводка строки слева (заменила правую колонку «Разрывы» D15) */
 .row-summary { display: block; margin-top: 0.15rem; font-size: 0.78rem; color: #8a90a0; }
 .row-summary > span { margin-right: 0.5rem; }

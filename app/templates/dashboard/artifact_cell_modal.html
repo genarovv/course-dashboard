@@ -2,7 +2,7 @@
     <div class="modal" role="dialog" aria-label="{{ details.title }} — подробности" tabindex="-1">
         <header class="modal-header">
             <h2>{{ details.title }}</h2>
-            <p class="repo-url">{{ details.repository.repo_url }} · <a href="/students/{{ details.repository.id }}">карточка студента</a></p>
+            <p class="repo-url"><a href="{{ details.repository.repo_url }}" title="{{ details.repository.repo_url }}">открыть репозиторий</a> · <a href="/students/{{ details.repository.id }}">карточка студента</a></p>
             <button type="button" class="modal-close" aria-label="Закрыть"
                     onclick="this.closest('.modal-overlay').remove()">×</button>
         </header>
