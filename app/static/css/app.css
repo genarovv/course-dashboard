@@ -164,7 +164,15 @@ table.extras { width: auto; min-width: 60%; }
 .verdict { margin: 0 0 0.35rem; font-size: 0.9rem; }
 .verdict-break { color: #a01212; font-weight: 600; }
 .verdict-ok { color: #157a37; }
-.confidence { font-weight: 400; color: #667; font-size: 0.8rem; margin-left: 0.5rem; }
+/* D17 (#61): уверенность — заметный бейдж по уровню, а не мелкий серый текст */
+.confidence {
+    font-weight: 600; font-size: 0.85rem;
+    margin-left: 0.5rem; padding: 0.1rem 0.45rem; border-radius: 4px;
+}
+.conf-high { background: #e2f5e8; color: #14532d; }
+.conf-medium { background: #fdeeda; color: #713f12; }
+.conf-low { background: #f9dede; color: #7c1010; }
+.edge-card-link { margin-left: 0.6rem; font-size: 0.82rem; white-space: nowrap; }
 .edge-overridden .verdict-break { color: #778; text-decoration: line-through; }
 .override { color: #667; font-size: 0.8rem; margin-left: 0.5rem; }
 .points { margin: 0.25rem 0; padding-left: 1.25rem; font-size: 0.85rem; }

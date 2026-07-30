@@ -97,10 +97,34 @@
 
 <div id="modal-root"></div>
 <script>
+    // D17 (#61): управление фокусом — модалка забирает фокус, Esc возвращает ячейке
+    var lastFocusedCell = null;
+    document.addEventListener("htmx:afterSwap", function (e) {
+        if (e.target.id === "modal-root") {
+            lastFocusedCell = document.activeElement;
+            var modal = document.querySelector(".modal");
+            if (modal) modal.focus();
+        }
+    });
+    function closeModal() {
+        var overlay = document.querySelector(".modal-overlay");
+        if (overlay) overlay.remove();
+        if (lastFocusedCell) lastFocusedCell.focus();
+    }
     document.addEventListener("keydown", function (e) {
-        if (e.key === "Escape") {
+        if (e.key === "Escape") closeModal();
+        // ловушка Tab внутри модалки
+        if (e.key === "Tab") {
             var overlay = document.querySelector(".modal-overlay");
-            if (overlay) overlay.remove();
+            if (!overlay) return;
+            var focusables = overlay.querySelectorAll("a, button, [tabindex='-1']");
+            if (!focusables.length) return;
+            var first = focusables[0], last = focusables[focusables.length - 1];
+            if (e.shiftKey && document.activeElement === first) {
+                e.preventDefault(); last.focus();
+            } else if (!e.shiftKey && document.activeElement === last) {
+                e.preventDefault(); first.focus();
+            }
         }
     });
 </script>

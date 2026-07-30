@@ -10,7 +10,8 @@
 <section class="edges">
     <h2>Связность конвейера</h2>
     {% for edge in card.edges %}
-    <article class="edge edge-{{ edge.state }}{% if edge.override_active %} edge-overridden{% endif %}">
+    <article id="edge-{{ edge.source_role }}-{{ edge.target_role }}"
+             class="edge edge-{{ edge.state }}{% if edge.override_active %} edge-overridden{% endif %}">
         <h3>{{ edge.source_role }} → {{ edge.target_role }}</h3>
         {% if edge.state == "no_data" %}
         <p class="state">нет данных: не наблюдались обе стороны ребра</p>
