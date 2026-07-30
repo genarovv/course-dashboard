@@ -61,7 +61,7 @@ course-dashboard/
 ├── alembic/              # Миграции БД
 ├── hooks/                # Версионируемые git-хуки (гейты; активация — §Хуки и гейты)
 ├── tests/                # pytest-тесты (7 модулей)
-├── evals/                # Golden-set для регрессии LLM-ядра
+├── evals/                # Golden-set + мини-эвал модели (`python -m evals.mini_eval all`, C3 #34)
 ├── product/              # PRD, user stories, интервью, персоны
 ├── decisions/            # ADR (архитектурные решения)
 ├── reviews/              # Состязательные ревью
