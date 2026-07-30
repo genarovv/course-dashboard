@@ -98,3 +98,106 @@ def test_reconcile_real_config(tmp_path):
         edge_pairs = {(e.source_role, e.target_role) for e in session.scalars(select(EdgeDef))}
         assert (ArtifactRole.prd, ArtifactRole.architecture) in edge_pairs
     engine.dispose()
+
+
+# ── fix: несколько паттернов одной роли переживают реконсиляцию ─────────────
+
+
+def _mini_config(patterns):
+    """Мини-конфиг: одно занятие, роль data_model с заданными паттернами."""
+    from app.services.config_manager import ConfigYAML
+
+    return ConfigYAML.model_validate({
+        "lessons": [{
+            "number": 6,
+            "title": "Данные",
+            "date": "2026-07-02",
+            "artifacts": [
+                {"role": "data_model", "expected_pattern": p} for p in patterns
+            ],
+        }],
+        "edges": [],
+    })
+
+
+def test_reconcile_keeps_multiple_patterns_per_role(tmp_path):
+    """Ключ дефа — (занятие, роль, паттерн): альтернативные пути не схлопываются.
+
+    Боевой прогон 2026-07-30 показал: со старым ключом (занятие, роль) второй
+    паттерн затирал первый — конфиг «подгонялся» под последнего студента.
+    """
+    db_path = tmp_path / "multi.db"
+    cfg = Config("alembic.ini")
+    cfg.set_main_option("sqlalchemy.url", f"sqlite:///{db_path}")
+    command.upgrade(cfg, "head")
+    engine = create_engine(f"sqlite:///{db_path}")
+    with Session(engine) as session:
+        config_manager.reconcile(session, _mini_config(["data-model.md", "DATA_MODEL.md"]))
+        session.commit()
+        patterns = sorted(
+            d.expected_pattern for d in session.scalars(select(ArtifactDef))
+        )
+        assert patterns == ["DATA_MODEL.md", "data-model.md"]
+
+        # идемпотентность: повторный reconcile ничего не плодит
+        summary = config_manager.reconcile(session, _mini_config(["data-model.md", "DATA_MODEL.md"]))
+        session.commit()
+        assert summary.artifact_defs_created == 0
+        assert len(list(session.scalars(select(ArtifactDef)))) == 2
+    engine.dispose()
+
+
+def test_real_config_reconciles_all_patterns(tmp_path):
+    db_path = tmp_path / "full.db"
+    cfg = Config("alembic.ini")
+    cfg.set_main_option("sqlalchemy.url", f"sqlite:///{db_path}")
+    command.upgrade(cfg, "head")
+    engine = create_engine(f"sqlite:///{db_path}")
+    config = load_real_config()
+    expected = sum(len(lesson.artifacts) for lesson in config.lessons)
+    with Session(engine) as session:
+        config_manager.reconcile(session, config)
+        session.commit()
+        assert len(list(session.scalars(select(ArtifactDef)))) == expected
+    engine.dispose()
+
+
+# ── fix: агрегация ячейки — альтернативы внутри роли по лучшему статусу ─────
+
+
+def test_cell_aggregation_alternatives_best_wins(tmp_path):
+    """Внутри роли (альтернативные пути) побеждает лучший статус; между ролями —
+    прежнее строгое правило (все found → found, все not_found → not_found, иначе partial)."""
+    from datetime import datetime
+
+    from app import store
+    from app.models import GitHost, SnapshotStatus, SyncTrigger
+    from app.models.lesson import Lesson
+    from app.services.matrix_builder import _aggregate_cell
+
+    db_path = tmp_path / "agg.db"
+    cfg = Config("alembic.ini")
+    cfg.set_main_option("sqlalchemy.url", f"sqlite:///{db_path}")
+    command.upgrade(cfg, "head")
+    engine = create_engine(f"sqlite:///{db_path}")
+    with Session(engine) as s:
+        lesson = Lesson(number=5, title="PRD", date=datetime(2026, 6, 30).date())
+        s.add(lesson)
+        s.flush()
+        d1 = ArtifactDef(lesson_id=lesson.id, role="prd", expected_pattern="product/prd.md")
+        d2 = ArtifactDef(lesson_id=lesson.id, role="prd", expected_pattern="REQUIREMENTS.md")
+        s.add_all([d1, d2])
+        repo = store.register_repository(s, repo_url="https://github.com/u/r", git_host=GitHost.GitHub)
+        run = store.register_sync_run(s, triggered_by=SyncTrigger.manual)
+        s.flush()
+        # альтернатива 1 не найдена, альтернатива 2 найдена → роль prd = found
+        store.register_snapshot(s, sync_run_id=run.id, repository_id=repo.id,
+                                artifact_def_id=d1.id, status=SnapshotStatus.not_found)
+        store.register_snapshot(s, sync_run_id=run.id, repository_id=repo.id,
+                                artifact_def_id=d2.id, status=SnapshotStatus.found,
+                                content_hash="a" * 64, file_path="REQUIREMENTS.md",
+                                source_commit_sha="c" * 40)
+        s.flush()
+        cell = _aggregate_cell(s, repo.id, [d1, d2])
+        assert cell["status"] == SnapshotStatus.found  # а не partial
+    engine.dispose()
