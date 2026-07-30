@@ -15,6 +15,7 @@ from sqlalchemy.orm import Session
 from app import store
 from app.clients.git_client import GitClient, GitClientError
 from app.models import GitHost
+from app.services.branch_detect import refresh_default_branch
 
 
 class ImportSummary(BaseModel):
@@ -51,14 +52,8 @@ async def import_csv(session: Session, csv_text: str, git_client: GitClient) -> 
         git_host = _detect_git_host(repo_url)
         repo = store.register_repository(session, repo_url=repo_url, git_host=git_host)
         session.flush()
-        try:
-            actual = await git_client.fetch_default_branch(repo_url, git_host.value)
-            # #48: пустой проект — default_branch: null; None в NOT NULL не пишем
-            if actual and actual != repo.default_branch:
-                repo.default_branch = actual
-                session.flush()
-        except GitClientError:
-            pass
+        await refresh_default_branch(session, git_client, repo)  # ADR-006/#48/#50
+        session.flush()
         try:
             await git_client.get_tree(repo_url, git_host.value, repo.default_branch)
             summary.available += 1

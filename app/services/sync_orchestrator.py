@@ -26,6 +26,7 @@ from app.models import SnapshotStatus, SyncOutcome, SyncStatus, SyncTrigger
 from app.models.artifact_def import ArtifactDef
 from app.models.repository import Repository
 from app.models.sync_run import SyncRun
+from app.services.branch_detect import refresh_default_branch
 
 logger = logging.getLogger(__name__)
 
@@ -443,18 +444,9 @@ async def run_sync(
     ]
     template_hashes = await _fetch_template_hashes(git_client, template_repo)  # D35: раз за обход
 
-    # ADR-006: переопределить default_branch для репо, созданных до фикса.
-    # #48: у пустого проекта GitLab отдаёт default_branch: null — None не пишем
-    # (колонка NOT NULL, репо честно уйдёт в repo_unavailable при чтении дерева)
+    # ADR-006: сверка default_branch для репо, созданных до фикса (#48/#50 — общий шаг)
     for repo in store.find_active_repositories(session):
-        try:
-            actual = await git_client.fetch_default_branch(
-                repo.repo_url, repo.git_host
-            )
-            if actual and actual != repo.default_branch:
-                repo.default_branch = actual
-        except GitClientError:
-            pass
+        await refresh_default_branch(session, git_client, repo)
     session.flush()
 
     outcomes: list[SyncOutcome] = []

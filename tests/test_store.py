@@ -27,17 +27,48 @@ def session(tmp_path):
     engine.dispose()
 
 
-def test_contract_exactly_4_updates_no_deletes():
-    """Критерий #3: ровно 4 update_*, delete_* нет вообще."""
+def test_contract_exactly_5_updates_no_deletes():
+    """Критерий #3 (изменён тикетом #50): ровно 5 update_*, delete_* нет вообще.
+
+    Пятый — update_repository_default_branch: мутация default_branch (ADR-006)
+    узаконена через store вместо прямых присваиваний в сервисах (§3.5).
+    """
     names = [n for n, f in inspect.getmembers(store, inspect.isfunction)]
     updates = sorted(n for n in names if n.startswith("update_"))
     assert updates == [
         "update_credential_validity",
         "update_override_revoked",
+        "update_repository_default_branch",
         "update_sync_run_status",
         "update_user_lockout",
     ]
     assert not [n for n in names if n.startswith("delete_")]
+
+
+def test_update_repository_default_branch(session):
+    """#50: единственная легальная точка мутации default_branch (ADR-006)."""
+    repo = store.register_repository(
+        session, repo_url="https://github.com/u/branchy", git_host=GitHost.GitHub
+    )
+    session.flush()
+    assert repo.default_branch == "main"
+
+    store.update_repository_default_branch(session, repo.id, "master")
+    session.flush()
+    assert repo.default_branch == "master"
+
+
+def test_services_do_not_mutate_default_branch_directly():
+    """#50: ограничитель по образцу S4 — сервисы не присваивают default_branch мимо store."""
+    import pathlib
+    import re
+
+    services_dir = pathlib.Path(store.__file__).parent / "services"
+    offenders = []
+    for path in services_dir.glob("*.py"):
+        if re.search(r"\.default_branch\s*=(?!=)", path.read_text(encoding="utf-8")):
+            offenders.append(path.name)
+    assert offenders == []
 
 
 def test_contract_register_for_journal_entities():

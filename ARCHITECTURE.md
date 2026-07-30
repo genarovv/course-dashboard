@@ -7,7 +7,7 @@
 > - Вычеркнуты 9 механизмов: TaskTracker + сущность-очередь; кеш-колонки Repository; append-only-триггеры на всех таблицах (остались на 2 доказательных); рудимент `processing=0`/SKIP LOCKED; И10-CHECK с подзапросом; `encrypted_token` + крипто в БД; APScheduler; 3 ретрая с эскалацией промпта; `step_quality_card.py` в v1-коде. К каждому — запись «почему не строим» по месту.
 > - LLM-проверки: дельта-принцип «только changed» заменён идемпотентным сводом-реконсиляцией (§5.1)
 > - Носитель FR-8 — системный cron/systemd timer (§5.5)
-> - Раздел «журнал vs состояние» — честный контракт store.py: `register_*` + 4 узких `update_*` (§3.5)
+> - Раздел «журнал vs состояние» — честный контракт store.py: `register_*` + 5 узких `update_*` (§3.5; 5-й добавлен тикетом #50)
 > - Градация инвариантов DDL/код (§4)
 > - Модель ядра: `deepseek-v4-flash` — ADR-004 (D38), цена по расчёту
 >
@@ -90,7 +90,7 @@
 | Язык | Python 3.12+ | D39: максимальная предсказуемость для LLM-агента |
 | Backend | FastAPI | Async из коробки (D33); Pydantic — валидация enum-доменов |
 | СУБД | SQLite (WAL-mode) | D37: нулевой оверхед, нет отдельного процесса, constraints покрывают DDL-часть И1–И12 (§4) |
-| ORM | SQLAlchemy 2.x (Mapped) | D18: журнальные сущности — insert + select; мутации — только по трёхчастному контракту §3.5 (4 узких `update_*` состояния + конфиг-реконсиляция для config_manager). Unit-of-work и change-tracking не используются — легковесный mapper: Mapped + session.add() / session.execute(select()) |
+| ORM | SQLAlchemy 2.x (Mapped) | D18: журнальные сущности — insert + select; мутации — только по трёхчастному контракту §3.5 (5 узких `update_*` состояния + конфиг-реконсиляция для config_manager). Unit-of-work и change-tracking не используются — легковесный mapper: Mapped + session.add() / session.execute(select()) |
 | Миграции | Alembic | Единственный стандарт для SQLAlchemy |
 | Фронтенд | Jinja2 + HTMX | D37: серверный рендеринг, не нужен отдельный API; HTMX обновляет матрицу без JS-фреймворка |
 | Аутентификация | bcrypt + sessions | D10: один пользователь — готовое решение тяжелее задачи |
@@ -143,7 +143,7 @@ app/
 │   ├── coherence_verdict.py #   CoherenceVerdict — FR-5
 │   └── override.py          #   Override — FR-10
 │
-├── store.py                 # Data access: register_* (журнал) + 4 узких update_* + конфиг-реконсиляция (§3.5) + select
+├── store.py                 # Data access: register_* (журнал) + 5 узких update_* + конфиг-реконсиляция (§3.5) + select
 │
 ├── services/
 │   ├── sync_orchestrator.py #   Цикл обхода FR-8 + свод-реконсиляция LLM-пар (§5.1) + детект заготовки (D35)
@@ -151,6 +151,7 @@ app/
 │   ├── matrix_builder.py    #   Проекция матрицы FR-4/6/7
 │   ├── evidence_chain.py    #   Хронология FR-9
 │   ├── csv_importer.py      #   Импорт CSV → Repository (FR-1)
+│   ├── branch_detect.py     #   Детект default-ветки — общий шаг импорта и обхода (ADR-006, #50)
 │   └── config_manager.py    #   config.yaml → синк в БД (FR-2)
 │
 ├── clients/
@@ -198,7 +199,7 @@ routes → services → store.py → models
 
 - **routes** вызывают services, возвращают Jinja2-шаблоны. Никакой бизнес-логики.
 - **services** вызывают `store.py` и clients. Могут вызывать другие services.
-- **store.py** — единая точка доступа к данным. Экспортирует `register_*` / `find_*`, ровно 4 узких `update_*` и функции конфиг-реконсиляции (вызывает только config_manager) — §3.5. Для журнальных сущностей update/delete физически не экспортируются. Внутри — прямые SQLAlchemy-запросы.
+- **store.py** — единая точка доступа к данным. Экспортирует `register_*` / `find_*`, ровно 5 узких `update_*` и функции конфиг-реконсиляции (вызывает только config_manager) — §3.5. Для журнальных сущностей update/delete физически не экспортируются. Внутри — прямые SQLAlchemy-запросы.
 - **clients** не знают о модели данных — работают с сырыми текстами и Pydantic-схемами.
 - **models** — pure SQLAlchemy declarative, без бизнес-методов. Enums — в `models/__init__.py` (StrEnum), единое место определений.
 
@@ -241,7 +242,7 @@ class EnumColumn(types.TypeDecorator):
 
 **1. Журнал (иммутабельно, только `register_*`):** `Rubric`, `ArtifactSnapshot`, `CoherenceVerdict`, `SyncRunRepository`, создание `Override`. Для них store.py не экспортирует update/delete — это и есть основной механизм И5 (плюс триггеры на 2 доказательных таблицах, §4).
 
-**2. Рабочее состояние (ровно 4 узких `update_*`):**
+**2. Рабочее состояние (ровно 5 узких `update_*`; 5-й добавлен тикетом #50):**
 
 | Функция | Мутация | Зачем |
 |---------|---------|-------|
@@ -249,6 +250,7 @@ class EnumColumn(types.TypeDecorator):
 | `update_override_revoked` | `Override.revoked_at` | обратимость отметки (FR-10); снятие — не удаление |
 | `update_user_lockout` | `SystemUser.failed_attempts`, `locked_until` | блокировка входа (FR-0) |
 | `update_credential_validity` | `GitCredential.is_valid`, `checked_at` | сигнал «обнови токен» (FR-3) |
+| `update_repository_default_branch` | `Repository.default_branch` | детект наблюдаемой ветки при импорте и обходе (ADR-006, #50); вызывается только через `services/branch_detect.py` |
 
 Других `update_*` в этой категории не появляется; `delete_*` нет вообще.
 
@@ -302,6 +304,9 @@ class EnumColumn(types.TypeDecorator):
 POST /sync  →  sync_orchestrator.run_sync()
 
   → register_sync_run(status=in_progress)        # INSERT SyncRun
+
+  → for each Repository: branch_detect.refresh_default_branch()   # сверка ветки (ADR-006, #50);
+      # null/ошибка API — пропуск; мутация только через store.update_repository_default_branch
 
   → for each Repository (where archived_at IS NULL):
       → git_client.get_tree() + get_file_content(default_branch)

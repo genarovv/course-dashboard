@@ -28,7 +28,7 @@
 | `test_mr_sync.py` | модульный (FakeGit) | FR-12 (#40): MR-шаг обхода — маркеры с цитатой, вердикт «принято» (отрицание не считается), notes только у открытых, деградация NFR-2, выключение без конфига |
 | `test_mr_ui.py` | модульный + интеграционный (TestClient) | FR-12 (#41): MR в карточке (ready_for_merge, closed не ready, дата, маркер «не найден»), колонка «Процесс» в матрице, рендер |
 | `test_reconcile.py` | модульный (session fixture + фейк-воркер) | FR-5/FR-8 (G4 #11): идентификация пар без валидного вердикта, create_task через инжектированный воркер (ядро FR-5 — за гейтом Фазы 0), D25 «не мигаем», deferred-ретрай, идемпотентность свода, свод в конце run_sync |
-| `test_store.py` | модульный (session fixture) | Контракт store.py: ровно 4 `update_*`, нет `delete_*`, все `register_*` на месте, `normalize_url()`, CRUD-флоу репозиториев/runs/credentials/overrides, `find_verdict_by_quadruple` |
+| `test_store.py` | модульный (session fixture) | Контракт store.py: ровно 5 `update_*` (#50), нет `delete_*`, все `register_*` на месте, ограничитель «сервисы не присваивают default_branch напрямую», `normalize_url()`, CRUD-флоу репозиториев/runs/credentials/overrides, `find_verdict_by_quadruple` |
 
 ---
 

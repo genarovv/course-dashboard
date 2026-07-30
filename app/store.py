@@ -3,7 +3,7 @@
 Контракт «журнал vs состояние vs конфиг» — три категории (§3.5, ADR-005):
 - журнальные сущности (Rubric, ArtifactSnapshot, CoherenceVerdict, SyncRunRepository,
   создание Override) — только register_* (INSERT) и find_* (SELECT);
-- рабочее состояние — ровно 4 узких update_* (см. §3.5); delete_* нет вообще;
+- рабочее состояние — ровно 5 узких update_* (см. §3.5; 5-й — тикет #50); delete_* нет вообще;
 - конфиг-реконсиляция из config.yaml (config_*: Lesson, ArtifactDef, EdgeDef.rubric_id) —
   единственный вызывающий config_manager, закреплено тестом на импорт;
 - system_user не создаётся через store — И10: сид одной строки при миграции,
@@ -132,7 +132,18 @@ def register_override(session: Session, *, coherence_verdict_id: str, reason: st
     return override
 
 
-# ── СОСТОЯНИЕ: ровно 4 узких update_* (ARCHITECTURE §3.5) ────────────────────
+# ── СОСТОЯНИЕ: ровно 5 узких update_* (ARCHITECTURE §3.5; 5-й — тикет #50) ───
+
+
+def update_repository_default_branch(session: Session, repository_id: str, branch: str) -> None:
+    """ADR-006 (#50): смена наблюдаемой ветки — единственная легальная мутация Repository.
+
+    5-й узкий update_* (§3.5): детект default-ветки при импорте и обходе менял поле
+    напрямую в сервисах мимо store — узаконено здесь, прямые присваивания запрещены
+    ограничителем в tests/test_store.py.
+    """
+    repo = session.get(Repository, repository_id)
+    repo.default_branch = branch
 
 
 def update_sync_run_status(session: Session, sync_run_id: str, status: SyncStatus) -> None:
