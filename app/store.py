@@ -199,9 +199,18 @@ def config_upsert_artifact_def(
     session: Session, *, lesson_id: str, role, expected_pattern: str,
     template_relative_path: str | None = None,
 ) -> tuple[ArtifactDef, str]:
-    """FR-2: ожидаемый артефакт занятия. Возвращает (artifact_def, 'created'|'updated'|'unchanged')."""
+    """FR-2: ожидаемый артефакт занятия. Возвращает (artifact_def, 'created'|'updated'|'unchanged').
+
+    Ключ идентичности — (занятие, роль, паттерн): несколько паттернов одной роли =
+    альтернативные пути артефакта (пакет «12 артефактов», решение CEO 2026-07-30);
+    со старым ключом (занятие, роль) второй паттерн затирал первый.
+    """
     adef = session.scalar(
-        select(ArtifactDef).where(ArtifactDef.lesson_id == lesson_id, ArtifactDef.role == role)
+        select(ArtifactDef).where(
+            ArtifactDef.lesson_id == lesson_id,
+            ArtifactDef.role == role,
+            ArtifactDef.expected_pattern == expected_pattern,
+        )
     )
     if adef is None:
         adef = ArtifactDef(
@@ -210,8 +219,7 @@ def config_upsert_artifact_def(
         )
         session.add(adef)
         return adef, "created"
-    if (adef.expected_pattern, adef.template_relative_path) != (expected_pattern, template_relative_path):
-        adef.expected_pattern = expected_pattern
+    if adef.template_relative_path != template_relative_path:
         adef.template_relative_path = template_relative_path
         return adef, "updated"
     return adef, "unchanged"
