@@ -209,3 +209,17 @@ def test_reconcile_updates_probes_on_config_change(session):
     assert summary.artifact_defs_updated == 1  # смена набора проб = updated
     (adef,) = session.scalars(select(ArtifactDef))
     assert len(adef.content_probes) == 2
+
+
+@pytest.mark.anyio
+async def test_probes_apply_to_displaced_file(session):
+    """Пробы работают и для файла «не там» (displaced, BR-3): контент читается."""
+    _seed(session, PROBES)
+    git = FakeGit({"docs/CLAUDE.md": "Стек: <заполни>"})
+
+    await run_sync(session, git, triggered_by=SyncTrigger.manual)
+    session.flush()
+
+    (snap,) = session.scalars(select(ArtifactSnapshot))
+    assert snap.status == SnapshotStatus.partial  # wrong_place
+    assert {f["key"] for f in (snap.probe_findings or [])} == {"template_stub", "testing_standard"}

@@ -26,26 +26,33 @@ from app.services.sync_orchestrator import PendingPair, _match_artifact
 
 logger = logging.getLogger(__name__)
 
-MULTIFILE_HEADER = (
-    "Артефакт — связка файлов; ниже список путей всех файлов связки "
-    "(решение CEO 2026-07-30: для мультифайловой стороны суждение по именам "
-    "модулей и файлов, содержимое не передаётся):"
-)
+MULTIFILE_HEADER = "Артефакт — связка файлов. Список путей всех файлов:"
+
+
+def _is_glob(pattern: str) -> bool:
+    return any(ch in pattern for ch in "*?")
 
 
 async def _side_text(session: Session, git_client, repo, snap, tree_cache: dict) -> str:
     """Текст стороны пары для LLM.
 
-    Одиночный артефакт — содержимое файла. Мультифайловый (паттерн с глобом,
-    ≥2 совпадений на ревизии снапшота) — список путей связки: контент
-    «представителя» давал ложные break (боевой прогон #42, решение CEO 2026-07-30).
+    Одиночный артефакт — содержимое файла. Мультифайловый (паттерн с глобом) —
+    список путей ОБЪЕДИНЕНИЯ всех глоб-связок роли (решение CEO 2026-07-30 №2:
+    lib + functions + src = одна кодовая база; отдельные связки «теряли» задачи
+    другой половины). Контент «представителя» давал ложные break (прогон #42).
     """
     adef = store.find_artifact_def_by_id(session, snap.artifact_def_id)
     ref = snap.source_commit_sha or repo.default_branch
-    if adef is not None and any(ch in adef.expected_pattern for ch in "*?"):
+    if adef is not None and _is_glob(adef.expected_pattern):
         if ref not in tree_cache:
             tree_cache[ref] = await git_client.get_tree(repo.repo_url, repo.git_host, ref=ref)
-        matches = _match_artifact(adef, tree_cache[ref])
+        glob_defs = [
+            d for d in store.find_artifact_defs_by_role(session, adef.role)
+            if _is_glob(d.expected_pattern)
+        ]
+        matches = sorted({
+            path for d in glob_defs for path in _match_artifact(d, tree_cache[ref])
+        })
         if len(matches) > 1:
             return MULTIFILE_HEADER + "\n" + "\n".join(matches)
     return await git_client.get_file_content(
@@ -151,9 +158,12 @@ async def ensure_verdict(
     )
 
 
-def make_verdict_worker(session_factory, git_client, llm_client):
+def make_verdict_worker(session_factory, git_client, llm_client_factory):
     """Воркер для свода G4 (инъекция в run_sync/reconcile_llm_pairs).
 
+    llm_client_factory — фабрика (D6, находка 10 ревью C1-C2): клиент создаётся
+    на пару и закрывается в finally — fire-and-forget задачи живут дольше
+    HTTP-запроса, разделяемый клиент было некому закрыть.
     Каждая пара — собственная сессия с commit. Lock сериализует обработку пары
     ЦЕЛИКОМ (git + LLM + запись) — осознанный трейд-офф: параллелизм LLM-вызовов
     не нужен при 2 обходах/сутки, а единый writer SQLite не спорит сам с собой.
@@ -162,21 +172,27 @@ def make_verdict_worker(session_factory, git_client, llm_client):
 
     async def worker(pair: PendingPair) -> None:
         async with lock:
-            with session_factory() as session:
-                try:
-                    verdict = await ensure_verdict(session, git_client, llm_client, pair)
-                    if verdict is not None:
-                        session.commit()
-                except ValueError:
-                    # И2 нарушен — это баг конвейера, не временный сбой: пара будет
-                    # вечно «проверяется», ошибка требует расследования (fix по ревью C2)
-                    logger.exception(
-                        "ИНВАРИАНТ И2 НАРУШЕН: пара edge=%s repo=%s пропущена — "
-                        "расследовать источник пары",
-                        pair.edge_def_id, pair.repository_id,
-                    )
-                except Exception:
-                    logger.exception("Воркер вердиктов: пара edge=%s repo=%s не обработана",
-                                     pair.edge_def_id, pair.repository_id)
+            llm_client = llm_client_factory()
+            try:
+                with session_factory() as session:
+                    try:
+                        verdict = await ensure_verdict(session, git_client, llm_client, pair)
+                        if verdict is not None:
+                            session.commit()
+                    except ValueError:
+                        # И2 нарушен — это баг конвейера, не временный сбой: пара будет
+                        # вечно «проверяется», ошибка требует расследования (ревью C2)
+                        logger.exception(
+                            "ИНВАРИАНТ И2 НАРУШЕН: пара edge=%s repo=%s пропущена — "
+                            "расследовать источник пары",
+                            pair.edge_def_id, pair.repository_id,
+                        )
+                    except Exception:
+                        logger.exception("Воркер вердиктов: пара edge=%s repo=%s не обработана",
+                                         pair.edge_def_id, pair.repository_id)
+            finally:
+                aclose = getattr(llm_client, "aclose", None)
+                if aclose is not None:
+                    await aclose()
 
     return worker

@@ -11,7 +11,7 @@ from datetime import datetime
 
 import pytest
 from alembic.config import Config
-from sqlalchemy import create_engine, select, text
+from sqlalchemy import create_engine, text
 from sqlalchemy.orm import Session
 
 from alembic import command
@@ -108,18 +108,25 @@ def test_edge_with_parse_error_shows_deferred_reason(session):
     assert card["deferred_reason"] == "parse_error"
 
 
-def test_student_card_template_renders_deferred_reason(session, tmp_path, monkeypatch):
+def test_student_card_template_renders_deferred_reason(tmp_path, monkeypatch):
     """Шаблон карточки показывает человекочитаемую причину deferred."""
     from fastapi.testclient import TestClient
 
     from app.main import app
     from app.routes import get_session
 
-    monkeypatch.setenv("CD_ADMIN_PASSWORD", "pw")
+    monkeypatch.setenv("CD_ADMIN_PASSWORD", "pw")  # ДО миграции: сид админа читает env
+    db_path = tmp_path / "render.db"
+    cfg = Config("alembic.ini")
+    cfg.set_main_option("sqlalchemy.url", f"sqlite:///{db_path}")
+    command.upgrade(cfg, "head")
+    engine = create_engine(f"sqlite:///{db_path}")
+    session = Session(engine)
     edge, repo, rubric, snaps = _seed_edge_pair(session)
     _register_deferred(session, edge, rubric, snaps, "llm_unavailable")
+    repo_id = repo.id  # до закрытия сессии (detached instance)
     session.commit()
-    engine = session.get_bind()
+    session.close()
 
     def override_session():
         with Session(engine) as s:
@@ -130,10 +137,11 @@ def test_student_card_template_renders_deferred_reason(session, tmp_path, monkey
     try:
         client = TestClient(app)
         client.post("/login", data={"username": "admin", "password": "pw"})
-        html = client.get(f"/students/{repo.id}").text
+        html = client.get(f"/students/{repo_id}").text
         assert "LLM недоступна" in html
     finally:
         app.dependency_overrides.clear()
+        engine.dispose()
 
 
 # ── копилка: жизненный цикл LLMClient — клиент на пару, закрывается ─────────

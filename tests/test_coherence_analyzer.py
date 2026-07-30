@@ -336,7 +336,7 @@ async def test_worker_processes_pair_in_own_session(session, tmp_path):
         return Session(engine)
 
     llm = FakeLLM(result=dict(VALID_VERDICT))
-    worker = make_verdict_worker(session_factory, git, llm)
+    worker = make_verdict_worker(session_factory, git, lambda: llm)
 
     await worker(pair)
 
@@ -354,7 +354,7 @@ async def test_worker_swallows_i2_violation_with_error_log(session, caplog):
     engine = session.get_bind()
     other_repo_pair = PendingPair(**{**pair.__dict__, "repository_id": "несуществующий"})
 
-    worker = make_verdict_worker(lambda: Session(engine), git, FakeLLM(result=dict(VALID_VERDICT)))
+    worker = make_verdict_worker(lambda: Session(engine), git, lambda: FakeLLM(result=dict(VALID_VERDICT)))
     with caplog.at_level("ERROR"):
         await worker(other_repo_pair)  # не должно бросить
 
@@ -382,7 +382,7 @@ async def test_worker_serializes_writes(session):
             active -= 1
             return dict(VALID_VERDICT)
 
-    worker = make_verdict_worker(lambda: Session(engine), git, SlowLLM())
+    worker = make_verdict_worker(lambda: Session(engine), git, SlowLLM)
     await asyncio.gather(worker(pair), worker(pair))
 
     assert max_active == 1  # сериализовано

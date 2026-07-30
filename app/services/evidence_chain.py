@@ -47,6 +47,7 @@ def _edge_card(session: Session, repository_id: str, edge, llm_model: str) -> di
         "notes": None,
         "verdict_id": None,
         "override_active": False,
+        "deferred_reason": None,
     }
     snap_a = _latest_snapshot_for_role(session, repository_id, edge.source_role)
     snap_b = _latest_snapshot_for_role(session, repository_id, edge.target_role)
@@ -60,8 +61,13 @@ def _edge_card(session: Session, repository_id: str, edge, llm_model: str) -> di
         rubric_id=edge.rubric_id,
         llm_model=llm_model,
     )
-    if verdict is None or verdict.verdict == VerdictValue.deferred:
+    if verdict is None:
         card["state"] = "pending"  # В13: «проверяется» — вычислимое состояние
+        return card
+    if verdict.verdict == VerdictValue.deferred:
+        # D6 (#37): «отложено» отличимо от «проверяется» — с причиной (§5.2)
+        card["state"] = "deferred"
+        card["deferred_reason"] = str(verdict.deferred_reason) if verdict.deferred_reason else None
         return card
 
     card.update(

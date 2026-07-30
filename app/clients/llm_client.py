@@ -107,6 +107,11 @@ def validate_llm_response(raw: str) -> dict | None:
         return None
     if not isinstance(data["points"], list) or len(data["points"]) > 5:
         return None
+    # D6 (#37): элементы points — по канону {entity, quote, why} (data-model §1.10);
+    # точка без сущности бесполезна на защите — невалидный ответ
+    for point in data["points"]:
+        if not isinstance(point, dict) or not point.get("entity"):
+            return None
     return data
 
 

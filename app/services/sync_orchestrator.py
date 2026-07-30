@@ -216,10 +216,12 @@ async def _observe_artifact(
         status=status,
         file_path=file_path,
         content_hash=content_hash,
-        probe_findings=probe_findings,
         # FR-9: SHA головы ветки — свидетельство «такая версия существовала» (C4)
         source_commit_sha=head_sha if status != SnapshotStatus.not_found else None,
     )
+    if probe_findings is not None:
+        # как и у partial_reason: явный None стал бы json-'null' вместо SQL NULL (D6)
+        fields["probe_findings"] = probe_findings
     if partial_reason is not None:
         # явный None в JSON-колонке стал бы json-'null' и нарушил бы CHECK И8
         fields["partial_reason"] = partial_reason
