@@ -119,14 +119,14 @@ def test_import_null_default_branch_keeps_main(tmp_path, monkeypatch):
     app.dependency_overrides[get_session] = override_session
     app.dependency_overrides[get_git_client] = lambda: git_client
     try:
-        with TestClient(app) as client:
-            client.post("/login", data={"username": "admin", "password": PASSWORD})
-            response = client.post(
-                "/import-csv",
-                content="ФИО,Репозиторий\nПустов Пётр,https://gitlab.com/pustov/empty\n".encode(),
-            )
-            assert response.status_code == 200
-            assert response.json()["unavailable"] == 1
+        client = TestClient(app)  # без lifespan — как в client_and_engine
+        client.post("/login", data={"username": "admin", "password": PASSWORD})
+        response = client.post(
+            "/import-csv",
+            content="ФИО,Репозиторий\nПустов Пётр,https://gitlab.com/pustov/empty\n".encode(),
+        )
+        assert response.status_code == 200
+        assert response.json()["unavailable"] == 1
     finally:
         app.dependency_overrides.clear()
     with Session(engine) as s:

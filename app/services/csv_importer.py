@@ -53,7 +53,8 @@ async def import_csv(session: Session, csv_text: str, git_client: GitClient) -> 
         session.flush()
         try:
             actual = await git_client.fetch_default_branch(repo_url, git_host.value)
-            if actual != repo.default_branch:
+            # #48: пустой проект — default_branch: null; None в NOT NULL не пишем
+            if actual and actual != repo.default_branch:
                 repo.default_branch = actual
                 session.flush()
         except GitClientError:
