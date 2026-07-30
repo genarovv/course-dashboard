@@ -151,6 +151,7 @@ app/
 │   ├── matrix_builder.py    #   Проекция матрицы FR-4/6/7
 │   ├── evidence_chain.py    #   Хронология FR-9
 │   ├── csv_importer.py      #   Импорт CSV → Repository (FR-1)
+│   ├── branch_detect.py     #   Детект default-ветки — общий шаг импорта и обхода (ADR-006, #50)
 │   └── config_manager.py    #   config.yaml → синк в БД (FR-2)
 │
 ├── clients/
@@ -198,7 +199,7 @@ routes → services → store.py → models
 
 - **routes** вызывают services, возвращают Jinja2-шаблоны. Никакой бизнес-логики.
 - **services** вызывают `store.py` и clients. Могут вызывать другие services.
-- **store.py** — единая точка доступа к данным. Экспортирует `register_*` / `find_*`, ровно 4 узких `update_*` и функции конфиг-реконсиляции (вызывает только config_manager) — §3.5. Для журнальных сущностей update/delete физически не экспортируются. Внутри — прямые SQLAlchemy-запросы.
+- **store.py** — единая точка доступа к данным. Экспортирует `register_*` / `find_*`, ровно 5 узких `update_*` и функции конфиг-реконсиляции (вызывает только config_manager) — §3.5. Для журнальных сущностей update/delete физически не экспортируются. Внутри — прямые SQLAlchemy-запросы.
 - **clients** не знают о модели данных — работают с сырыми текстами и Pydantic-схемами.
 - **models** — pure SQLAlchemy declarative, без бизнес-методов. Enums — в `models/__init__.py` (StrEnum), единое место определений.
 
@@ -241,7 +242,7 @@ class EnumColumn(types.TypeDecorator):
 
 **1. Журнал (иммутабельно, только `register_*`):** `Rubric`, `ArtifactSnapshot`, `CoherenceVerdict`, `SyncRunRepository`, создание `Override`. Для них store.py не экспортирует update/delete — это и есть основной механизм И5 (плюс триггеры на 2 доказательных таблицах, §4).
 
-**2. Рабочее состояние (ровно 4 узких `update_*`):**
+**2. Рабочее состояние (ровно 5 узких `update_*`; 5-й добавлен тикетом #50):**
 
 | Функция | Мутация | Зачем |
 |---------|---------|-------|
@@ -249,6 +250,7 @@ class EnumColumn(types.TypeDecorator):
 | `update_override_revoked` | `Override.revoked_at` | обратимость отметки (FR-10); снятие — не удаление |
 | `update_user_lockout` | `SystemUser.failed_attempts`, `locked_until` | блокировка входа (FR-0) |
 | `update_credential_validity` | `GitCredential.is_valid`, `checked_at` | сигнал «обнови токен» (FR-3) |
+| `update_repository_default_branch` | `Repository.default_branch` | детект наблюдаемой ветки при импорте и обходе (ADR-006, #50); вызывается только через `services/branch_detect.py` |
 
 Других `update_*` в этой категории не появляется; `delete_*` нет вообще.
 

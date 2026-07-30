@@ -135,6 +135,17 @@ def register_override(session: Session, *, coherence_verdict_id: str, reason: st
 # ── СОСТОЯНИЕ: ровно 4 узких update_* (ARCHITECTURE §3.5) ────────────────────
 
 
+def update_repository_default_branch(session: Session, repository_id: str, branch: str) -> None:
+    """ADR-006 (#50): смена наблюдаемой ветки — единственная легальная мутация Repository.
+
+    5-й узкий update_* (§3.5): детект default-ветки при импорте и обходе менял поле
+    напрямую в сервисах мимо store — узаконено здесь, прямые присваивания запрещены
+    ограничителем в tests/test_store.py.
+    """
+    repo = session.get(Repository, repository_id)
+    repo.default_branch = branch
+
+
 def update_sync_run_status(session: Session, sync_run_id: str, status: SyncStatus) -> None:
     """FR-8, NFR-2: жизненный цикл обхода in_progress → completed/partial/failed."""
     run = session.get(SyncRun, sync_run_id)
