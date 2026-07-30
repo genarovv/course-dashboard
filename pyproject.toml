@@ -39,6 +39,3 @@ testpaths = ["tests"]
 # H1 (#52): coverage-гейт — порог применяется при запуске с --cov=app (hooks/pre-push)
 [tool.coverage.report]
 fail_under = 90
-
-[tool.coverage.run]
-omit = ["app/__pycache__/*"]

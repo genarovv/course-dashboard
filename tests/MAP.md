@@ -1,8 +1,8 @@
 # MAP — Тесты и покрытие course-dashboard
 
-**Дата:** 2026-07-28 (обновлено в MR FR-12: W-док + интерим)
+**Дата:** 2026-07-30 (обновлено в MR H1 #52: хуки/гейты)
 **Стек:** Python 3.13 · FastAPI · SQLAlchemy 2.x (Mapped) · SQLite (WAL) · Alembic · Jinja2+HTMX · bcrypt
-**Тестов:** 178, все ✅ · **Покрытие общее:** 98% (`pytest-cov`)
+**Тестов:** 184, все ✅ · **Покрытие общее:** 98% (`pytest-cov`, гейт `fail_under = 90` в hooks/pre-push)
 
 ---
 
@@ -17,6 +17,7 @@
 | `test_health.py` | интеграционный (TestClient + реальная БД) | FR-8 (I2 #13): /health без аутентификации — время последнего обхода, пары без вердикта, deferred по причинам, нули на пустой БД |
 | `test_evidence_chain.py` | модульный (session fixture) + интеграционный (TestClient) | FR-9 (D4 #14): хронология по observed_at (force-push), рёбра done/pending/no_data, вердикт+уверенность+≤5 точек, override-флаг, GET /students/{id} (200/303/404) |
 | `test_git_client.py` | модульный (MockTransport, без сети) | FR-3/NFR-4: GitHub и GitLab API — деревья + файлы + head SHA (FR-9), 401→GitAuthFailedError, 429→пауза+ретрай, исчерпание лимита, изоляция ошибок между репо |
+| `test_hooks.py` | интеграционный (tmp git-репо, subprocess) | H1 (#52): гейт commit-msg — правка/удаление существующих tests/ без «tests-change:» блокируется, с пометкой и для новых файлов проходит, не-тестовые правки свободны; coverage-гейт зафиксирован в pyproject |
 | `test_matrix_builder.py` | модульный (session fixture + alembic) | FR-4 (D1 #12): матрица «репо × занятие» — статусы ячеек, partial_reason, последний снапшот побеждает, «актуально на», пустая БД |
 | `test_dashboard_matrix.py` | интеграционный (TestClient + реальная БД) | FR-4 (D1 #12): GET / рендерит матрицу — строка репозитория, колонка занятия, partial_reason, «Актуально на», редирект без сессии |
 | `test_migrations.py` | интеграционный (alembic upgrade + raw SQL) | DDL: все 12 таблиц созданы, сид system_user, downgrade без ошибок, И1 (XOR), И3 (quad unique), И4 (one active override), И5 (append-only триггеры), И6 (norm URL unique), И8 (snapshot CHECK), И9+И11 (уникальность тройки/пары), И10 (reference uniqueness) |
