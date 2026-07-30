@@ -4,7 +4,7 @@
 
 ## 2026-07-30 (C1: llm_client — первый компонент ядра)
 - #35: `app/clients/llm_client.py` — `check_coherence` (DeepSeek, temperature 0, json_object, ключ/адрес/модель из settings) + `validate_llm_response` (schema-check §5.2, нормализация регистра, целостность счётчиков, ≤5 точек); 1 ретрай → None (deferred parse_error у вызывающего), HTTP/сеть → `LLMUnavailableError`. Промпт-каркас v1 канонически переехал сюда из мини-эвала.
-- AC «golden set прогоняется через клиента»: `evals/mini_eval.py` переведён на `LLMClient.check_coherence` (дубли промпта/валидации удалены); контрольный прогон — вердикты идентичны прямому (GS 2/2, R-1..R-3 ok, R-4 break). Тестов: +11 клиента, −9 дублей мини-эвала.
+- AC «golden set прогоняется через клиента»: `evals/mini_eval.py` переведён на `LLMClient.check_coherence` (дубли промпта/валидации удалены); контрольный прогон — вердикты идентичны прямому (GS 2/2, R-1..R-3 ok, R-4 break). Тестов: +11 клиента, −13 дублей мини-эвала (сьюта 212 → 210).
 
 ## 2026-07-30 (C3: мини-эвал — гейт Фазы 0 снят)
 - #34: скрипт мини-эвала `evals/mini_eval.py` (вне продукта): 6 пар — GS-1/GS-2 с эталонами + 4 реальные (С-01: REQUIREMENTS→DATA_MODEL, DATA_MODEL→ARCHITECTURE; С-02: jtbd→prd, prd→ARCHITECTURE); промпт по каркасу v1, валидация по контракту §5.2, `llm_model` фиксируется (канон Б1). Маппинг репо и кеш текстов студентов — вне git (`evals/pairs/`). Тестов 178 → 193 (+5 по ревью).
