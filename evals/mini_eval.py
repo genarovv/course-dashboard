@@ -404,7 +404,7 @@ async def run_all() -> None:
 
         async def call(prompt: str) -> str:
             resp = await http.post(
-                "https://api.deepseek.com/chat/completions",
+                f"{settings.deepseek_base_url.rstrip('/')}/chat/completions",
                 headers={"Authorization": f"Bearer {settings.deepseek_api_key}"},
                 json={
                     "model": model,

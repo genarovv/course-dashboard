@@ -1,5 +1,6 @@
 from pathlib import Path
 
+from pydantic import AliasChoices, Field
 from pydantic_settings import BaseSettings
 
 
@@ -10,7 +11,18 @@ class Settings(BaseSettings):
     # не в БД, не в коде, не в логах (решение CEO 2026-07-09)
     github_token: str = ""
     gitlab_token: str = ""
-    deepseek_api_key: str = ""
+    # C3 (#34): ключ и адрес DeepSeek принимаются и без префикса CD_ —
+    # так их задал CEO в .env (P2); base_url переопределяем (доступ через посредника)
+    deepseek_api_key: str = Field(
+        default="",
+        validation_alias=AliasChoices("CD_DEEPSEEK_API_KEY", "DEEPSEEK_API_KEY"),
+    )
+    deepseek_base_url: str = Field(
+        default="https://api.deepseek.com",
+        validation_alias=AliasChoices(
+            "CD_DEEPSEEK_BASE_URL", "DEEPSEEK_API_BASE_URL", "DEEPSEEK_BASE_URL"
+        ),
+    )
     deepseek_model: str = "deepseek-v4-flash"
     secret_key: str = "change-me"
     template_dir: str = str(Path(__file__).parent / "templates")
