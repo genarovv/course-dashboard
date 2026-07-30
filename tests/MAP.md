@@ -1,8 +1,8 @@
 # MAP — Тесты и покрытие course-dashboard
 
-**Дата:** 2026-07-30 (обновлено в MR H1 #52: хуки/гейты)
+**Дата:** 2026-07-30 (обновлено в MR D7: матрица «репозиторий × артефакт»)
 **Стек:** Python 3.13 · FastAPI · SQLAlchemy 2.x (Mapped) · SQLite (WAL) · Alembic · Jinja2+HTMX · bcrypt
-**Тестов:** 238, все ✅ · **Покрытие общее:** 98% (`pytest-cov`, гейт `fail_under = 90` в hooks/pre-push)
+**Тестов:** 252, все ✅ · **Покрытие общее:** 98% (`pytest-cov`, гейт `fail_under = 90` в hooks/pre-push)
 
 ---
 
@@ -23,6 +23,7 @@
 | `test_config_12_artifacts.py` | модульный + интеграционный (alembic, реальный config.yaml) | T3/#43 «12 артефактов»: +6 ролей enum, альтернативные пути на роль, мультистековые code/tests, ребро prd→architecture; реконсиляция хранит несколько паттернов (ключ занятие+роль+паттерн), агрегация best-wins внутри роли, карточка предпочитает found заготовке шаблона |
 | `test_matrix_builder.py` | модульный (session fixture + alembic) | FR-4 (D1 #12): матрица «репо × занятие» — статусы ячеек, partial_reason, последний снапшот побеждает, «актуально на», пустая БД |
 | `test_dashboard_matrix.py` | интеграционный (TestClient + реальная БД) | FR-4 (D1 #12): GET / рендерит матрицу — строка репозитория, колонка занятия, partial_reason, «Актуально на», редирект без сессии |
+| `test_artifact_matrix.py` | модульный (session fixture) + интеграционный (TestClient) | D7 (макет CEO): матрица «репо × артефакт» — порядок ролей по занятиям, best-wins между альтернативными путями, усечённый свод ячейки (частично-причины, разрыв с первой потерянной сущностью, гашение override), модалка деталей (файлы, рёбра с цитатами и заметками, кнопка FR-10), auth-гварды, 404 |
 | `test_migrations.py` | интеграционный (alembic upgrade + raw SQL) | DDL: все 12 таблиц созданы, сид system_user, downgrade без ошибок, И1 (XOR), И3 (quad unique), И4 (one active override), И5 (append-only триггеры), И6 (norm URL unique), И8 (snapshot CHECK), И9+И11 (уникальность тройки/пары), И10 (reference uniqueness) |
 | `test_sync_orchestrator.py` | модульный (FakeGitClient) + интеграционный (TestClient) | FR-8/FR-4 (G2 #9): классификация found/not_found, sha256 (в т.ч. мульти-совпадение паттерна и `**`-глоб), source_commit_sha (FR-9), инкрементальность D28, исходы всех 5 видов + detail, статусы SyncRun, архивные репо пропущены, POST /sync (сессия / X-Sync-Token / 401) |
 | `test_override_ui.py` | интеграционный (TestClient + реальная БД) | FR-10 (O2 #16): toggle создаёт/снимает Override (revoked_at, история строк), auth, 404, кнопка «ложный разрыв» в матрице и карточке, гашение подсветки, новая четвёрка не наследует отметку |

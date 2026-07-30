@@ -102,7 +102,7 @@ git config core.hooksPath hooks
 
 ## Статус
 
-Первая итерация кода в работе (занятия 9–13): модели + миграции, store, аутентификация, CSV-импорт, git_client, config_manager (FR-2), обход репозиториев с детектом заготовок (FR-8/FR-4/BR-3), свод-реконсиляция LLM-пар (без ядра), матрица (FR-4), карточка студента (FR-9), Override UI (FR-10), /health. Ядро FR-5 реализовано (гейт Фазы 0 снят 2026-07-30, ADR-004 Accepted): `llm_client` (C1) + `coherence_analyzer` (C2), воркер вердиктов подключён к своду через /sync; без ключа DeepSeek пары остаются в состоянии «проверяется». Трекер: [GitHub Issues](https://github.com/genarovv/course-dashboard/issues), карта тестов: [tests/MAP.md](tests/MAP.md).
+Первая итерация кода в работе (занятия 9–13): модели + миграции, store, аутентификация, CSV-импорт, git_client, config_manager (FR-2), обход репозиториев с детектом заготовок (FR-8/FR-4/BR-3), свод-реконсиляция LLM-пар (без ядра), матрица (FR-4), карточка студента (FR-9), Override UI (FR-10), /health. Дополнительный вид `GET /artifacts` (D7, занятие 14): матрица «репозиторий × артефакт» по макету CEO — цветокодированные ячейки с усечённым сводом анализа, модальное окно деталей (файлы, рёбра связности с цитатами, FR-10). Ядро FR-5 реализовано (гейт Фазы 0 снят 2026-07-30, ADR-004 Accepted): `llm_client` (C1) + `coherence_analyzer` (C2), воркер вердиктов подключён к своду через /sync; без ключа DeepSeek пары остаются в состоянии «проверяется». Трекер: [GitHub Issues](https://github.com/genarovv/course-dashboard/issues), карта тестов: [tests/MAP.md](tests/MAP.md).
 
 ## Деплой (VPS, ARCHITECTURE §5.5)
 

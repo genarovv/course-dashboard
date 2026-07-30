@@ -1,0 +1,55 @@
+{% extends "base.html" %}
+{% block title %}Артефакты — Course Dashboard{% endblock %}
+{% block content %}
+<header class="matrix-header">
+    <h1>Матрица «репозиторий × артефакт»</h1>
+    <p class="as-of as-of-note">Последний анализ: <b>{{ matrix.as_of }}</b></p>
+    <nav class="matrix-nav">
+        <a href="/">матрица занятий</a>
+        <a href="/logout">Выйти</a>
+    </nav>
+</header>
+
+{% if matrix.registry_count == 0 %}
+<div class="empty-registry">
+    <p><b>Реестр пуст</b> — обходить нечего. Загрузите репозитории:
+    <code>curl -b cookies -X POST /import-csv --data-binary @data/student-repos.csv</code></p>
+</div>
+{% endif %}
+
+<table class="matrix amatrix">
+    <thead>
+        <tr>
+            <th>Репозиторий</th>
+            {% for role in matrix.roles %}
+            <th>{{ role.title }}</th>
+            {% endfor %}
+        </tr>
+    </thead>
+    <tbody>
+        {% for repo in matrix.repositories %}
+        <tr>
+            <td class="repo-url"><a href="/students/{{ repo.id }}">{{ repo.repo_url }}</a></td>
+            {% for role in matrix.roles %}
+            {% set cell = matrix.cells[repo.id][role.key] %}
+            <td class="acell acell-{{ cell.status or 'none' }}{% if cell.break_count %} acell-break{% endif %}"
+                hx-get="/artifacts/{{ repo.id }}/{{ role.key }}"
+                hx-target="#modal-root" hx-swap="innerHTML"
+                role="button" tabindex="0"
+                title="{{ role.title }} — подробности">{{ cell.summary or "—" }}</td>
+            {% endfor %}
+        </tr>
+        {% endfor %}
+    </tbody>
+</table>
+
+<div id="modal-root"></div>
+<script>
+    document.addEventListener("keydown", function (e) {
+        if (e.key === "Escape") {
+            var overlay = document.querySelector(".modal-overlay");
+            if (overlay) overlay.remove();
+        }
+    });
+</script>
+{% endblock %}
