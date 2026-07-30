@@ -120,9 +120,11 @@ class FakeLLM:
         self.result = result
         self.error = error
         self.calls = []
+        self.models = []
 
-    async def check_coherence(self, source_text, target_text, rubric_text):
+    async def check_coherence(self, source_text, target_text, rubric_text, model=None):
         self.calls.append((source_text, target_text, rubric_text))
+        self.models.append(model)
         if self.error:
             raise self.error
         return self.result
@@ -216,6 +218,8 @@ async def test_ok_verdict_registered_with_counters(session):
     # рубрика и тексты дошли до LLM
     (call,) = llm.calls
     assert call == ("# PRD", "# DM", "правило ребра")
+    # fix по ревью C2: модель четвёрки передана клиенту явно (не подменяется settings)
+    assert llm.models == [LLM_MODEL]
 
 
 @pytest.mark.anyio
@@ -227,7 +231,9 @@ async def test_break_verdict_registered_with_points(session):
         entities_found=1,
         entities_excluded=0,
         entities_lost=2,
-        points=[{"entity": "оплата", "quote_a": "модуль оплаты", "why_not": "в B не найден"}],
+        # канон ключей points — {entity, quote, why} (решение CEO 2026-07-30):
+        # ровно эти ключи читают карточка студента и evidence_chain
+        points=[{"entity": "оплата", "quote": "модуль оплаты", "why": "в B не найден"}],
     )
     llm = FakeLLM(result=result)
 
@@ -236,7 +242,7 @@ async def test_break_verdict_registered_with_points(session):
 
     assert verdict.verdict == VerdictValue.break_
     assert verdict.entities_lost == 2
-    assert verdict.points[0]["entity"] == "оплата"
+    assert verdict.points[0] == {"entity": "оплата", "quote": "модуль оплаты", "why": "в B не найден"}
 
 
 # ── деградации §5.2 ─────────────────────────────────────────────────────────
@@ -341,6 +347,23 @@ async def test_worker_processes_pair_in_own_session(session, tmp_path):
 
 
 @pytest.mark.anyio
+async def test_worker_swallows_i2_violation_with_error_log(session, caplog):
+    """Fix по ревью C2: И2-нарушение не роняет loop, но логируется как инвариант."""
+    pair, git, rubric = _setup_pair(session)
+    session.commit()
+    engine = session.get_bind()
+    other_repo_pair = PendingPair(**{**pair.__dict__, "repository_id": "несуществующий"})
+
+    worker = make_verdict_worker(lambda: Session(engine), git, FakeLLM(result=dict(VALID_VERDICT)))
+    with caplog.at_level("ERROR"):
+        await worker(other_repo_pair)  # не должно бросить
+
+    assert any("И2" in r.message for r in caplog.records)
+    with Session(engine) as check:
+        assert list(check.scalars(select(CoherenceVerdict))) == []
+
+
+@pytest.mark.anyio
 async def test_worker_serializes_writes(session):
     """Единый writer SQLite: конкурентные пары обрабатываются последовательно (Lock)."""
     pair, git, rubric = _setup_pair(session)
@@ -351,7 +374,7 @@ async def test_worker_serializes_writes(session):
     max_active = 0
 
     class SlowLLM:
-        async def check_coherence(self, source_text, target_text, rubric_text):
+        async def check_coherence(self, source_text, target_text, rubric_text, model=None):
             nonlocal active, max_active
             active += 1
             max_active = max(max_active, active)

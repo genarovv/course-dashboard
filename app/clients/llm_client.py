@@ -51,8 +51,8 @@ B>>>
   "entities_excluded": <int>,
   "entities_lost": <int>,
   "points": [до 5 объектов {{"entity": "...",
-      "quote_a": "цитата A до 15 слов",
-      "why_not": "что искал в B и почему не засчитал"}}],
+      "quote": "цитата A до 15 слов",
+      "why": "что искал в B и почему не засчитал"}}],
   "notes": "до 3 строк"
 }}
 Целостность обязательна: entities_checked = entities_found + entities_excluded + entities_lost."""
@@ -120,12 +120,14 @@ class LLMClient:
         await self._http.aclose()
 
     async def check_coherence(
-        self, source_text: str, target_text: str, rubric_text: str
+        self, source_text: str, target_text: str, rubric_text: str, model: str | None = None
     ) -> dict | None:
         """Вердикт связности пары или None после 1 ретрая (→ deferred parse_error).
 
         temperature=0 + json_object — детерминизм прогона (канон Б1: вердикт
-        воспроизводим по четвёрке).
+        воспроизводим по четвёрке). model — явная модель четвёрки (fix по ревью C2:
+        вызывающий передаёт pair.llm_model, чтобы вердикт не приписался чужой модели);
+        по умолчанию settings.deepseek_model.
         """
         prompt = build_prompt(rubric_text, source_text, target_text)
         for _ in range(2):
@@ -134,7 +136,7 @@ class LLMClient:
                     f"{settings.deepseek_base_url.rstrip('/')}/chat/completions",
                     headers={"Authorization": f"Bearer {settings.deepseek_api_key}"},
                     json={
-                        "model": settings.deepseek_model,
+                        "model": model or settings.deepseek_model,
                         "messages": [{"role": "user", "content": prompt}],
                         "response_format": {"type": "json_object"},
                         "temperature": 0.0,

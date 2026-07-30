@@ -150,7 +150,7 @@ def test_validate_rejects_counter_mismatch():
 
 
 def test_validate_rejects_more_than_five_points():
-    points = [{"entity": f"e{i}", "quote_a": "q", "why_not": "w"} for i in range(6)]
+    points = [{"entity": f"e{i}", "quote": "q", "why": "w"} for i in range(6)]
     assert (
         validate_llm_response(
             make_content(
@@ -170,3 +170,47 @@ def test_validate_rejects_missing_field_and_bad_domain():
     del data["confidence"]
     assert validate_llm_response(json.dumps(data)) is None
     assert validate_llm_response(make_content(verdict="maybe")) is None
+    assert validate_llm_response(make_content(confidence="абсолютная")) is None
+
+
+# восстановленные контрактные тесты (fix по ревью C1: были утеряны при переносе из мини-эвала)
+
+
+def test_validate_rejects_negative_counters():
+    assert (
+        validate_llm_response(
+            make_content(entities_checked=1, entities_found=2, entities_excluded=0,
+                         entities_lost=-1)
+        )
+        is None
+    )
+
+
+def test_validate_rejects_bool_counters():
+    # bool проходит isinstance(int) — защищаемся от True/False в счётчиках
+    assert (
+        validate_llm_response(
+            make_content(entities_checked=2, entities_found=True, entities_excluded=1,
+                         entities_lost=0)
+        )
+        is None
+    )
+
+
+def test_validate_rejects_points_not_a_list():
+    assert validate_llm_response(make_content(points="нет точек")) is None
+
+
+def test_check_coherence_model_override_reaches_api():
+    """Fix по ревью C2: модель четвёрки (pair.llm_model) важнее settings."""
+    payloads = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        payloads.append(json.loads(request.content))
+        return _api_response(make_content())
+
+    result = _run(
+        _client(handler).check_coherence("a", "b", "r", model="deepseek-v4-flash-frozen")
+    )
+    assert result is not None
+    assert payloads[0]["model"] == "deepseek-v4-flash-frozen"

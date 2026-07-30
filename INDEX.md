@@ -16,7 +16,7 @@
 | Что нашло ревью архитектуры | `reviews/08-ревью-архитектуры-занятие-7.md` (14 находок; митинг упрощения: `../digital-twin/staging/митинг-упрощение-архитектуры-2026-07-09.md`) |
 | Архитектура / стек | `ARCHITECTURE.md` — **принята, v3 (2026-07-09)**: 3 слоя, журнал/состояние, свод-реконсиляция, cron, карта инвариантов |
 | Схема данных | `data-model.md` — итоговый канон (словарь + ER + инварианты + трассировка + сценарии); черновики поглощены, в `archive/` |
-| Почему так решили | `decisions/`: ADR-001 (ядро FR-5 — LLM-агент по правилам), ADR-002 (стек Python + FastAPI + SQLite), ADR-003 (superseded), ADR-004 (LLM-модель `deepseek-v4-flash` — Proposed, ждёт мини-эвала), ADR-005 (конфиг-реконсиляция store), ADR-006 (детект default-ветки), ADR-007 (FR-12: наблюдение канала сдачи MR) + протоколы совещаний в `decisions/meetings/` + курсовые ADR в `../digital-twin/ssot/course/decisions/` |
+| Почему так решили | `decisions/`: ADR-001 (ядро FR-5 — LLM-агент по правилам), ADR-002 (стек Python + FastAPI + SQLite), ADR-003 (superseded), ADR-004 (LLM-модель `deepseek-v4-flash` — **Accepted 2026-07-30**, мини-эвал: golden set 2/2), ADR-005 (конфиг-реконсиляция store), ADR-006 (детект default-ветки), ADR-007 (FR-12: наблюдение канала сдачи MR) + протоколы совещаний в `decisions/meetings/` + курсовые ADR в `../digital-twin/ssot/course/decisions/` |
 | Golden set ядра (эталонные пары + рубрика) | `evals/golden-set.md` |
  | Спорное решение / приоритизация | `roles/совещание.md` (протокол) + роли `roles/*.md`; скилл `/meeting` в Claude Code; протоколы — `decisions/meetings/` |
 | **План разработки до защиты** | **`plans/plan.md`** — вехи, задачи первой итерации в порядке выполнения, отложенное |

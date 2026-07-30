@@ -346,6 +346,9 @@ POST /sync  →  sync_orchestrator.run_sync()
 coherence_analyzer.ensure_verdict(edge, snapshot_a, snapshot_b)
   → find_verdict_by_quadruple(hash_a, hash_b, rubric_id, llm_model)
       → если найден И verdict != 'deferred': return (D25 — не мигаем)
+  → И2: оба снапшота одного репозитория, роли = ребру; нарушение → ValueError (баг конвейера)
+  → тексты из git по file_path @ source_commit_sha (контент не храним — С4);
+      GitClientError → return None БЕЗ записи: не вина LLM, пара вернётся следующим сводом
   → try:
         llm_response = await llm_client.check_coherence(source_text, target_text, rubric_text)
         validated = validate_llm_response(llm_response)     # schema-check + 1 ретрай

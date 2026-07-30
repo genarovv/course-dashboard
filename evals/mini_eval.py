@@ -221,7 +221,7 @@ def render_report(results: list[PairResult], llm_model: str) -> str:
         lines.append(f"- A: `{r.pair.source_label}` → B: `{r.pair.target_label}`")
         for p in r.data.get("points", []):
             lines.append(
-                f"- {p.get('entity', '?')} | «{p.get('quote_a', '')}» | {p.get('why_not', '')}"
+                f"- {p.get('entity', '?')} | «{p.get('quote', '')}» | {p.get('why', '')}"
             )
         notes = r.data.get("notes", "")
         if notes:

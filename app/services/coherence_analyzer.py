@@ -98,7 +98,10 @@ async def ensure_verdict(
         return None
 
     try:
-        validated = await llm_client.check_coherence(source_text, target_text, rubric.text)
+        # модель — из четвёрки пары (И3/Б1): вердикт не должен приписаться чужой модели
+        validated = await llm_client.check_coherence(
+            source_text, target_text, rubric.text, model=pair.llm_model
+        )
     except LLMUnavailableError as exc:
         logger.warning("Пара %s→%s: LLM недоступна (%s)", snap_a.file_path, snap_b.file_path, exc)
         return _register(
@@ -130,8 +133,9 @@ async def ensure_verdict(
 def make_verdict_worker(session_factory, git_client, llm_client):
     """Воркер для свода G4 (инъекция в run_sync/reconcile_llm_pairs).
 
-    Каждая пара — собственная сессия с commit; записи сериализованы Lock-ом
-    (единый writer SQLite, обход и так асинхронен вне тайминга NFR-1).
+    Каждая пара — собственная сессия с commit. Lock сериализует обработку пары
+    ЦЕЛИКОМ (git + LLM + запись) — осознанный трейд-офф: параллелизм LLM-вызовов
+    не нужен при 2 обходах/сутки, а единый writer SQLite не спорит сам с собой.
     """
     lock = asyncio.Lock()
 
@@ -142,6 +146,14 @@ def make_verdict_worker(session_factory, git_client, llm_client):
                     verdict = await ensure_verdict(session, git_client, llm_client, pair)
                     if verdict is not None:
                         session.commit()
+                except ValueError:
+                    # И2 нарушен — это баг конвейера, не временный сбой: пара будет
+                    # вечно «проверяется», ошибка требует расследования (fix по ревью C2)
+                    logger.exception(
+                        "ИНВАРИАНТ И2 НАРУШЕН: пара edge=%s repo=%s пропущена — "
+                        "расследовать источник пары",
+                        pair.edge_def_id, pair.repository_id,
+                    )
                 except Exception:
                     logger.exception("Воркер вердиктов: пара edge=%s repo=%s не обработана",
                                      pair.edge_def_id, pair.repository_id)
