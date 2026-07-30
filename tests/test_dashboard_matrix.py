@@ -1,4 +1,4 @@
-"""D1 (#12): GET / рендерит матрицу «репозиторий × занятие» (AC 1, 3, 4 на уровне HTTP).
+"""D1 (#12): GET /lessons рендерит матрицу «репозиторий × занятие» (D14 #58: переехала с /) (AC 1, 3, 4 на уровне HTTP).
 
 AC тикета #12:
   1. GET / показывает матрицу «репозиторий × занятие»
@@ -86,7 +86,7 @@ def test_dashboard_shows_matrix_with_repo_and_lesson(client_and_engine):
     client, engine = client_and_engine
     _seed(engine)
     _login(client)
-    response = client.get("/")
+    response = client.get("/lessons")
     assert response.status_code == 200
     assert "https://github.com/s01/proj" in response.text  # строка матрицы (AC 1)
     assert "Занятие 1" in response.text  # колонка матрицы (AC 1)
@@ -96,7 +96,7 @@ def test_dashboard_shows_partial_reason(client_and_engine):
     client, engine = client_and_engine
     _seed(engine)
     _login(client)
-    response = client.get("/")
+    response = client.get("/lessons")
     # AC 3; требование изменено решением CEO 2026-07-30 (D8): причины — по-русски
     assert "заготовка из шаблона" in response.text
 
@@ -105,7 +105,7 @@ def test_dashboard_shows_as_of_time(client_and_engine):
     client, engine = client_and_engine
     _seed(engine)
     _login(client)
-    response = client.get("/")
+    response = client.get("/lessons")
     assert "Актуально на" in response.text  # AC 4
 
 

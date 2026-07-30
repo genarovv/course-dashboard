@@ -3,12 +3,42 @@
 {% block content %}
 <header class="matrix-header">
     <h1>Матрица «репозиторий × артефакт»</h1>
-    <p class="as-of as-of-note">Актуально на {{ matrix.as_of }}</p>
+    <p class="as-of as-of-note{% if matrix.stale %} as-of-stale{% endif %}">Актуально на {{ matrix.as_of }}{% if matrix.stale %} — <b>обход старше 48 часов, данные могли устареть</b>{% endif %}</p>
     <nav class="matrix-nav">
-        <a href="/">матрица занятий</a>
+        <a href="/lessons">матрица занятий</a>
         <a href="/logout">Выйти</a>
     </nav>
 </header>
+
+{% if matrix.auth_banner %}
+<div class="auth-banner"><b>Обнови токен:</b> часть репозиториев отвечает «доступ запрещён» — это проблема нашего токена, не студентов.</div>
+{% endif %}
+
+{% if matrix.blind_spots %}
+<section class="blind-spots">
+    <h2>Слепая зона</h2>
+    <ul>
+        {% for spot in matrix.blind_spots %}
+        <li>{{ spot.repo_url }}{% if spot.detail %} — {{ spot.detail }}{% endif %}</li>
+        {% endfor %}
+    </ul>
+</section>
+{% endif %}
+
+{% if matrix.chronics %}
+<section class="chronics">
+    <h2>Хроники. Студенты в тишине</h2>
+    <ul>
+        {% for chronic in matrix.chronics %}
+        <li>{{ chronic.repo_url }} — нет новых артефактов {{ chronic.lessons_silent }} занятия(й)</li>
+        {% endfor %}
+    </ul>
+</section>
+{% endif %}
+
+{% if matrix.unchecked %}
+<p class="unchecked">Не проверялось в последний обход (лимит API): {% for u in matrix.unchecked %}{{ u.repo_url }}{% if not loop.last %}, {% endif %}{% endfor %}</p>
+{% endif %}
 
 {% if matrix.registry_count == 0 %}
 <div class="empty-registry">
@@ -16,6 +46,17 @@
     <code>curl -b cookies -X POST /import-csv --data-binary @data/student-repos.csv</code></p>
 </div>
 {% endif %}
+
+<div class="legend" aria-label="Легенда">
+    <span class="legend-item"><span class="swatch acell-found"></span>есть</span>
+    <span class="legend-item" title="Правило «частично»: неточное имя файла, не в ожидаемой папке или нетронутая заготовка из шаблона"><span class="swatch acell-partial"></span>частично&nbsp;ⓘ</span>
+    <span class="legend-item"><span class="swatch acell-not_found"></span>нет</span>
+    <span class="legend-item"><span class="swatch acell-none"></span>не наблюдался</span>
+    <span class="legend-item"><span class="swatch acell-mr"></span>сдача через MR</span>
+    <span class="legend-item"><span class="break-chip chip-high">⚠ разрыв</span> потеряна мысль источника (уверенность высокая)</span>
+    <span class="legend-item"><span class="break-chip chip-low">⚠ разрыв</span> уверенность средняя/низкая — перепроверь</span>
+    <span class="legend-item">«помечен ложным» — твоя отметка, разрыв погашен</span>
+</div>
 
 <table class="matrix amatrix">
     <thead>
@@ -32,11 +73,16 @@
             <td class="repo-url"><a href="/students/{{ repo.id }}" title="{{ repo.repo_url }}">{{ repo.name }}</a></td>
             {% for role in matrix.roles %}
             {% set cell = matrix.cells[repo.id][role.key] %}
-            <td class="acell acell-{{ cell.status or 'none' }}{% if cell.break_count %} acell-break{% endif %}"
+            <td class="acell acell-{{ 'mr' if cell.mr_channel else (cell.status or 'none') }}{% if cell.break %} acell-break{% endif %}"
                 hx-get="/artifacts/{{ repo.id }}/{{ role.key }}"
                 hx-target="#modal-root" hx-swap="innerHTML"
                 role="button" tabindex="0"
-                title="{{ role.title }} — подробности">{{ cell.summary or "—" }}</td>
+                title="{{ role.title }} — подробности">
+                {%- if cell.presence -%}<span class="presence">{{ cell.presence }}</span>{%- else -%}—{%- endif -%}
+                {%- if cell.break -%}
+                <span class="break-chip chip-{{ cell.break.confidence }}">⚠ {% if cell.break.count > 1 %}разрыв ×{{ cell.break.count }}{% if cell.break.entity %}: потеряна «{{ cell.break.entity }}»{% endif %}{% elif cell.break.entity %}потеряна «{{ cell.break.entity }}»{% else %}разрыв{% endif %}{% if cell.break.confidence != "high" %} · уверенность {{ CONFIDENCE_LABELS.get(cell.break.confidence, cell.break.confidence) }}{% endif %}</span>
+                {%- endif -%}
+            </td>
             {% endfor %}
         </tr>
         {% endfor %}

@@ -111,7 +111,7 @@ def _seed(engine) -> None:
 
 def test_matrix_statuses_in_russian(engine, client):
     _seed(engine)
-    html = client.get("/").text
+    html = client.get("/lessons").text
     assert ">есть<" in html
     assert ">частично<" in html
     assert ">нет<" in html
@@ -126,7 +126,7 @@ def test_matrix_statuses_in_russian(engine, client):
 
 def test_matrix_repo_short_name_with_full_url_in_title(engine, client):
     _seed(engine)
-    html = client.get("/").text
+    html = client.get("/lessons").text
     assert ">proj</a>" in html
     assert 'title="https://github.com/s01/proj"' in html
 
@@ -147,7 +147,7 @@ def test_as_of_contains_date_and_local_time(engine, monkeypatch):
 
 def test_breaks_and_process_moved_below_matrix(engine, client):
     _seed(engine)
-    html = client.get("/").text
+    html = client.get("/lessons").text
     matrix_end = html.index("</table>")  # конец первой (основной) таблицы
     assert html.index("Разрывы связности") > matrix_end
     assert html.index("Процесс") > matrix_end

@@ -26,6 +26,12 @@
             </ul>
         </section>
 
+        {% if details.mr_channel %}
+        <p class="state mr-note">Канал сдачи этого занятия — запрос на слияние: артефакт может
+            жить в ветке несмерженного MR. Смотри блок MR в карточке студента и колонку
+            «Процесс» матрицы занятий.</p>
+        {% endif %}
+
         <section class="modal-edges">
             <h3>Связи с другими артефактами</h3>
             {% for edge in details.edges %}

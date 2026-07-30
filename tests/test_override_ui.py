@@ -176,7 +176,7 @@ def test_matrix_shows_break_with_toggle_button(client_env):
         verdict_id = verdict.id
     _login(client)
 
-    html = client.get("/").text
+    html = client.get("/lessons").text
 
     assert f"/verdicts/{verdict_id}/override-toggle" in html  # кнопка на точке разрыва
     assert "ложный разрыв" in html
@@ -213,7 +213,7 @@ def test_overridden_break_not_highlighted_on_next_matrix(client_env):
     (break_card,) = matrix["breaks"][repo_id]
     assert break_card["override_active"] is True  # шаблон гасит подсветку по этому флагу
 
-    html = client.get("/").text
+    html = client.get("/lessons").text
     assert "отмечен как ложный" in html
 
 

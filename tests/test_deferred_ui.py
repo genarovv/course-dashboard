@@ -308,6 +308,14 @@ def test_artifact_modal_renders_deferred_not_svyazno(session):
     env = jinja2.Environment(
         loader=jinja2.FileSystemLoader("app/templates"), autoescape=True
     )
+    # D8: шаблоны используют глобали русских ярлыков (routes/__init__) — регистрируем как в приложении
+    from app.services.labels import CONFIDENCE_LABELS, PARTIAL_LABELS, STATUS_LABELS
+
+    env.globals.update(
+        STATUS_LABELS=STATUS_LABELS,
+        PARTIAL_LABELS=PARTIAL_LABELS,
+        CONFIDENCE_LABELS=CONFIDENCE_LABELS,
+    )
     html = env.get_template("dashboard/artifact_cell_modal.html").render(details=details)
     assert "отложено" in html
     assert "связно" not in html

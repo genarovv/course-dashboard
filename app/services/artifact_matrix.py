@@ -7,6 +7,8 @@
 заметки, FR-10) отдаёт build_cell_details — модальное окно в UI.
 """
 
+from datetime import date, datetime, timedelta
+
 from sqlalchemy.orm import Session
 
 from app import store, timeutil
@@ -14,6 +16,13 @@ from app.config import settings
 from app.models import SNAPSHOT_STATUS_RANK, ArtifactRole, SnapshotStatus, VerdictValue
 from app.services import evidence_chain
 from app.services.labels import PARTIAL_LABELS, repo_short_name
+from app.services.matrix_builder import blind_spots_and_signals
+
+# D10 (#54), US-A3: обход старше этого срока — явный флаг устаревания на стикере
+STALE_AFTER = timedelta(hours=48)
+
+# D13 (#57): ранжирование уверенности FR-5; неизвестное значение деградирует до «низкой»
+CONFIDENCE_RANK = {"high": 0, "medium": 1, "low": 2}
 
 ROLE_TITLES: dict[ArtifactRole, str] = {
     ArtifactRole.interview: "Интервью",
@@ -58,50 +67,99 @@ def _edges_touching(edges: list[dict], role: ArtifactRole) -> list[dict]:
     return [e for e in edges if role in (e["source_role"], e["target_role"])]
 
 
-def _cell(session: Session, repository_id: str, defs: list, edges: list[dict]) -> dict:
+def _cell(
+    session: Session, repository_id: str, defs: list, edges: list[dict],
+    mr_lesson_ids: set[str] | None = None,
+) -> dict:
     """Ячейка: статус + усечённый результат анализа (summary) + счётчики рёбер."""
     snap = _best_snapshot(session, repository_id, defs)
     touching = _edges_touching(edges, defs[0].role)
+    # D9 (#53), FR-12/US-B7: best-wins не нашёл артефакт, а роль ожидается
+    # в MR-занятии — честная плашка вместо красного «нет»
+    mr_channel = (
+        (snap is None or snap.status == SnapshotStatus.not_found)
+        and any(adef.lesson_id in (mr_lesson_ids or set()) for adef in defs)
+    )
     breaks = [
         e for e in touching
         if e["state"] == "done" and e["verdict"] == VerdictValue.break_ and not e["override_active"]
     ]
     pending = [e for e in touching if e["state"] == "pending"]
     deferred = [e for e in touching if e["state"] == "deferred"]  # D6 (#37)
-    oks = [
+    # D11 (#55), BR-2: решение преподавателя (override) не маскируется под вердикт агента
+    overridden = [
         e for e in touching
-        if e["state"] == "done" and (e["verdict"] == VerdictValue.ok or e["override_active"])
+        if e["state"] == "done" and e["verdict"] == VerdictValue.break_ and e["override_active"]
     ]
+    oks = [e for e in touching if e["state"] == "done" and e["verdict"] == VerdictValue.ok]
 
-    if snap is None:
-        summary = None
+    # D13 (#57): структурированный чип разрыва — сущность, счётчик, наивысшая уверенность
+    break_info = None
+    if breaks:
+        first_point = next((p for e in breaks for p in e["points"]), None)
+        top_conf = min(
+            (str(e["confidence"]) for e in breaks),
+            key=lambda c: CONFIDENCE_RANK.get(c, 3),
+        )
+        break_info = {
+            "count": len(breaks),
+            "entity": first_point["entity"] if first_point else None,
+            "confidence": top_conf if top_conf in CONFIDENCE_RANK else "low",
+        }
+
+    def break_tail() -> str:
+        lost = f": потеряна «{break_info['entity']}»" if break_info["entity"] else ""
+        count = f" ×{len(breaks)}" if len(breaks) > 1 else ""
+        return f"разрыв{count}{lost}"
+
+    # Приоритет свода (спека D11): разрыв > проверяется > помечен ложным > ок > статус;
+    # presence — та же строка без хвоста разрыва (хвост в UI живёт в чипе, D13)
+    if mr_channel:
+        presence = summary = "сдача через MR"
+    elif snap is None:
+        presence = summary = None
     elif snap.status == SnapshotStatus.not_found:
-        summary = "нет"
+        presence = summary = "нет"
     elif snap.status == SnapshotStatus.partial:
         reasons = [PARTIAL_LABELS.get(r, r) for r in (snap.partial_reason or [])]
-        summary = "частично · " + ", ".join(reasons) if reasons else "частично"
+        presence = "частично · " + ", ".join(reasons) if reasons else "частично"
+        summary = f"{presence} · {break_tail()}" if breaks else presence
     elif breaks:
-        first_point = next((p for e in breaks for p in e["points"]), None)
-        lost = f": потеряна «{first_point['entity']}»" if first_point else ""
-        count = f" ×{len(breaks)}" if len(breaks) > 1 else ""
-        summary = f"есть · разрыв{count}{lost}"
+        presence = "есть"
+        summary = f"есть · {break_tail()}"
     elif deferred:
-        summary = "есть · проверка отложена"  # D6: LLM недоступна / ответ не распарсился
+        # D6: LLM недоступна / ответ не распарсился — честнее «проверяется»
+        presence = summary = "есть · проверка отложена"
     elif pending:
-        summary = "есть · связность проверяется"
+        presence = summary = "есть · связность проверяется"
+    elif overridden:
+        presence = summary = "есть · помечен ложным"
     elif oks:
-        summary = "есть · связность ок"
+        presence = summary = "есть · связность ок"
     else:
-        summary = "есть"
+        presence = summary = "есть"
 
     return {
         "status": snap.status if snap else None,
         "partial_reason": snap.partial_reason if snap else None,
         "summary": summary,
+        "presence": presence,
+        "break": break_info,
+        "mr_channel": mr_channel,
         "break_count": len(breaks),
         "pending_count": len(pending),
         "deferred_count": len(deferred),
+        "overridden_count": len(overridden),
         "ok_count": len(oks),
+    }
+
+
+def _mr_lesson_ids(session: Session) -> set[str]:
+    """Занятия с каналом сдачи «запрос на слияние» (FR-12)."""
+    return {
+        lesson.id
+        for lesson in store.find_all_lessons(session)
+        if lesson.submission_channel == "mr"
     }
 
 
@@ -119,7 +177,8 @@ def _defs_by_role_in_course_order(session: Session) -> dict[ArtifactRole, list]:
 
 
 def build_artifact_matrix(
-    session: Session, llm_model: str | None = None
+    session: Session, llm_model: str | None = None,
+    today: date | None = None, now: datetime | None = None,
 ) -> dict:
     """Матрица «репозиторий × артефакт» для GET /artifacts."""
     resolved_model = llm_model or settings.deepseek_model
@@ -127,12 +186,13 @@ def build_artifact_matrix(
     active_repos = store.find_active_repositories(session)
     repos = [r for r in active_repos if r.id in checked_ids]
     defs_by_role = _defs_by_role_in_course_order(session)
+    mr_lesson_ids = _mr_lesson_ids(session)
 
     cells: dict[str, dict[str, dict]] = {}
     for repo in repos:
         edges = evidence_chain.edge_states(session, repo.id, resolved_model)
         cells[repo.id] = {
-            str(role): _cell(session, repo.id, defs, edges)
+            str(role): _cell(session, repo.id, defs, edges, mr_lesson_ids)
             for role, defs in defs_by_role.items()
         }
 
@@ -142,8 +202,13 @@ def build_artifact_matrix(
         f"{timeutil.to_display(last_run.started_at):%d.%m %H:%M} ({timeutil.offset_label()})"
         if last_run else "—"
     )
+    resolved_now = now or timeutil.utcnow()
+    stale = bool(last_run and resolved_now - last_run.started_at > STALE_AFTER)
 
     return {
+        "stale": stale,
+        # D10 (#54): те же сигналы FR-6/FR-7/FR-3, что в матрице занятий
+        **blind_spots_and_signals(session, active_repos, today or resolved_now.date()),
         "roles": [
             {"key": str(role), "title": ROLE_TITLES.get(role, str(role))}
             for role in defs_by_role
@@ -192,10 +257,16 @@ def build_cell_details(
     edges = _edges_touching(
         evidence_chain.edge_states(session, repository_id, resolved_model), role_enum
     )
+    best = _best_snapshot(session, repository_id, defs)
+    mr_channel = (
+        (best is None or best.status == SnapshotStatus.not_found)
+        and any(adef.lesson_id in _mr_lesson_ids(session) for adef in defs)
+    )
     return {
         "repository": {"id": repo.id, "repo_url": repo.repo_url},
         "role": str(role_enum),
         "title": ROLE_TITLES.get(role_enum, str(role_enum)),
         "files": files,
         "edges": edges,
+        "mr_channel": mr_channel,
     }
