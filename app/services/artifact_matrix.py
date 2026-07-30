@@ -179,8 +179,13 @@ def _defs_by_role_in_course_order(session: Session) -> dict[ArtifactRole, list]:
 def build_artifact_matrix(
     session: Session, llm_model: str | None = None,
     today: date | None = None, now: datetime | None = None,
+    sort: str | None = None,
 ) -> dict:
-    """Матрица «репозиторий × артефакт» для GET /artifacts."""
+    """Матрица «репозиторий × артефакт» для GET /artifacts.
+
+    sort="breaks" — «сначала проблемные» (D15, #59): по числу уникальных
+    рёбер-разрывов, стабильно относительно порядка реестра.
+    """
     resolved_model = llm_model or settings.deepseek_model
     checked_ids = store.find_checked_repository_ids(session)
     active_repos = store.find_active_repositories(session)
@@ -189,12 +194,21 @@ def build_artifact_matrix(
     mr_lesson_ids = _mr_lesson_ids(session)
 
     cells: dict[str, dict[str, dict]] = {}
+    row_breaks: dict[str, int] = {}
     for repo in repos:
         edges = evidence_chain.edge_states(session, repo.id, resolved_model)
         cells[repo.id] = {
             str(role): _cell(session, repo.id, defs, edges, mr_lesson_ids)
             for role, defs in defs_by_role.items()
         }
+        # D15 (#59): уникальные рёбра-разрывы — ребро видно в двух ячейках, считается раз
+        row_breaks[repo.id] = sum(
+            1 for e in edges
+            if e["state"] == "done" and e["verdict"] == VerdictValue.break_
+            and not e["override_active"]
+        )
+    if sort == "breaks":
+        repos = sorted(repos, key=lambda r: -row_breaks[r.id])  # sorted стабилен — реестр внутри
 
     last_run = store.find_last_sync_run(session)
     # Макет: «Время и дата последнего анализа: День.Месяц ЧЧ:ММ» (местное время, #32)
@@ -218,6 +232,8 @@ def build_artifact_matrix(
             for r in repos
         ],
         "cells": cells,
+        "row_breaks": row_breaks,
+        "sort": sort,
         "as_of": as_of,
         "registry_count": len(active_repos),
     }

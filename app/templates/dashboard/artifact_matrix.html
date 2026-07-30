@@ -58,13 +58,17 @@
     <span class="legend-item">«помечен ложным» — твоя отметка, разрыв погашен</span>
 </div>
 
+<div class="matrix-wrap">
 <table class="matrix amatrix">
     <thead>
         <tr>
-            <th>Репозиторий</th>
+            <th class="col-repo">Репозиторий</th>
             {% for role in matrix.roles %}
             <th>{{ role.title }}</th>
             {% endfor %}
+            <th class="col-breaks" title="Уникальные рёбра-разрывы репозитория; клик — сначала проблемные">
+                {% if matrix.sort == "breaks" %}<a href="?">Разрывы ▼</a>{% else %}<a href="?sort=breaks">Разрывы</a>{% endif %}
+            </th>
         </tr>
     </thead>
     <tbody>
@@ -84,10 +88,12 @@
                 {%- endif -%}
             </td>
             {% endfor %}
+            <td class="row-breaks{% if matrix.row_breaks[repo.id] %} row-breaks-warm{% endif %}">{{ matrix.row_breaks[repo.id] or "—" }}</td>
         </tr>
         {% endfor %}
     </tbody>
 </table>
+</div>
 
 <div id="modal-root"></div>
 <script>

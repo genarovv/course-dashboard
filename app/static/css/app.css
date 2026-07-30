@@ -31,6 +31,17 @@ body {
 .unchecked { color: #667; font-size: 0.85rem; }
 
 /* ── Таблицы матриц ───────────────────────────────────────────────────── */
+/* D15 (#59): закреплённые шапка и первая колонка при прокрутке */
+.matrix-wrap { overflow: auto; max-height: 78vh; margin-top: 1rem; }
+.matrix-wrap table.matrix { margin-top: 0; }
+.matrix-wrap thead th { position: sticky; top: 0; background: #fff; z-index: 3; }
+.matrix-wrap td.repo-url, .matrix-wrap th.col-repo {
+    position: sticky; left: 0; background: #fff; z-index: 2;
+}
+.matrix-wrap thead th.col-repo { z-index: 4; }
+.row-breaks { text-align: center; color: #8a90a0; }
+.row-breaks-warm { color: #8f0f0f; font-weight: 700; }
+.col-breaks a { color: inherit; text-decoration: none; border-bottom: 1px dashed #99a; }
 table.matrix { border-collapse: collapse; width: 100%; margin-top: 1rem; }
 table.matrix th, table.matrix td {
     border: 1px solid #c9ced8;

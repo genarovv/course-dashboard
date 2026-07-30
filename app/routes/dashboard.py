@@ -26,11 +26,17 @@ async def dashboard(request: Request, session: Session = Depends(get_session)):
 
 @router.get("/")
 @router.get("/artifacts")
-async def artifact_matrix_page(request: Request, session: Session = Depends(get_session)):
-    """D7/D14 (#58): матрица «репозиторий × артефакт» — главный экран (решение CEO 2026-07-30)."""
+async def artifact_matrix_page(
+    request: Request, session: Session = Depends(get_session), sort: str | None = None
+):
+    """D7/D14 (#58): матрица «репозиторий × артефакт» — главный экран (решение CEO 2026-07-30).
+
+    D15 (#59): ?sort=breaks — «сначала проблемные»; сортировка живёт в URL,
+    поэтому переживает POST-редиректы по referer (отметки FR-10).
+    """
     if "user_id" not in request.session:  # BR-4: teacher-only
         return RedirectResponse("/login", status_code=303)
-    matrix = build_artifact_matrix(session)
+    matrix = build_artifact_matrix(session, sort=sort if sort == "breaks" else None)
     return templates.TemplateResponse(request, "dashboard/artifact_matrix.html", {"matrix": matrix})
 
 
