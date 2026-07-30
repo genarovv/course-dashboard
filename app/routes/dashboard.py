@@ -15,17 +15,19 @@ from app.services.matrix_builder import build_matrix
 router = APIRouter()
 
 
-@router.get("/")
+@router.get("/lessons")
 async def dashboard(request: Request, session: Session = Depends(get_session)):
+    """D14 (#58): матрица занятий — второй вид, переехала с / на /lessons."""
     if "user_id" not in request.session:
         return RedirectResponse("/login", status_code=303)
     matrix = build_matrix(session)
     return templates.TemplateResponse(request, "dashboard/matrix.html", {"matrix": matrix})
 
 
+@router.get("/")
 @router.get("/artifacts")
 async def artifact_matrix_page(request: Request, session: Session = Depends(get_session)):
-    """D7: матрица «репозиторий × артефакт» по макету CEO."""
+    """D7/D14 (#58): матрица «репозиторий × артефакт» — главный экран (решение CEO 2026-07-30)."""
     if "user_id" not in request.session:  # BR-4: teacher-only
         return RedirectResponse("/login", status_code=303)
     matrix = build_artifact_matrix(session)
