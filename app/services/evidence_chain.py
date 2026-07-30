@@ -10,7 +10,7 @@ from sqlalchemy.orm import Session
 
 from app import store
 from app.config import settings
-from app.models import SNAPSHOT_STATUS_RANK, VerdictValue
+from app.models import SNAPSHOT_STATUS_RANK, SyncOutcome, VerdictValue
 
 MAX_POINTS = 5  # AC 2 / PRD §5.1: не более 5 подсвеченных точек на разрыв
 
@@ -49,11 +49,20 @@ def _edge_card(session: Session, repository_id: str, edge, llm_model: str) -> di
         "override_active": False,
         "deferred_reason": None,
         "computed_at": None,
+        "source_file": None,
+        "source_sha": None,
+        "target_file": None,
+        "target_sha": None,
     }
     snap_a = _latest_snapshot_for_role(session, repository_id, edge.source_role)
     snap_b = _latest_snapshot_for_role(session, repository_id, edge.target_role)
     if snap_a is None or snap_b is None:
         return card  # нет наблюдений обеих сторон — нет данных
+    # D18 (#62): доказательство на защите — файлы и коммиты обеих сторон вердикта
+    card.update(
+        source_file=snap_a.file_path, source_sha=snap_a.source_commit_sha,
+        target_file=snap_b.file_path, target_sha=snap_b.source_commit_sha,
+    )
 
     verdict = store.find_latest_verdict_for_quadruple(
         session,
@@ -158,4 +167,37 @@ def build_student_card(
         "edges": edges,
         "mrs": mrs,
         "probe_findings": probe_rows,
+    }
+
+
+def build_defense_card(
+    session: Session, repository_id: str, *, llm_model: str | None = None
+) -> dict | None:
+    """US-C2 (D18, #62): «дело» одного студента для защиты.
+
+    Поверх карточки: показываются только разрывы с уверенностью «высокая»
+    и не погашенные отметкой (митигация риска PRD §11); остальные разрывы
+    отсутствуют в выдаче. Связные рёбра — доказательная база «в плюс».
+    Слепая зона не роняет режим — честная пометка.
+    """
+    card = build_student_card(session, repository_id, llm_model=llm_model)
+    if card is None:
+        return None
+    edges = card["edges"]
+    sure_breaks = [
+        e for e in edges
+        if e["state"] == "done" and e["verdict"] == VerdictValue.break_
+        and str(e["confidence"]) == "high" and not e["override_active"]
+    ]
+    ok_edges = [
+        e for e in edges if e["state"] == "done" and e["verdict"] == VerdictValue.ok
+    ]
+    last = store.find_last_outcome_row(session, repository_id)
+    blind = last is not None and last.outcome == SyncOutcome.repo_unavailable
+    return {
+        **card,
+        "sure_breaks": sure_breaks,
+        "ok_edges": ok_edges,
+        "blind": blind,
+        "blind_detail": (last.detail or "") if blind else None,
     }

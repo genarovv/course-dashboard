@@ -173,6 +173,13 @@ table.extras { width: auto; min-width: 60%; }
 .conf-medium { background: #fdeeda; color: #713f12; }
 .conf-low { background: #f9dede; color: #7c1010; }
 .edge-card-link { margin-left: 0.6rem; font-size: 0.82rem; white-space: nowrap; }
+
+/* D18 (#62): режим защиты */
+.defense-link { display: inline-block; font-size: 0.75rem; color: #556; margin-left: 0.3rem; }
+.defense-header h1 { color: #14532d; }
+.evidence-meta { display: block; font-weight: 400; font-size: 0.8rem; color: #556; margin-top: 0.2rem; }
+.defense-breaks .edge { border-left: 4px solid #8f0f0f; }
+.defense-ok ul { margin: 0; padding-left: 1.25rem; font-size: 0.9rem; }
 .edge-overridden .verdict-break { color: #778; text-decoration: line-through; }
 .override { color: #667; font-size: 0.8rem; margin-left: 0.5rem; }
 .points { margin: 0.25rem 0; padding-left: 1.25rem; font-size: 0.85rem; }

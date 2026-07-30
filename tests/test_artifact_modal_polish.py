@@ -30,7 +30,7 @@ PASSWORD = "correct-horse"
 
 
 @pytest.fixture()
-def client(tmp_path, monkeypatch):
+def client_repo(tmp_path, monkeypatch):
     monkeypatch.setenv("CD_ADMIN_PASSWORD", PASSWORD)
     db_path = tmp_path / "test.db"
     cfg = Config("alembic.ini")
@@ -45,9 +45,9 @@ def client(tmp_path, monkeypatch):
 
     app.dependency_overrides[get_session] = override_session
     with Session(engine) as s:
-        globals()["_repo_id"] = _seed(s)
+        repo_id = _seed(s)
         s.commit()
-    yield TestClient(app)
+    yield TestClient(app), repo_id
     app.dependency_overrides.clear()
     engine.dispose()
 
@@ -95,26 +95,30 @@ def _login(client):
     client.post("/login", data={"username": "admin", "password": PASSWORD})
 
 
-def test_modal_confidence_badge(client):
+def test_modal_confidence_badge(client_repo):
+    client, _repo_id = client_repo
     _login(client)
     html = client.get(f"/artifacts/{_repo_id}/prd").text
     assert "conf-medium" in html  # класс уровня — стилизуемый бейдж (AC 1)
     assert "средняя" in html  # словами
 
 
-def test_modal_links_to_card_with_anchor(client):
+def test_modal_links_to_card_with_anchor(client_repo):
+    client, _repo_id = client_repo
     _login(client)
     html = client.get(f"/artifacts/{_repo_id}/prd").text
     assert f"/students/{_repo_id}#edge-prd-data_model" in html  # AC 2
 
 
-def test_student_card_has_edge_anchor(client):
+def test_student_card_has_edge_anchor(client_repo):
+    client, _repo_id = client_repo
     _login(client)
     html = client.get(f"/students/{_repo_id}").text
     assert 'id="edge-prd-data_model"' in html  # AC 2: якорь на ребре
 
 
-def test_modal_focusable_and_focus_script(client):
+def test_modal_focusable_and_focus_script(client_repo):
+    client, _repo_id = client_repo
     _login(client)
     modal = client.get(f"/artifacts/{_repo_id}/prd").text
     assert 'tabindex="-1"' in modal  # модалка фокусируема (AC 3)

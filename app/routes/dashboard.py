@@ -9,7 +9,7 @@ from sqlalchemy.orm import Session
 from app import store
 from app.routes import get_session, templates
 from app.services.artifact_matrix import build_artifact_matrix, build_cell_details
-from app.services.evidence_chain import build_student_card
+from app.services.evidence_chain import build_defense_card, build_student_card
 from app.services.matrix_builder import build_matrix
 
 router = APIRouter()
@@ -72,6 +72,19 @@ async def override_toggle(
             session, coherence_verdict_id=verdict_id, reason="отмечено преподавателем в UI"
         )
     return RedirectResponse(request.headers.get("referer", "/"), status_code=303)
+
+
+@router.get("/students/{repository_id}/defense")
+async def defense_mode(
+    repository_id: str, request: Request, session: Session = Depends(get_session)
+):
+    """D18 (#62), US-C2: режим защиты — дело одного студента, только уверенные разрывы."""
+    if "user_id" not in request.session:  # BR-4: teacher-only
+        return RedirectResponse("/login", status_code=303)
+    card = build_defense_card(session, repository_id)
+    if card is None:
+        raise HTTPException(status_code=404, detail="репозиторий не найден")
+    return templates.TemplateResponse(request, "dashboard/defense.html", {"card": card})
 
 
 @router.get("/students/{repository_id}")

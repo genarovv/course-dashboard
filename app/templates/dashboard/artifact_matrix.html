@@ -74,7 +74,8 @@
     <tbody>
         {% for repo in matrix.repositories %}
         <tr>
-            <td class="repo-url"><a href="/students/{{ repo.id }}" title="{{ repo.repo_url }}">{{ repo.name }}</a></td>
+            <td class="repo-url"><a href="/students/{{ repo.id }}" title="{{ repo.repo_url }}">{{ repo.name }}</a>
+                <a class="defense-link" href="/students/{{ repo.id }}/defense" title="Режим защиты: дело одного студента, только уверенные разрывы">защита</a></td>
             {% for role in matrix.roles %}
             {% set cell = matrix.cells[repo.id][role.key] %}
             <td class="acell acell-{{ 'mr' if cell.mr_channel else (cell.status or 'none') }}{% if cell.break %} acell-break{% endif %}"
