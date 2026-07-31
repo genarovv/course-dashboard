@@ -59,6 +59,9 @@
     <span class="legend-item"><span class="break-chip chip-high">⚠ разрыв</span> потеряна мысль источника (уверенность высокая)</span>
     <span class="legend-item"><span class="break-chip chip-low">⚠ разрыв</span> уверенность средняя/низкая — перепроверь</span>
     <span class="legend-item">«помечен ложным» — твоя отметка, разрыв погашен</span>
+    <span class="legend-item"><b>⚠ N</b> — непогашенные разрывы строки</span>
+    <span class="legend-item"><b>X/M</b> — сдано артефактов из ожидаемых файлами (частично — тоже сдано)</span>
+    <span class="legend-item"><b>мимо ревью</b> — merge request влит без вердикта ревьюера</span>
 </div>
 
 <div class="matrix-wrap">
@@ -67,12 +70,13 @@
         <tr>
             <th class="col-repo">Репозиторий
                 <span class="sort-links">
-                    {% if matrix.sort == "breaks" %}<a href="?">по разрывам ▼</a>{% else %}<a href="?sort=breaks">по разрывам</a>{% endif %}
-                    {% if matrix.sort == "lag" %}<a href="?">по отставанию ▼</a>{% else %}<a href="?sort=lag">по отставанию</a>{% endif %}
+                    {% if not matrix.sort %}<span class="sort-active">по реестру ▼</span>{% else %}<a href="?">по реестру</a>{% endif %}
+                    {% if matrix.sort == "breaks" %}<span class="sort-active">по разрывам ▼</span>{% else %}<a href="?sort=breaks">по разрывам</a>{% endif %}
+                    {% if matrix.sort == "lag" %}<span class="sort-active">по отставанию ▼</span>{% else %}<a href="?sort=lag">по отставанию</a>{% endif %}
                 </span>
             </th>
             {% for role in matrix.roles %}
-            <th>{{ role.title }}</th>
+            <th title="{{ role.hint }}">{{ role.title }}</th>
             {% endfor %}
         </tr>
     </thead>

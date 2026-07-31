@@ -139,7 +139,10 @@ def test_mr_lesson_not_found_cell_also_marked(session):
 
 
 def test_mr_note_rendered_with_card_link(tmp_path, monkeypatch):
-    """UI: пометка «сдача через MR, не наблюдается» + ссылка на карточку (AC-5 US-B7)."""
+    """UI: пометка MR-канала + ссылка на карточку (AC-5 US-B7).
+
+    tests-change D39 (итерация 5, решение CEO «на все да»): формулировка без
+    двойного отрицания — «сдаётся через merge request — файлов в основной ветке нет»."""
     from fastapi.testclient import TestClient
 
     from app.main import app
@@ -171,7 +174,7 @@ def test_mr_note_rendered_with_card_link(tmp_path, monkeypatch):
         app.dependency_overrides.clear()
         engine.dispose()
 
-    assert "сдача через MR, не наблюдается" in html  # честная формулировка ADR-007 (вариант А)
+    assert "сдаётся через merge request — файлов в основной ветке нет" in html  # ADR-007, редакция D39
     assert f"/students/{repo_id}" in html  # ссылка на карточку
 
 

@@ -244,7 +244,7 @@ def test_no_breaks_no_chip_no_review_badge(client, engine):
     _login(client)
     html = client.get("/artifacts").text
     assert "⚠ 1" not in html  # погашенный разрыв чипа не рождает
-    assert "мимо ревью" not in html  # K=0 — шильдика нет
+    assert "мимо ревью:" not in html  # K=0 — шильдика нет (легенда «мимо ревью» без двоеточия — D38)
 
 
 def test_sort_lag_via_http(client, engine):

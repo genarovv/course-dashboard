@@ -285,21 +285,24 @@ def _defense_events(session: Session, repository_id: str) -> list[dict]:
             "sync_run_id": snap.sync_run_id,
         })
 
-    # D24: «исчез» + «появился» одной роли в одном обходе = перенос файла
+    # D24: «исчез» + «появился» одной роли в одном обходе = перенос файла;
+    # ревью итерации 5, находка 7: пара схлопывается независимо от порядка сканирования
     collapsed: list[dict] = []
     for tr in transitions:
-        if tr["label"] == "появился":
-            gone = next(
-                (
-                    c for c in collapsed
-                    if c["label"] == "исчез" and c["role"] == tr["role"]
-                    and c["sync_run_id"] == tr["sync_run_id"]
-                ),
-                None,
-            )
-            if gone is not None:
-                collapsed.remove(gone)
-                tr = {**tr, "label": "перемещён", "from_path": gone["from_path"]}
+        pair_label = {"появился": "исчез", "исчез": "появился"}.get(tr["label"])
+        mate = next(
+            (
+                c for c in collapsed
+                if pair_label is not None and c["label"] == pair_label
+                and c["role"] == tr["role"] and c["sync_run_id"] == tr["sync_run_id"]
+            ),
+            None,
+        )
+        if mate is not None:
+            appeared = tr if tr["label"] == "появился" else mate
+            gone = mate if tr["label"] == "появился" else tr
+            collapsed.remove(mate)
+            tr = {**appeared, "label": "перемещён", "from_path": gone["from_path"]}
         collapsed.append(tr)
     events.extend(collapsed)
 
@@ -362,15 +365,14 @@ def build_defense_card(
         )
     case_summary = {
         "submitted": repo_progress(session, repository_id),
-        "breaks": sum(
-            1 for e in edges
-            if e["state"] == "done" and e["verdict"] == VerdictValue.break_
-            and not e["override_active"]
-        ),
+        # ревью итерации 5, находка 6: «разрывов: N» = числу разрывов НА ЭКРАНЕ
+        # (high, не погашенные) — цифры резюме и секции не расходятся перед комиссией
+        "breaks": len(sure_breaks),
         "mrs_total": len(card["mrs"]),
         "no_review": merged_no_review_count(mr_rows),
-        "work_from": dates[0] if dates else None,
-        "work_to": dates[-1] if dates else None,
+        # находка 1 (серьёзное): период — в местном времени (#32), как вся хронология
+        "work_from": to_display(dates[0]) if dates else None,
+        "work_to": to_display(dates[-1]) if dates else None,
     }
     return {
         **card,

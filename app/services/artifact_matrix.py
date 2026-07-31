@@ -16,7 +16,7 @@ from app.config import settings
 from app.models import SNAPSHOT_STATUS_RANK, ArtifactRole, SnapshotStatus, VerdictValue
 from app.services import evidence_chain
 from app.services.evidence_chain import merged_no_review_count
-from app.services.labels import PARTIAL_LABELS, ROLE_TITLES, repo_short_name
+from app.services.labels import PARTIAL_LABELS, ROLE_HINTS, ROLE_TITLES, repo_short_name
 from app.services.matrix_builder import blind_spots_and_signals
 
 # D10 (#54), US-A3: обход старше этого срока — явный флаг устаревания на стикере
@@ -86,10 +86,13 @@ def _cell(
             key=lambda c: CONFIDENCE_RANK.get(c, 3),
         )
         # D21 (#67): в чипе сущность усечена до ~80 символов (полный текст — в модалке);
-        # обрезка по строкам — CSS line-clamp
+        # обрезка по строкам — CSS line-clamp. D38: резать по границе слова
         entity = first_point["entity"] if first_point else None
         if entity and len(entity) > 80:
-            entity = entity[:80] + "…"
+            cut = entity[:80]
+            if " " in cut[40:]:  # не короче половины — узнавание по названию ценится
+                cut = cut[: cut.rfind(" ")]
+            entity = cut.rstrip() + "…"
         break_info = {
             "count": len(breaks),
             "entity": entity,
@@ -258,7 +261,12 @@ def build_artifact_matrix(
         # D10 (#54): те же сигналы FR-6/FR-7/FR-3, что в матрице занятий
         **blind_spots_and_signals(session, active_repos, today or resolved_now.date()),
         "roles": [
-            {"key": str(role), "title": ROLE_TITLES.get(role, str(role))}
+            {
+                "key": str(role),
+                "title": ROLE_TITLES.get(role, str(role)),
+                # D38: расшифровка колонки — подсказка для преподавателя без жаргона
+                "hint": ROLE_HINTS.get(role, ""),
+            }
             for role in defs_by_role
         ],
         "repositories": [

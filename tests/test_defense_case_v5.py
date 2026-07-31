@@ -26,6 +26,15 @@ LLM_MODEL = "deepseek-v4-flash"
 PASSWORD = "correct-horse"
 
 
+@pytest.fixture(autouse=True)
+def _utc_display(monkeypatch):
+    """Ревью итерации 5, находка 1: период работы показывается в местном времени;
+    для детерминизма — смещение 0 (кроме явного теста зоны)."""
+    from app.config import settings as cfg
+
+    monkeypatch.setattr(cfg, "tz_offset_minutes", 0)
+
+
 @pytest.fixture()
 def engine(tmp_path, monkeypatch):
     monkeypatch.setenv("CD_ADMIN_PASSWORD", PASSWORD)
@@ -116,6 +125,29 @@ def test_case_summary_values(engine):
     # период работы — по независимым датам хостинга
     assert summary["work_from"] == datetime(2026, 7, 19, 10, 0)
     assert summary["work_to"] == datetime(2026, 7, 30, 12, 0)
+
+
+def test_case_summary_work_dates_local_time(engine, monkeypatch):
+    """Ревью итерации 5, находка 1 (серьёзное): даты периода — в местном времени
+    (#32), как вся хронология дела; UTC съезжал бы на день рядом с вехами."""
+    from app.config import settings as cfg
+
+    monkeypatch.setattr(cfg, "tz_offset_minutes", 240)
+    with Session(engine) as s:
+        repo = _seed(s)
+        s.commit()
+        card = build_defense_card(s, repo.id, llm_model=LLM_MODEL)
+    assert card["case_summary"]["work_from"] == datetime(2026, 7, 19, 14, 0)
+
+
+def test_case_summary_breaks_matches_screen(engine):
+    """Ревью итерации 5, находка 6: «разрывов: N» в резюме = числу разрывов НА ЭКРАНЕ
+    (high, не погашенные) — иначе цифры расходятся перед комиссией."""
+    with Session(engine) as s:
+        repo = _seed(s)
+        s.commit()
+        card = build_defense_card(s, repo.id, llm_model=LLM_MODEL)
+    assert card["case_summary"]["breaks"] == len(card["sure_breaks"])
 
 
 def test_case_summary_rendered(client, engine):
