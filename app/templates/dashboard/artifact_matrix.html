@@ -81,9 +81,7 @@
             <td class="repo-url"><a href="/students/{{ repo.id }}" title="{{ repo.repo_url }}">{{ repo.name }}</a>
                 <a class="defense-link" href="/students/{{ repo.id }}/defense" title="Режим защиты: дело одного студента, только уверенные разрывы">защита проекта</a>
                 <span class="row-summary">
-                    {%- if matrix.row_breaks[repo.id] %}<span class="row-breaks-chip" title="уникальные рёбра-разрывы репозитория">⚠ {{ matrix.row_breaks[repo.id] }}</span>{% endif -%}
-                    <span class="row-progress" title="сдано ролей из ожидаемых (частично — тоже сдано)">{{ matrix.row_submitted[repo.id].x }}/{{ matrix.row_submitted[repo.id].m }}</span>
-                    {%- if matrix.row_no_review[repo.id] %}<span class="no-review" title="merge request смержен без вердикта ревьюера">мимо ревью: {{ matrix.row_no_review[repo.id] }}</span>{% endif -%}
+                    {% if matrix.row_breaks[repo.id] %}<span class="row-breaks-chip" title="уникальные рёбра-разрывы репозитория">⚠ {{ matrix.row_breaks[repo.id] }}</span> {% endif %}<span class="row-progress" title="сдано ролей из ожидаемых (частично — тоже сдано)">{{ matrix.row_submitted[repo.id].x }}/{{ matrix.row_submitted[repo.id].m }}</span>{% if matrix.row_no_review[repo.id] %} <span class="no-review" title="merge request смержен без вердикта ревьюера">мимо ревью: {{ matrix.row_no_review[repo.id] }}</span>{% endif %}
                 </span></td>
             {% for role in matrix.roles %}
             {% set cell = matrix.cells[repo.id][role.key] %}
