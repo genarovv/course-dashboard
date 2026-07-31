@@ -41,10 +41,11 @@
         {% endif %}
         {% if edge.notes %}<p class="notes">{{ edge.notes }}</p>{% endif %}
         {% if edge.verdict == "break" %}
-        <form method="post" action="/verdicts/{{ edge.verdict_id }}/override-toggle">
-            <button type="submit">
-                {{ "снять отметку «ложный разрыв»" if edge.override_active else "ложный разрыв" }}
+        <form method="post" action="/verdicts/{{ edge.verdict_id }}/override-toggle" class="override-form">
+            <button type="submit" class="override-button">
+                {{ "снять отметку «ложный разрыв»" if edge.override_active else "пометить ложным" }}
             </button>
+            <span class="override-note">отметка обратима</span>
         </form>
         {% endif %}
         {% endif %}
@@ -70,7 +71,7 @@
     <ul>
         {% for mr in card.mrs %}
         <li class="mr mr-{{ mr.state }}">
-            <b>{{ mr.title }}</b> — ветка {{ mr.source_branch }}, {{ mr.state }}{% if mr.updated_at %}, обновлён {{ fmt_dt(mr.updated_at) }}{% endif %}
+            <b>{{ mr.title }}</b> — ветка {{ mr.source_branch }}, {{ MR_STATE_LABELS.get(mr.state, mr.state) }}{% if mr.updated_at %}, обновлён {{ fmt_dt(mr.updated_at) }}{% endif %}
             {% if mr.ready_for_merge %}<span class="ready">принят ревьюером, ждёт merge</span>{% endif %}
             {% if mr.state == "merged" and not mr.reviewer_approved %}<span class="no-review">смержен мимо ревью</span>{% endif %}
             {% for key, marker in mr.markers.items() %}

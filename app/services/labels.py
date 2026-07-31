@@ -27,6 +27,33 @@ ROLE_TITLES: dict[ArtifactRole, str] = {
 }
 
 
+# D38: подсказки заголовков колонок — расшифровка для преподавателя без жаргона
+ROLE_HINTS: dict[ArtifactRole, str] = {
+    ArtifactRole.interview: "записи проблемных интервью",
+    ArtifactRole.persona: "портреты пользователей",
+    ArtifactRole.user_story: "пользовательские истории",
+    ArtifactRole.prd: "PRD — описание продукта и требований",
+    ArtifactRole.data_model: "схема данных проекта",
+    ArtifactRole.architecture: "архитектура решения",
+    ArtifactRole.plan: "план разработки",
+    ArtifactRole.code: "код проекта",
+    ArtifactRole.tests: "автотесты",
+    ArtifactRole.jtbd: "JTBD — задачи пользователя",
+    ArtifactRole.readme: "README — обзор проекта",
+    ArtifactRole.changelog: "CHANGELOG — журнал изменений",
+    ArtifactRole.adr: "ADR — журнал архитектурных решений",
+    ArtifactRole.claude_md: "CLAUDE.md — правила проекта для ИИ-агентов",
+    ArtifactRole.roles_roster: "состав ролей проекта",
+}
+
+# D39: статусы merge request по-русски (слаг остаётся в CSS-классах)
+MR_STATE_LABELS: dict[str, str] = {
+    "opened": "открыт",
+    "merged": "влит",
+    "closed": "закрыт",
+}
+
+
 def role_title(role) -> str:
     """D37: подпись роли для человека; неизвестная роль деградирует до слага."""
     try:

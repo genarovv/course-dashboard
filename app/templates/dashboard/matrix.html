@@ -47,6 +47,13 @@
     <code>curl -b cookies -X POST /import-csv --data-binary @data/student-repos.csv</code></p>
 </div>
 {% endif %}
+<div class="legend" aria-label="Легенда">
+    <span class="legend-item"><span class="swatch acell-found"></span>есть</span>
+    <span class="legend-item"><span class="swatch acell-partial"></span>частично</span>
+    <span class="legend-item"><span class="swatch acell-not_found"></span>нет</span>
+    <span class="legend-item"><span class="swatch acell-mr"></span>сдача через merge request (запрос на слияние)</span>
+    <span class="legend-item"><b>мимо ревью</b> — merge request влит без вердикта ревьюера</span>
+</div>
 <table class="matrix">
     {% set collapsed = matrix.collapsed_mr.numbers if matrix.collapsed_mr else [] %}
     <thead>
@@ -71,7 +78,7 @@
             {% set cell = matrix.cells[repo.id][lesson.number] %}
             <td class="cell cell-{{ cell.status or 'none' }}{% if cell.mr_channel %} cell-mr-channel{% endif %}">
                 {% if cell.mr_channel %}
-                <a class="status status-mr" href="/students/{{ repo.id }}" title="Канал сдачи этого занятия — запрос на слияние; наблюдение MR появится с FR-12">сдача через MR, не наблюдается</a>
+                <a class="status status-mr" href="/students/{{ repo.id }}" title="Канал сдачи этого занятия — запрос на слияние; наблюдение MR появится с FR-12">сдаётся через merge request — файлов в основной ветке нет</a>
                 {% elif cell.status %}
                 <span class="status">{{ cell.status_label }}</span>
                 {% if cell.partial_reason_labels %}
@@ -109,15 +116,16 @@
                 <td class="breaks">
                     {% for break_card in row.breaks %}
                     <div class="break{% if break_card.override_active %} break-overridden{% endif %}">
-                        {{ break_card.source_role }}→{{ break_card.target_role }}
+                        {{ role_title(break_card.source_role) }} → {{ role_title(break_card.target_role) }}
                         {% if break_card.override_active %}
                         <span class="override">отмечен как ложный</span>
                         {% endif %}
-                        <form method="post" action="/verdicts/{{ break_card.verdict_id }}/override-toggle">
-                            <button type="submit">
+                        <form method="post" action="/verdicts/{{ break_card.verdict_id }}/override-toggle" class="override-form">
+                            <button type="submit" class="override-button">
                                 {{ "снять отметку «ложный разрыв»" if break_card.override_active
-                                   else "ложный разрыв" }}
+                                   else "пометить ложным" }}
                             </button>
+                            <span class="override-note">отметка обратима</span>
                         </form>
                     </div>
                     {% else %}

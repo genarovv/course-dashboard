@@ -179,7 +179,7 @@ def test_matrix_shows_break_with_toggle_button(client_env):
     html = client.get("/lessons").text
 
     assert f"/verdicts/{verdict_id}/override-toggle" in html  # кнопка на точке разрыва
-    assert "ложный разрыв" in html
+    assert "пометить ложным" in html  # tests-change D38: кнопка-глагол
 
 
 def test_student_card_shows_toggle_button(client_env):
@@ -193,7 +193,7 @@ def test_student_card_shows_toggle_button(client_env):
     html = client.get(f"/students/{repo_id}").text
 
     assert f"/verdicts/{verdict_id}/override-toggle" in html
-    assert "ложный разрыв" in html
+    assert "пометить ложным" in html  # tests-change D38: кнопка-глагол
 
 
 # ── AC 4: отмеченный разрыв не подсвечивается, пока пара не изменилась ─────

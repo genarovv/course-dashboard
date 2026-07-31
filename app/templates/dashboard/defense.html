@@ -22,8 +22,8 @@
         {% if edge.notes %}<p class="defense-notes">{{ edge.notes }}</p>{% endif %}
         <p class="verdict verdict-break">разрыв
             <span class="evidence-meta">вердикт от {{ fmt_dt(edge.computed_at) }} ·
-                <code>{{ edge.source_file }}</code> @{{ (edge.source_sha or "—")[:8] }} →
-                <code>{{ edge.target_file }}</code> @{{ (edge.target_sha or "—")[:8] }}</span>
+                <code>{{ edge.source_file }}</code> → <code>{{ edge.target_file }}</code>
+                {% if edge.source_sha == edge.target_sha %}@{{ (edge.source_sha or "—")[:8] }}{% else %}@{{ (edge.source_sha or "—")[:8] }} → @{{ (edge.target_sha or "—")[:8] }}{% endif %}</span>
         </p>
         {% if edge.points %}
         <details class="points-details">
@@ -48,7 +48,7 @@
         {% for edge in card.ok_edges %}
         <li>{{ role_title(edge.source_role) }} → {{ role_title(edge.target_role) }} — связно
             <span class="evidence-meta">({{ fmt_dt(edge.computed_at) }},
-                @{{ (edge.source_sha or "—")[:8] }} → @{{ (edge.target_sha or "—")[:8] }})</span></li>
+                {% if edge.source_sha == edge.target_sha %}@{{ (edge.source_sha or "—")[:8] }}{% else %}@{{ (edge.source_sha or "—")[:8] }} → @{{ (edge.target_sha or "—")[:8] }}{% endif %})</span></li>
         {% endfor %}
     </ul>
 </section>
@@ -64,7 +64,7 @@
             <tr>
                 <td>!{{ mr.number }} {{ mr.title }}</td>
                 <td><code>{{ mr.source_branch }}</code></td>
-                <td>{{ mr.state }}</td>
+                <td>{{ MR_STATE_LABELS.get(mr.state, mr.state) }}</td>
                 <td>{{ fmt_dt(mr.updated_at) }}</td>
             </tr>
             {% endfor %}
@@ -101,7 +101,7 @@
             {% elif ev.kind == "mr" %}
             <tr class="mr-event">
                 <td>{{ fmt_dt(ev.when) }} <span class="obs-note">дата хостинга</span></td>
-                <td>MR !{{ ev.number }} — {{ ev.state }}</td>
+                <td>MR !{{ ev.number }} — {{ MR_STATE_LABELS.get(ev.state, ev.state) }}</td>
                 <td><code>{{ ev.source_branch }}</code></td>
                 <td>—</td>
             </tr>

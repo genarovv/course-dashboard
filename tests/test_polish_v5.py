@@ -171,7 +171,7 @@ def test_column_headers_have_tooltips(client, engine):
     _login(client)
     html = client.get("/artifacts").text
     assert "описание продукта" in html  # PRD — title-подсказка
-    assert "журнал" in html  # ADR/CHANGELOG — расшифровка
+    assert "схема данных проекта" in html  # data_model — расшифровка
 
 
 # ── D39 ───────────────────────────────────────────────────────────────────

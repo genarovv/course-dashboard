@@ -313,6 +313,7 @@ def test_artifact_modal_renders_deferred_not_svyazno(session):
         CONFIDENCE_LABELS,
         PARTIAL_LABELS,
         STATUS_LABELS,
+        repo_short_name,
         role_title,
     )
 
@@ -320,6 +321,7 @@ def test_artifact_modal_renders_deferred_not_svyazno(session):
         STATUS_LABELS=STATUS_LABELS,
         PARTIAL_LABELS=PARTIAL_LABELS,
         CONFIDENCE_LABELS=CONFIDENCE_LABELS,
+        repo_short_name=repo_short_name,
         role_title=role_title,
     )
     html = env.get_template("dashboard/artifact_cell_modal.html").render(details=details)

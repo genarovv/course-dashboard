@@ -1,7 +1,7 @@
 <div class="modal-overlay" onclick="if (event.target === this) this.remove()">
     <div class="modal" role="dialog" aria-label="{{ details.title }} — подробности" tabindex="-1">
         <header class="modal-header">
-            <h2>{{ details.title }}</h2>
+            <h2>{{ details.title }} — {{ repo_short_name(details.repository.repo_url) }}</h2>
             <p class="repo-url"><a href="{{ details.repository.repo_url }}" title="{{ details.repository.repo_url }}">открыть репозиторий</a> · <a href="/students/{{ details.repository.id }}">карточка студента</a></p>
             <button type="button" class="modal-close" aria-label="Закрыть"
                     onclick="this.closest('.modal-overlay').remove()">×</button>
@@ -19,7 +19,7 @@
                     {% if f.source_commit_sha %}<span class="sha">@{{ f.source_commit_sha[:8] }}</span>{% endif %}
                     {% else %}
                     <code>{{ f.expected_pattern }}</code>
-                    <span class="file-status file-none">{% if f.status %}нет{% else %}не наблюдался{% endif %}</span>
+                    <span class="file-status file-none">{% if f.status %}нет{% else %}ожидался, не найден{% endif %}</span>
                     {% endif %}
                 </li>
                 {% endfor %}
@@ -58,7 +58,7 @@
                 {# D21 (#67): курирование — видимая кнопка-действие в блоке разрыва #}
                 <form method="post" action="/verdicts/{{ edge.verdict_id }}/override-toggle" class="override-form">
                     <button type="submit" class="override-button">
-                        {{ "снять отметку «ложный разрыв»" if edge.override_active else "ложный разрыв" }}
+                        {{ "снять отметку «ложный разрыв»" if edge.override_active else "пометить ложным" }}
                     </button>
                     <span class="override-note">отметка обратима</span>
                 </form>
