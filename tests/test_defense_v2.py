@@ -424,13 +424,15 @@ def test_muted_breaks_section(client, engine):
     assert "override-toggle" not in html  # по-прежнему без кнопок FR-10
 
 
-def test_no_muted_breaks_no_section(client, engine):
+def test_no_muted_breaks_explicit_zero(client, engine):
+    """tests-change D36 (решение CEO №3, 2026-07-31): негативный AC D19 «секция
+    не рисуется» отменён — при нуле погашенных показывается явный ноль."""
     with Session(engine) as s:
         repo = _seed_break_with_override(s)
         s.commit()
         repo_id = repo.id
     _login(client)
-    assert "Погашенные разрывы" not in client.get(f"/students/{repo_id}/defense").text
+    assert "погашенных разрывов: 0" in client.get(f"/students/{repo_id}/defense").text
 
 
 def test_mr_history_section(client, engine):
