@@ -29,6 +29,7 @@ python -m venv .venv && source .venv/bin/activate   # Windows: .venv\Scripts\act
 pip install -e ".[dev]"
 
 # 4. Миграции (создаст course_dashboard.db + seed-админа)
+cp course_dashboard.db course_dashboard.db.bak-$(date +%F)  # бэкап обязателен: миграции могут чинить данные (D23)
 alembic upgrade head
 
 # 5. Сервер (port 8000)

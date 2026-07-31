@@ -144,10 +144,10 @@ def test_chip_entity_truncated_at_word_boundary(engine):
         s.commit()
         matrix = build_artifact_matrix(s, llm_model=LLM_MODEL)
     chip = matrix["cells"][repo.id]["prd"]["break"]["entity"]
-    assert chip.endswith("…") and len(chip) <= 81
-    assert not chip[:-1].endswith(("требовани", "каждо"))  # не посреди слова
-    assert chip[:-1] == chip[:-1].rstrip() + ""  # без висячего пробела
-    assert chip[:-1].rstrip() == chip[:-1]
+    # ревью итерации 5, находка 4: проверяем точное ожидание, а не отсутствие фрагментов
+    expected_cut = LONG_ENTITY[:80][: LONG_ENTITY[:80].rfind(" ")].rstrip()
+    assert chip == expected_cut + "…"
+    assert LONG_ENTITY.startswith(chip[:-1]) and LONG_ENTITY[len(chip) - 1] == " "
 
 
 def test_override_button_verb_and_note_everywhere(client, engine):

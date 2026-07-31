@@ -90,7 +90,7 @@
 <section class="timeline">
     <h2>Хронология</h2>
     <table>
-        <thead><tr><th>Когда</th><th>Событие</th><th>Файл</th><th>Commit</th></tr></thead>
+        <thead><tr><th>Когда</th><th>Событие</th><th>Файл</th><th>Коммит</th></tr></thead>
         <tbody>
             {% for ev in card.events %}
             {% if ev.kind == "lesson" %}
@@ -120,7 +120,7 @@
     <details class="timeline-full">
         <summary>полный лог наблюдений ({{ card.timeline|length }})</summary>
         <table>
-            <thead><tr><th>Когда</th><th>Артефакт</th><th>Статус</th><th>Файл</th><th>Commit</th></tr></thead>
+            <thead><tr><th>Когда</th><th>Артефакт</th><th>Статус</th><th>Файл</th><th>Коммит</th></tr></thead>
             <tbody>
                 {% for entry in card.timeline %}
                 <tr>
