@@ -309,12 +309,18 @@ def test_artifact_modal_renders_deferred_not_svyazno(session):
         loader=jinja2.FileSystemLoader("app/templates"), autoescape=True
     )
     # D8: шаблоны используют глобали русских ярлыков (routes/__init__) — регистрируем как в приложении
-    from app.services.labels import CONFIDENCE_LABELS, PARTIAL_LABELS, STATUS_LABELS
+    from app.services.labels import (
+        CONFIDENCE_LABELS,
+        PARTIAL_LABELS,
+        STATUS_LABELS,
+        role_title,
+    )
 
     env.globals.update(
         STATUS_LABELS=STATUS_LABELS,
         PARTIAL_LABELS=PARTIAL_LABELS,
         CONFIDENCE_LABELS=CONFIDENCE_LABELS,
+        role_title=role_title,
     )
     html = env.get_template("dashboard/artifact_cell_modal.html").render(details=details)
     assert "отложено" in html
