@@ -15,8 +15,8 @@ from app import store, timeutil
 from app.config import settings
 from app.models import SNAPSHOT_STATUS_RANK, ArtifactRole, SnapshotStatus, VerdictValue
 from app.services import evidence_chain
-from app.services.labels import PARTIAL_LABELS, repo_short_name
 from app.services.evidence_chain import merged_no_review_count
+from app.services.labels import PARTIAL_LABELS, repo_short_name
 from app.services.matrix_builder import blind_spots_and_signals
 
 # D10 (#54), US-A3: обход старше этого срока — явный флаг устаревания на стикере
