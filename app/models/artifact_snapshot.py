@@ -37,6 +37,9 @@ class ArtifactSnapshot(Base):
     partial_reason: Mapped[dict | None] = mapped_column(JSON, nullable=True)
     file_path: Mapped[str | None] = mapped_column(String(500), nullable=True)
     source_commit_sha: Mapped[str | None] = mapped_column(String(40), nullable=True)
+    # D19 (#65): дата головного коммита из Git API — доказательство «когда сделано»
+    # против «когда увидели»; NULL у старых снапшотов и при сбое даты (не падение)
+    source_commit_date: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     content_hash: Mapped[str | None] = mapped_column(String(64), nullable=True)
     # T2 (#44): сработавшие пробы содержимого — [{key, label}]; признак карточки,
     # статус не меняет (BR-3); входит в наблюдение D28

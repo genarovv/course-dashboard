@@ -98,6 +98,8 @@ class ReloadSummary(BaseModel):
     lessons_updated: int = 0
     artifact_defs_created: int = 0
     artifact_defs_updated: int = 0
+    # D23 (итерация 5): удалённые дубли определений (след смены ключа реконсиляции)
+    artifact_defs_deduped: int = 0
     edges_created: int = 0
     edges_repointed: int = 0
     rubrics_registered: int = 0
@@ -125,6 +127,8 @@ def reconcile(session: Session, config: ConfigYAML) -> ReloadSummary:
     Удалений нет by design: ушедшие из YAML сущности остаются в БД.
     """
     summary = ReloadSummary()
+    # D23: сперва чистка дублей (см. store) — upsert ниже работает по чистому ключу
+    summary.artifact_defs_deduped = store.config_dedupe_artifact_defs(session)
 
     for lesson_cfg in config.lessons:
         lesson, outcome = store.config_upsert_lesson(

@@ -111,6 +111,30 @@ class GitClient:
         )
         return data["id"]
 
+    async def get_head_commit_date(
+        self, repo_url: str, git_host: str, ref: str = "main"
+    ) -> str | None:
+        """D19 (#65): дата головного коммита ветки (сырая ISO-строка хостинга).
+
+        Отдельный вызов того же эндпоинта, что get_head_sha: контракт get_head_sha
+        не меняется (его используют фейки существующих тестов) — цена одного
+        лишнего запроса на репозиторий за обход. API не вернул дату — None.
+        """
+        host, path = _parse_repo(repo_url)
+        if git_host == "GitHub":
+            data = await self._request_json(
+                f"https://api.github.com/repos/{path}/commits/{quote(ref)}",
+                self._github_headers(),
+            )
+            # "committer": null у коммитов без учётки GitHub — None, не AttributeError
+            return ((data.get("commit") or {}).get("committer") or {}).get("date")
+        data = await self._request_json(
+            f"https://{host}/api/v4/projects/{quote(path, safe='')}"
+            f"/repository/commits/{quote(ref, safe='')}",
+            self._gitlab_headers(),
+        )
+        return data.get("committed_date")
+
     async def fetch_default_branch(self, repo_url: str, git_host: str) -> str:
         """Определить дефолтную ветку репозитория через API (ADR-006)."""
         host, path = _parse_repo(repo_url)

@@ -3,7 +3,9 @@
 {% block content %}
 <header class="matrix-header">
     <h1>Матрица «репозиторий × занятие»</h1>
-    <p class="as-of as-of-note">Актуально на {{ matrix.as_of }}</p>
+    <p class="as-of as-of-note">Актуально на {{ matrix.as_of }}
+        <button type="button" class="sync-now"
+                onclick="if (confirm('Запустить обход сейчас? Займёт до пары минут.')) { this.disabled = true; this.textContent = 'обход идёт…'; fetch('/sync', {method: 'POST'}).then(function () { location.reload(); }, function () { location.reload(); }); }">обновить сейчас</button></p>
     <nav class="matrix-nav">
         <a href="/artifacts">матрица артефактов</a>
         <a href="/logout">Выйти</a>
@@ -46,12 +48,18 @@
 </div>
 {% endif %}
 <table class="matrix">
+    {% set collapsed = matrix.collapsed_mr.numbers if matrix.collapsed_mr else [] %}
     <thead>
         <tr>
             <th>Репозиторий</th>
             {% for lesson in matrix.lessons %}
+            {% if lesson.number not in collapsed %}
             <th title="{{ lesson.title }}">{{ lesson.number }}. {{ lesson.title }}</th>
+            {% endif %}
             {% endfor %}
+            {% if matrix.collapsed_mr %}
+            <th class="col-mr-collapsed" title="Канал сдачи этих занятий — запрос на слияние; файлов в default-ветке пока ни у кого нет">{{ matrix.collapsed_mr.label }}</th>
+            {% endif %}
         </tr>
     </thead>
     <tbody>
@@ -59,6 +67,7 @@
         <tr>
             <td class="repo-url"><a href="/students/{{ repo.id }}" title="{{ repo.repo_url }}">{{ repo.name }}</a></td>
             {% for lesson in matrix.lessons %}
+            {% if lesson.number not in collapsed %}
             {% set cell = matrix.cells[repo.id][lesson.number] %}
             <td class="cell cell-{{ cell.status or 'none' }}{% if cell.mr_channel %} cell-mr-channel{% endif %}">
                 {% if cell.mr_channel %}
@@ -72,7 +81,11 @@
                 <span class="status status-empty">—</span>
                 {% endif %}
             </td>
+            {% endif %}
             {% endfor %}
+            {% if matrix.collapsed_mr %}
+            <td class="cell cell-mr-channel"><a class="status status-mr" href="/students/{{ repo.id }}" title="Смотри блок MR в карточке студента">MR</a></td>
+            {% endif %}
         </tr>
         {% endfor %}
     </tbody>

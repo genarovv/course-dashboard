@@ -1,8 +1,9 @@
 body {
     font-family: system-ui, sans-serif;
-    max-width: 1200px;
-    margin: 2rem auto;
-    padding: 0 1rem;
+    /* D22 (#68, живая петля): рабочий инструмент с широкой таблицей — вся ширина
+       окна, а не центрированная колонка 1200px с внутренним скроллом матрицы */
+    margin: 2rem 0;
+    padding: 0 2rem;
     color: #1c2330;
 }
 
@@ -39,9 +40,29 @@ body {
     position: sticky; left: 0; background: #fff; z-index: 2;
 }
 .matrix-wrap thead th.col-repo { z-index: 4; }
-.row-breaks { text-align: center; color: #8a90a0; }
-.row-breaks-warm { color: #8f0f0f; font-weight: 700; }
-.col-breaks a { color: inherit; text-decoration: none; border-bottom: 1px dashed #99a; }
+/* D22 (#68): переносы в колонке репо — по границам слов, не в случайном месте */
+.repo-url { overflow-wrap: break-word; word-break: normal; }
+/* D22 (#68): кнопка обхода на стикере актуальности (POST /sync с подтверждением) */
+.sync-now {
+    margin-left: 0.6rem;
+    padding: 0.15rem 0.6rem;
+    border: 1px solid #99a;
+    border-radius: 4px;
+    background: #fff;
+    color: #445;
+    font-size: 0.78rem;
+    cursor: pointer;
+}
+.sync-now:hover { border-color: #445; }
+.sync-now:disabled { opacity: 0.6; cursor: wait; }
+
+/* D20 (#66): сводка строки слева (заменила правую колонку «Разрывы» D15) */
+.row-summary { display: block; margin-top: 0.15rem; font-size: 0.78rem; color: #8a90a0; }
+.row-summary > span { margin-right: 0.5rem; }
+.row-breaks-chip { color: #8f0f0f; font-weight: 700; }
+.row-progress { color: #445; }
+.sort-links { display: block; font-weight: 400; font-size: 0.75rem; margin-top: 0.15rem; }
+.sort-links a { color: inherit; text-decoration: none; border-bottom: 1px dashed #99a; margin-right: 0.5rem; }
 table.matrix { border-collapse: collapse; width: 100%; margin-top: 1rem; }
 table.matrix th, table.matrix td {
     border: 1px solid #c9ced8;
@@ -51,7 +72,9 @@ table.matrix th, table.matrix td {
     font-size: 0.85rem;
 }
 table.matrix thead th { background: #fff; font-weight: 600; white-space: nowrap; }
-td.repo-url { max-width: 16rem; overflow-wrap: anywhere; }
+/* D22 (#68): перенос по границам слов; «anywhere» ломал имена в случайном месте
+   и перебивал по специфичности общее правило .repo-url */
+td.repo-url { max-width: 16rem; overflow-wrap: break-word; word-break: normal; }
 
 /* ── Ячейки: инверсия сигнала (D13, решение CEO 2026-07-30) ──────────────
    Наличие — тихие светлые подложки (светофор как фон), единственный
@@ -78,7 +101,11 @@ td.repo-url { max-width: 16rem; overflow-wrap: anywhere; }
 /* Чип разрыва — подпись прибора: высокая уверенность — полный,
    средняя/низкая — контурный с подписью словами (риск PRD §11) */
 .break-chip {
-    display: inline-block;
+    display: -webkit-box;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 2; /* D21 (#67): чип — не выше 2 строк, дальше многоточие */
+    line-clamp: 2;
+    overflow: hidden;
     margin-top: 0.3rem;
     padding: 0.12rem 0.5rem;
     border-radius: 4px;
@@ -182,5 +209,31 @@ table.extras { width: auto; min-width: 60%; }
 .defense-ok ul { margin: 0; padding-left: 1.25rem; font-size: 0.9rem; }
 .edge-overridden .verdict-break { color: #778; text-decoration: line-through; }
 .override { color: #667; font-size: 0.8rem; margin-left: 0.5rem; }
+/* D21 (#67): видимое курирование — кнопка-действие в блоке разрыва */
+.override-form { margin: 0.4rem 0; display: flex; align-items: center; gap: 0.5rem; }
+.override-button {
+    padding: 0.3rem 0.8rem;
+    border: 1px solid #8f0f0f;
+    border-radius: 4px;
+    background: #fff;
+    color: #8f0f0f;
+    font-weight: 600;
+    cursor: pointer;
+}
+.override-button:hover { background: #8f0f0f; color: #fff; }
+.override-note { font-size: 0.75rem; color: #778; }
+
 .points { margin: 0.25rem 0; padding-left: 1.25rem; font-size: 0.85rem; }
 .notes { font-size: 0.85rem; color: #444d61; background: #f6f7fa; padding: 0.4rem 0.6rem; border-radius: 4px; }
+
+/* D19 (#65): дело защиты v2 */
+.repo-url-small { font-size: 0.78rem; color: #667; margin: 0.1rem 0; }
+.defense-opened { font-size: 0.78rem; color: #667; margin: 0.1rem 0 0.4rem; }
+.defense-notes { font-size: 1.05rem; line-height: 1.5; color: #1c2333; margin: 0.4rem 0; }
+.points-details summary,
+.timeline-full summary,
+.defense-mrs summary,
+.defense-muted summary { cursor: pointer; font-size: 0.85rem; color: #445; }
+.defense-mrs, .defense-muted, .timeline-full { margin: 0.8rem 0; }
+.lesson-milestone td { background: #eef1f6; color: #333c50; font-size: 0.82rem; font-weight: 600; }
+.obs-note { font-size: 0.72rem; color: #778; white-space: nowrap; }

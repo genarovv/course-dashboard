@@ -311,6 +311,8 @@ POST /sync  →  sync_orchestrator.run_sync()
 
   → for each Repository (where archived_at IS NULL):
       → git_client.get_tree() + get_file_content(default_branch)
+      → git_client.get_head_commit_date()         # D19 (#65): дата головного коммита;
+          # любой сбой → NULL (дата — свидетельство «в плюс», не условие наблюдения)
       → content_hash = sha256(content)
       → классификация: found | partial | not_found
           # partial_reason=template_copy — сравнение с content_hash файлов шаблона (D35)

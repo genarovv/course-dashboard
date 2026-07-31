@@ -2,8 +2,11 @@
 {% block title %}Режим защиты — Course Dashboard{% endblock %}
 {% block content %}
 <header class="card-header defense-header">
-    <h1>Режим защиты</h1>
-    <p class="repo-url">{{ card.repository.repo_url }}</p>
+    <h1>Защита: {{ repo_short_name(card.repository.repo_url) }}</h1>
+    <p class="repo-url-small">{{ card.repository.repo_url }}</p>
+    <p class="defense-opened">режим открыт {{ fmt_dt(card.opened_at) }}</p>
+    {% set cs = card.case_summary %}
+    <p class="case-summary">сдано {{ cs.submitted.x }}/{{ cs.submitted.m }} · разрывов: {{ cs.breaks }} · MR: {{ cs.mrs_total }}, мимо ревью: {{ cs.no_review }}{% if cs.work_from %} · работа {{ cs.work_from.strftime("%d.%m") }} — {{ cs.work_to.strftime("%d.%m") }}{% endif %}</p>
     <a href="/students/{{ card.repository.id }}">← выйти из режима защиты</a>
 </header>
 
@@ -15,20 +18,23 @@
     <h2>Разрывы связности (уверенность высокая, не погашены)</h2>
     {% for edge in card.sure_breaks %}
     <article class="edge edge-done">
-        <h3>{{ edge.source_role }} → {{ edge.target_role }}</h3>
+        <h3>{{ role_title(edge.source_role) }} → {{ role_title(edge.target_role) }}</h3>
+        {% if edge.notes %}<p class="defense-notes">{{ edge.notes }}</p>{% endif %}
         <p class="verdict verdict-break">разрыв
-            <span class="evidence-meta">вердикт от {{ edge.computed_at.strftime("%d.%m.%Y %H:%M") if edge.computed_at else "—" }} ·
+            <span class="evidence-meta">вердикт от {{ fmt_dt(edge.computed_at) }} ·
                 <code>{{ edge.source_file }}</code> @{{ (edge.source_sha or "—")[:8] }} →
                 <code>{{ edge.target_file }}</code> @{{ (edge.target_sha or "—")[:8] }}</span>
         </p>
         {% if edge.points %}
-        <ul class="points">
-            {% for point in edge.points %}
-            <li><b>{{ point.entity }}</b> — «{{ point.quote }}» — {{ point.why }}</li>
-            {% endfor %}
-        </ul>
+        <details class="points-details">
+            <summary>файловая детализация ({{ edge.points|length }})</summary>
+            <ul class="points">
+                {% for point in edge.points %}
+                <li><b>{{ point.entity }}</b> — «{{ point.quote }}» — {{ point.why }}</li>
+                {% endfor %}
+            </ul>
+        </details>
         {% endif %}
-        {% if edge.notes %}<p class="notes">{{ edge.notes }}</p>{% endif %}
     </article>
     {% else %}
     <p class="state">Уверенных разрывов для показа нет.</p>
@@ -40,29 +46,93 @@
     <h2>Связные рёбра</h2>
     <ul>
         {% for edge in card.ok_edges %}
-        <li>{{ edge.source_role }} → {{ edge.target_role }} — связно
-            <span class="evidence-meta">({{ edge.computed_at.strftime("%d.%m.%Y") if edge.computed_at else "—" }},
+        <li>{{ role_title(edge.source_role) }} → {{ role_title(edge.target_role) }} — связно
+            <span class="evidence-meta">({{ fmt_dt(edge.computed_at) }},
                 @{{ (edge.source_sha or "—")[:8] }} → @{{ (edge.target_sha or "—")[:8] }})</span></li>
         {% endfor %}
     </ul>
 </section>
 {% endif %}
 
-<section class="timeline">
-    <h2>Хронология наблюдений</h2>
+{% if card.mrs %}
+<details class="defense-mrs">
+    <summary>История merge requests ({{ card.mrs|length }})</summary>
     <table>
-        <thead><tr><th>Когда</th><th>Артефакт</th><th>Статус</th><th>Файл</th><th>Commit</th></tr></thead>
+        <thead><tr><th>MR</th><th>Ветка</th><th>Состояние</th><th>Дата (по данным хостинга)</th></tr></thead>
         <tbody>
-            {% for entry in card.timeline %}
+            {% for mr in card.mrs %}
             <tr>
-                <td>{{ entry.observed_at }}</td>
-                <td>{{ entry.role }}</td>
-                <td class="cell-{{ entry.status }}">{{ STATUS_LABELS.get(entry.status, entry.status) }}</td>
-                <td>{{ entry.file_path or "—" }}</td>
-                <td class="sha">{{ (entry.source_commit_sha or "—")[:8] }}</td>
+                <td>!{{ mr.number }} {{ mr.title }}</td>
+                <td><code>{{ mr.source_branch }}</code></td>
+                <td>{{ mr.state }}</td>
+                <td>{{ fmt_dt(mr.updated_at) }}</td>
             </tr>
             {% endfor %}
         </tbody>
     </table>
+</details>
+{% endif %}
+
+{% if card.muted_breaks %}
+<details class="defense-muted">
+    <summary>Погашенные разрывы ({{ card.muted_breaks|length }})</summary>
+    <ul>
+        {% for edge in card.muted_breaks %}
+        <li>разрыв {{ role_title(edge.source_role) }} → {{ role_title(edge.target_role) }} снят преподавателем {{ edge.override_at.strftime("%d.%m") if edge.override_at else "—" }}</li>
+        {% endfor %}
+    </ul>
+</details>
+{% else %}
+{# D36 (решение CEO №3): явный ноль — комиссия видит, что курирование работает #}
+<p class="defense-muted-zero">погашенных разрывов: 0</p>
+{% endif %}
+
+<section class="timeline">
+    <h2>Хронология</h2>
+    <table>
+        <thead><tr><th>Когда</th><th>Событие</th><th>Файл</th><th>Commit</th></tr></thead>
+        <tbody>
+            {% for ev in card.events %}
+            {% if ev.kind == "lesson" %}
+            <tr class="lesson-milestone">
+                <td>{{ ev.when.strftime("%d.%m") }}</td>
+                <td colspan="3">занятие {{ ev.number }} — {{ ev.title }}</td>
+            </tr>
+            {% elif ev.kind == "mr" %}
+            <tr class="mr-event">
+                <td>{{ fmt_dt(ev.when) }} <span class="obs-note">дата хостинга</span></td>
+                <td>MR !{{ ev.number }} — {{ ev.state }}</td>
+                <td><code>{{ ev.source_branch }}</code></td>
+                <td>—</td>
+            </tr>
+            {% else %}
+            <tr>
+                <td>{{ fmt_dt(ev.when) }}{% if ev.by_observation %} <span class="obs-note">зафиксировано обходом</span>{% endif %}</td>
+                <td>{{ role_title(ev.role) }} — {{ ev.label }}{% if ev.label == "статус изменился" %}:
+                    {{ STATUS_LABELS.get(ev.from_status, ev.from_status) }} → {{ STATUS_LABELS.get(ev.to_status, ev.to_status) }}{% endif %}{% if ev.label == "перемещён" and ev.from_path %}: {{ ev.from_path }} → {{ ev.file_path }}{% endif %}</td>
+                <td>{{ ev.file_path or "—" }}</td>
+                <td class="sha">{{ (ev.sha or "—")[:8] }}</td>
+            </tr>
+            {% endif %}
+            {% endfor %}
+        </tbody>
+    </table>
+    <details class="timeline-full">
+        <summary>полный лог наблюдений ({{ card.timeline|length }})</summary>
+        <table>
+            <thead><tr><th>Когда</th><th>Артефакт</th><th>Статус</th><th>Файл</th><th>Commit</th></tr></thead>
+            <tbody>
+                {% for entry in card.timeline %}
+                <tr>
+                    <td>{{ fmt_dt(entry.observed_at) }}</td>
+                    <td>{{ role_title(entry.role) }}</td>
+                    <td class="cell-{{ entry.status }}">{{ STATUS_LABELS.get(entry.status, entry.status) }}</td>
+                    <td>{{ entry.file_path or "—" }}</td>
+                    <td class="sha">{{ (entry.source_commit_sha or "—")[:8] }}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </details>
 </section>
 {% endblock %}

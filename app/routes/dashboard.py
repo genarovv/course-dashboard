@@ -31,12 +31,12 @@ async def artifact_matrix_page(
 ):
     """D7/D14 (#58): матрица «репозиторий × артефакт» — главный экран (решение CEO 2026-07-30).
 
-    D15 (#59): ?sort=breaks — «сначала проблемные»; сортировка живёт в URL,
-    поэтому переживает POST-редиректы по referer (отметки FR-10).
+    D15 (#59) / D20 (#66): ?sort=breaks — «по разрывам», ?sort=lag — «по отставанию»;
+    сортировка живёт в URL, поэтому переживает POST-редиректы по referer (отметки FR-10).
     """
     if "user_id" not in request.session:  # BR-4: teacher-only
         return RedirectResponse("/login", status_code=303)
-    matrix = build_artifact_matrix(session, sort=sort if sort == "breaks" else None)
+    matrix = build_artifact_matrix(session, sort=sort if sort in ("breaks", "lag") else None)
     return templates.TemplateResponse(request, "dashboard/artifact_matrix.html", {"matrix": matrix})
 
 
@@ -72,6 +72,21 @@ async def override_toggle(
             session, coherence_verdict_id=verdict_id, reason="отмечено преподавателем в UI"
         )
     return RedirectResponse(request.headers.get("referer", "/"), status_code=303)
+
+
+@router.get("/defense")
+async def defense_index(request: Request, session: Session = Depends(get_session)):
+    """D36 (итерация 5, решение CEO №4): нейтральный вход в дела — без общей
+    матрицы с чужими результатами на проекторе (только имена и ссылки)."""
+    if "user_id" not in request.session:  # BR-4: teacher-only
+        return RedirectResponse("/login", status_code=303)
+    from app.services.labels import repo_short_name
+
+    repos = [
+        {"id": r.id, "name": repo_short_name(r.repo_url)}
+        for r in store.find_active_repositories(session)
+    ]
+    return templates.TemplateResponse(request, "dashboard/defense_index.html", {"repos": repos})
 
 
 @router.get("/students/{repository_id}/defense")

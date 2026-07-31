@@ -5,7 +5,34 @@ Jinja в app/routes) и сервисы-проекции; сырые значен
 и CSS-классах, наружу к преподавателю уходят только русские подписи.
 """
 
-from app.models import SnapshotStatus
+from app.models import ArtifactRole, SnapshotStatus
+
+# D7/D37: русские имена ролей — колонки матрицы и все экраны (один факт в одном месте)
+ROLE_TITLES: dict[ArtifactRole, str] = {
+    ArtifactRole.interview: "Интервью",
+    ArtifactRole.persona: "Персоны",
+    ArtifactRole.user_story: "User stories",
+    ArtifactRole.prd: "PRD",
+    ArtifactRole.data_model: "Схема данных",
+    ArtifactRole.architecture: "Архитектура",
+    ArtifactRole.plan: "План",
+    ArtifactRole.code: "Код",
+    ArtifactRole.tests: "Тесты",
+    ArtifactRole.jtbd: "JTBD",
+    ArtifactRole.readme: "README",
+    ArtifactRole.changelog: "CHANGELOG",
+    ArtifactRole.adr: "ADR",
+    ArtifactRole.claude_md: "CLAUDE.md",
+    ArtifactRole.roles_roster: "Ростер ролей",
+}
+
+
+def role_title(role) -> str:
+    """D37: подпись роли для человека; неизвестная роль деградирует до слага."""
+    try:
+        return ROLE_TITLES.get(ArtifactRole(role), str(role))
+    except ValueError:
+        return str(role)
 
 STATUS_LABELS: dict[SnapshotStatus, str] = {
     SnapshotStatus.found: "есть",

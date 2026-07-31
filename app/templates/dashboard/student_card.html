@@ -2,11 +2,11 @@
 {% block title %}Карточка студента — Course Dashboard{% endblock %}
 {% block content %}
 <header class="card-header">
-    <h1>Карточка студента</h1>
-    <p class="repo-url">{{ card.repository.repo_url }}</p>
+    <h1>Карточка студента: {{ repo_short_name(card.repository.repo_url) }}</h1>
+    <p class="repo-url"><a href="{{ card.repository.repo_url }}" title="{{ card.repository.repo_url }}">открыть репозиторий</a></p>
     <nav class="matrix-nav">
         <a href="/">← к матрице</a>
-        <a class="defense-link" href="/students/{{ card.repository.id }}/defense">режим защиты</a>
+        <a class="defense-link" href="/students/{{ card.repository.id }}/defense">защита проекта</a>
     </nav>
 </header>
 
@@ -15,7 +15,7 @@
     {% for edge in card.edges %}
     <article id="edge-{{ edge.source_role }}-{{ edge.target_role }}"
              class="edge edge-{{ edge.state }}{% if edge.override_active %} edge-overridden{% endif %}">
-        <h3>{{ edge.source_role }} → {{ edge.target_role }}</h3>
+        <h3>{{ role_title(edge.source_role) }} → {{ role_title(edge.target_role) }}</h3>
         {% if edge.state == "no_data" %}
         <p class="state">нет данных: не наблюдались обе стороны ребра</p>
         {% elif edge.state == "pending" %}
@@ -70,7 +70,7 @@
     <ul>
         {% for mr in card.mrs %}
         <li class="mr mr-{{ mr.state }}">
-            <b>{{ mr.title }}</b> — ветка {{ mr.source_branch }}, {{ mr.state }}{% if mr.updated_at %}, обновлён {{ mr.updated_at[:10] }}{% endif %}
+            <b>{{ mr.title }}</b> — ветка {{ mr.source_branch }}, {{ mr.state }}{% if mr.updated_at %}, обновлён {{ fmt_dt(mr.updated_at) }}{% endif %}
             {% if mr.ready_for_merge %}<span class="ready">принят ревьюером, ждёт merge</span>{% endif %}
             {% if mr.state == "merged" and not mr.reviewer_approved %}<span class="no-review">смержен мимо ревью</span>{% endif %}
             {% for key, marker in mr.markers.items() %}
@@ -90,8 +90,8 @@
         <tbody>
             {% for entry in card.timeline %}
             <tr>
-                <td>{{ entry.observed_at }}</td>
-                <td>{{ entry.role }}</td>
+                <td>{{ fmt_dt(entry.observed_at) }}</td>
+                <td>{{ role_title(entry.role) }}</td>
                 <td class="cell-{{ entry.status }}">{{ STATUS_LABELS.get(entry.status, entry.status) }}
                     {% if entry.partial_reason %}({% for r in entry.partial_reason %}{{ PARTIAL_LABELS.get(r, r) }}{% if not loop.last %}, {% endif %}{% endfor %}){% endif %}</td>
                 <td>{{ entry.file_path or "—" }}</td>

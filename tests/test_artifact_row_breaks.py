@@ -143,12 +143,15 @@ def test_sort_breaks_first_and_registry_default(engine):
 
 
 def test_page_counter_column_and_sort_link(client, engine):
+    """tests-change D20 (#66): счётчик переехал из правой колонки в сводку строки
+    слева («⚠ N» у имени репо) — требования (счётчик виден, сортировка по клику,
+    sticky) не менялись, проверки перенесены на новое представление."""
     with Session(engine) as s:
         _seed(s)
         s.commit()
     _login(client)
     html = client.get("/artifacts").text
-    assert "Разрывы" in html  # колонка-счётчик
+    assert "⚠ 1" in html  # счётчик уникальных разрывов — в сводке строки (D20)
     assert "?sort=breaks" in html  # клик по заголовку сортирует
     assert "matrix-wrap" in html  # sticky-обёртка (AC 4)
     sorted_html = client.get("/artifacts?sort=breaks").text

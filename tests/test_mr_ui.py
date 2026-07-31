@@ -150,7 +150,9 @@ def test_ui_shows_updated_at_and_missing_markers(engine):
         app.dependency_overrides.clear()
         engine.dispose()
 
-    assert "2026-07-28" in html  # дата последнего обновления MR (AC1)
+    # tests-change D22 (#68) + ревью итерации 4, находка 8: единый формат времени
+    # интерфейса ДД.ММ ЧЧ:ММ (fmt_dt) — требование AC1 «дата обновления видна» не менялось
+    assert "28.07" in html  # дата последнего обновления MR (AC1)
     assert "prichina: не найден" in html  # отсутствие маркера — явно, не ошибка (AC2)
 
 

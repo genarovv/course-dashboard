@@ -15,7 +15,8 @@ from app import store, timeutil
 from app.config import settings
 from app.models import SNAPSHOT_STATUS_RANK, ArtifactRole, SnapshotStatus, VerdictValue
 from app.services import evidence_chain
-from app.services.labels import PARTIAL_LABELS, repo_short_name
+from app.services.evidence_chain import merged_no_review_count
+from app.services.labels import PARTIAL_LABELS, ROLE_TITLES, repo_short_name
 from app.services.matrix_builder import blind_spots_and_signals
 
 # D10 (#54), US-A3: обход старше этого срока — явный флаг устаревания на стикере
@@ -24,25 +25,7 @@ STALE_AFTER = timedelta(hours=48)
 # D13 (#57): ранжирование уверенности FR-5; неизвестное значение деградирует до «низкой»
 CONFIDENCE_RANK = {"high": 0, "medium": 1, "low": 2}
 
-ROLE_TITLES: dict[ArtifactRole, str] = {
-    ArtifactRole.interview: "Интервью",
-    ArtifactRole.persona: "Персоны",
-    ArtifactRole.user_story: "User stories",
-    ArtifactRole.prd: "PRD",
-    ArtifactRole.data_model: "Схема данных",
-    ArtifactRole.architecture: "Архитектура",
-    ArtifactRole.plan: "План",
-    ArtifactRole.code: "Код",
-    ArtifactRole.tests: "Тесты",
-    ArtifactRole.jtbd: "JTBD",
-    ArtifactRole.readme: "README",
-    ArtifactRole.changelog: "CHANGELOG",
-    ArtifactRole.adr: "ADR",
-    ArtifactRole.claude_md: "CLAUDE.md",
-    ArtifactRole.roles_roster: "Ростер ролей",
-}
-
-# PARTIAL_LABELS переехали в labels.py (D8) — общие для обеих матриц и модалки
+# PARTIAL_LABELS и ROLE_TITLES живут в labels.py (D8/D37) — общие для всех экранов
 
 
 def _best_snapshot(session: Session, repository_id: str, defs: list):
@@ -102,9 +85,14 @@ def _cell(
             (str(e["confidence"]) for e in breaks),
             key=lambda c: CONFIDENCE_RANK.get(c, 3),
         )
+        # D21 (#67): в чипе сущность усечена до ~80 символов (полный текст — в модалке);
+        # обрезка по строкам — CSS line-clamp
+        entity = first_point["entity"] if first_point else None
+        if entity and len(entity) > 80:
+            entity = entity[:80] + "…"
         break_info = {
             "count": len(breaks),
-            "entity": first_point["entity"] if first_point else None,
+            "entity": entity,
             "confidence": top_conf if top_conf in CONFIDENCE_RANK else "low",
             # D16 (#60): вердикт впервые вычислен в последнем обходе (D25: перепрогон
             # той же четвёрки не создаёт новой записи — метка не «мигает»)
@@ -134,8 +122,9 @@ def _cell(
         presence = "частично · " + ", ".join(reasons) if reasons else "частично"
         summary = f"{presence} · {break_tail()}" if breaks else presence
     elif breaks:
-        presence = "есть"
-        summary = f"есть · {break_tail()}"
+        # D21 (#67): словесный итог снимает конфликт «зелёное + бордовое»
+        presence = "сдано, но разрыв"
+        summary = f"сдано, но {break_tail()}"
     elif deferred:
         # D6: LLM недоступна / ответ не распарсился — честнее «проверяется»
         presence = summary = "есть · проверка отложена"
@@ -194,8 +183,9 @@ def build_artifact_matrix(
 ) -> dict:
     """Матрица «репозиторий × артефакт» для GET /artifacts.
 
-    sort="breaks" — «сначала проблемные» (D15, #59): по числу уникальных
-    рёбер-разрывов, стабильно относительно порядка реестра.
+    sort="breaks" — «по разрывам» (D15, #59): по числу уникальных
+    рёбер-разрывов; sort="lag" — «по отставанию» (D20, #66): по возрастанию
+    доли сданного X/M. Обе стабильны относительно порядка реестра.
     """
     resolved_model = llm_model or settings.deepseek_model
     checked_ids = store.find_checked_repository_ids(session)
@@ -214,6 +204,8 @@ def build_artifact_matrix(
 
     cells: dict[str, dict[str, dict]] = {}
     row_breaks: dict[str, int] = {}
+    row_submitted: dict[str, dict] = {}
+    row_no_review: dict[str, int] = {}
     for repo in repos:
         edges = evidence_chain.edge_states(session, repo.id, resolved_model)
         cells[repo.id] = {
@@ -226,8 +218,32 @@ def build_artifact_matrix(
             if e["state"] == "done" and e["verdict"] == VerdictValue.break_
             and not e["override_active"]
         )
+        # D20 (#66): «X/M» — сдано ролей из ожидаемых файлами; found+partial = сдано
+        # (BR-3: partial и есть «сдано криво»); роли «сдача через MR» — вне знаменателя
+        expected = [c for c in cells[repo.id].values() if not c["mr_channel"]]
+        row_submitted[repo.id] = {
+            "x": sum(
+                1 for c in expected
+                if c["status"] in (SnapshotStatus.found, SnapshotStatus.partial)
+            ),
+            "m": len(expected),
+        }
+        # D20: «мимо ревью» — сигнал процесса с матрицы занятий (FR-12, порядок 2026-07-29)
+        row_no_review[repo.id] = merged_no_review_count(
+            store.find_latest_mr_observations(session, repo.id)
+        )
     if sort == "breaks":
         repos = sorted(repos, key=lambda r: -row_breaks[r.id])  # sorted стабилен — реестр внутри
+    elif sort == "lag":
+        # D20: «по отставанию» — по возрастанию доли сданного; пустая строка первой;
+        # M=0 (все роли через MR) — не отстаёт
+        repos = sorted(
+            repos,
+            key=lambda r: (
+                row_submitted[r.id]["x"] / row_submitted[r.id]["m"]
+                if row_submitted[r.id]["m"] else 1.0
+            ),
+        )
 
     # Макет: «Время и дата последнего анализа: День.Месяц ЧЧ:ММ» (местное время, #32)
     as_of = (
@@ -251,6 +267,8 @@ def build_artifact_matrix(
         ],
         "cells": cells,
         "row_breaks": row_breaks,
+        "row_submitted": row_submitted,
+        "row_no_review": row_no_review,
         "sort": sort,
         "as_of": as_of,
         "registry_count": len(active_repos),

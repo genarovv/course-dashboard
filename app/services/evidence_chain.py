@@ -6,11 +6,14 @@
 + content_hash + observed_at.
 """
 
+from datetime import datetime, time
+
 from sqlalchemy.orm import Session
 
 from app import store
 from app.config import settings
-from app.models import SNAPSHOT_STATUS_RANK, SyncOutcome, VerdictValue
+from app.models import SNAPSHOT_STATUS_RANK, SnapshotStatus, SyncOutcome, VerdictValue
+from app.timeutil import to_display, utcnow
 
 MAX_POINTS = 5  # AC 2 / PRD §5.1: не более 5 подсвеченных точек на разрыв
 
@@ -47,6 +50,7 @@ def _edge_card(session: Session, repository_id: str, edge, llm_model: str) -> di
         "notes": None,
         "verdict_id": None,
         "override_active": False,
+        "override_at": None,
         "deferred_reason": None,
         "computed_at": None,
         "source_file": None,
@@ -80,6 +84,7 @@ def _edge_card(session: Session, repository_id: str, edge, llm_model: str) -> di
         card["deferred_reason"] = str(verdict.deferred_reason) if verdict.deferred_reason else None
         return card
 
+    override = store.find_active_override_for_verdict(session, verdict.id)
     card.update(
         state="done",
         verdict=verdict.verdict,
@@ -87,7 +92,9 @@ def _edge_card(session: Session, repository_id: str, edge, llm_model: str) -> di
         points=(verdict.points or [])[:MAX_POINTS],
         notes=verdict.notes,
         verdict_id=verdict.id,
-        override_active=store.find_active_override_for_verdict(session, verdict.id) is not None,
+        override_active=override is not None,
+        # D19 (#65): дата отметки — «разрыв снят преподавателем ДД.ММ» в деле защиты
+        override_at=override.created_at if override is not None else None,
         computed_at=verdict.computed_at,  # D16 (#60): метка «новое с прошлого обхода»
     )
     return card
@@ -170,14 +177,158 @@ def build_student_card(
     }
 
 
+def merged_no_review_count(rows) -> int:
+    """FR-12 (порядок 2026-07-29): merged без вердикта ревьюера = «мимо ревью».
+
+    Один факт — в одном месте: правило используют процесс матрицы занятий,
+    сводка строки артефактной матрицы (D20) и шапка-резюме дела (D36).
+    Переехало из matrix_builder (итерация 5) — evidence_chain ниже по слою.
+    """
+    return sum(1 for r in rows if r.state == "merged" and not r.reviewer_approved)
+
+
+def repo_progress(session: Session, repository_id: str) -> dict:
+    """D20/D36: «X/M» — сдано ролей из ожидаемых файлами (found+partial = сдано,
+    BR-3); роли, ожидаемые через MR и не найденные файлами, — вне знаменателя."""
+    mr_lessons = {
+        lesson.id
+        for lesson in store.find_all_lessons(session)
+        if lesson.submission_channel == "mr"
+    }
+    defs_by_role: dict = {}
+    for lesson in store.find_all_lessons(session):
+        for adef in store.find_artifact_defs_by_lesson(session, lesson.id):
+            defs_by_role.setdefault(adef.role, []).append(adef)
+    x = m = 0
+    for defs in defs_by_role.values():
+        candidates = [
+            snap
+            for adef in defs
+            if (snap := store.find_last_snapshot(session, repository_id, adef.id)) is not None
+        ]
+        best = min(
+            candidates,
+            key=lambda snap: (SNAPSHOT_STATUS_RANK[snap.status], -snap.observed_at.timestamp()),
+            default=None,
+        )
+        mr_channel = (
+            (best is None or best.status == SnapshotStatus.not_found)
+            and any(adef.lesson_id in mr_lessons for adef in defs)
+        )
+        if mr_channel:
+            continue
+        m += 1
+        if best is not None and best.status in (SnapshotStatus.found, SnapshotStatus.partial):
+            x += 1
+    return {"x": x, "m": m}
+
+
+def _defense_events(session: Session, repository_id: str) -> list[dict]:
+    """D19 (#65): хронология защиты — переходы состояний + вехи занятий.
+
+    Снапшот пишется только при изменении наблюдения (D28), но смена одного
+    контента при том же статусе — не переход; переходы: появился / статус
+    изменился / исчез. Первый снапшот not_found перехода не рождает.
+    Дата перехода — дата коммита; без неё — дата наблюдения с пометкой
+    «зафиксировано обходом». Поток ведётся по artifact_def (альтернативные
+    пути роли не смешиваются), подпись — роль.
+    D24 (итерация 5): пара «исчез»+«появился» одной роли в одном обходе —
+    перенос файла, схлопывается в «перемещён: старый → новый»; MR-события
+    с датами хостинга встроены в общую ленту (независимые даты).
+    """
+    role_by_adef = {
+        adef.id: adef.role
+        for lesson in store.find_all_lessons(session)
+        for adef in store.find_artifact_defs_by_lesson(session, lesson.id)
+    }
+    events: list[dict] = [
+        {
+            "kind": "lesson",
+            "number": lesson.number,
+            "title": lesson.title,
+            "when": datetime.combine(lesson.date, time.min),
+        }
+        for lesson in store.find_all_lessons(session)
+    ]
+    last_status: dict[str, SnapshotStatus] = {}
+    last_path: dict[str, str | None] = {}
+    transitions: list[dict] = []
+    for snap in store.find_snapshots_by_repository(session, repository_id):
+        prev = last_status.get(snap.artifact_def_id)
+        prev_path = last_path.get(snap.artifact_def_id)
+        last_status[snap.artifact_def_id] = snap.status
+        if snap.file_path:
+            last_path[snap.artifact_def_id] = snap.file_path
+        if prev == snap.status:
+            continue  # смена контента без смены статуса — не переход
+        if prev is None and snap.status == SnapshotStatus.not_found:
+            continue  # ничего не было и нет — нечему появляться
+        if snap.status == SnapshotStatus.not_found:
+            label = "исчез"
+        elif prev is None or prev == SnapshotStatus.not_found:
+            label = "появился"
+        else:
+            label = "статус изменился"
+        transitions.append({
+            "kind": "transition",
+            "role": role_by_adef.get(snap.artifact_def_id, "?"),
+            "label": label,
+            "from_status": prev,
+            "to_status": snap.status,
+            # #32 + ревью итерации 4 (находка 1): в БД UTC, показ и сортировка —
+            # в местном времени, иначе даты съезжают рядом с местными вехами занятий
+            "when": to_display(snap.source_commit_date or snap.observed_at),
+            "by_observation": snap.source_commit_date is None,
+            "file_path": snap.file_path,
+            "from_path": prev_path,
+            "sha": snap.source_commit_sha,
+            "sync_run_id": snap.sync_run_id,
+        })
+
+    # D24: «исчез» + «появился» одной роли в одном обходе = перенос файла
+    collapsed: list[dict] = []
+    for tr in transitions:
+        if tr["label"] == "появился":
+            gone = next(
+                (
+                    c for c in collapsed
+                    if c["label"] == "исчез" and c["role"] == tr["role"]
+                    and c["sync_run_id"] == tr["sync_run_id"]
+                ),
+                None,
+            )
+            if gone is not None:
+                collapsed.remove(gone)
+                tr = {**tr, "label": "перемещён", "from_path": gone["from_path"]}
+        collapsed.append(tr)
+    events.extend(collapsed)
+
+    # D24: независимые даты хостинга — MR-события в общей ленте (без даты — не рисуем)
+    events.extend(
+        {
+            "kind": "mr",
+            "number": row.mr_number,
+            "source_branch": row.source_branch,
+            "state": row.state,
+            "when": to_display(row.updated_at),
+        }
+        for row in store.find_latest_mr_observations(session, repository_id)
+        if row.updated_at is not None
+    )
+    events.sort(key=lambda e: e["when"])
+    return events
+
+
 def build_defense_card(
     session: Session, repository_id: str, *, llm_model: str | None = None
 ) -> dict | None:
-    """US-C2 (D18, #62): «дело» одного студента для защиты.
+    """US-C2 (D18, #62; v2 — D19, #65): «дело» одного студента для защиты.
 
     Поверх карточки: показываются только разрывы с уверенностью «высокая»
     и не погашенные отметкой (митигация риска PRD §11); остальные разрывы
     отсутствуют в выдаче. Связные рёбра — доказательная база «в плюс».
+    v2: хронология переходов с вехами занятий, погашенные разрывы и
+    MR-история свёрнутыми — история решений легитимизирует оценку.
     Слепая зона не роняет режим — честная пометка.
     """
     card = build_student_card(session, repository_id, llm_model=llm_model)
@@ -192,12 +343,43 @@ def build_defense_card(
     ok_edges = [
         e for e in edges if e["state"] == "done" and e["verdict"] == VerdictValue.ok
     ]
+    muted_breaks = [
+        e for e in edges
+        if e["state"] == "done" and e["verdict"] == VerdictValue.break_
+        and e["override_active"]
+    ]
     last = store.find_last_outcome_row(session, repository_id)
     blind = last is not None and last.outcome == SyncOutcome.repo_unavailable
+
+    # D36: шапка-резюме — комиссия за 10 секунд; период работы по независимым
+    # датам хостинга, без MR — по датам коммитов/наблюдений, без данных — None
+    mr_rows = store.find_latest_mr_observations(session, repository_id)
+    dates = sorted(row.updated_at for row in mr_rows if row.updated_at is not None)
+    if not dates:
+        dates = sorted(
+            snap.source_commit_date or snap.observed_at
+            for snap in store.find_snapshots_by_repository(session, repository_id)
+        )
+    case_summary = {
+        "submitted": repo_progress(session, repository_id),
+        "breaks": sum(
+            1 for e in edges
+            if e["state"] == "done" and e["verdict"] == VerdictValue.break_
+            and not e["override_active"]
+        ),
+        "mrs_total": len(card["mrs"]),
+        "no_review": merged_no_review_count(mr_rows),
+        "work_from": dates[0] if dates else None,
+        "work_to": dates[-1] if dates else None,
+    }
     return {
         **card,
         "sure_breaks": sure_breaks,
         "ok_edges": ok_edges,
+        "muted_breaks": muted_breaks,
+        "case_summary": case_summary,
+        "events": _defense_events(session, repository_id),
+        "opened_at": to_display(utcnow()),
         "blind": blind,
         "blind_detail": (last.detail or "") if blind else None,
     }

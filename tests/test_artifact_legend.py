@@ -61,10 +61,12 @@ def _page(client):
 
 
 def test_legend_lists_all_states(client):
+    """tests-change D22 (#68): формулировки легенды без жаргона («не наблюдался» →
+    «нет данных», «сдача через MR» → расшифровка) — состав легенды не менялся."""
     html = _page(client)
     assert 'class="legend"' in html
-    for state in ("есть", "частично", "нет", "не наблюдался", "сдача через MR",
-                  "помечен ложным"):
+    for state in ("есть", "частично", "нет", "нет данных",
+                  "сдача через merge request (запрос на слияние)", "помечен ложным"):
         assert state in html
 
 
