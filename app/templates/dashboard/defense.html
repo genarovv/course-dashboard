@@ -18,7 +18,7 @@
     <h2>Разрывы связности (уверенность высокая, не погашены)</h2>
     {% for edge in card.sure_breaks %}
     <article class="edge edge-done">
-        <h3>{{ edge.source_role }} → {{ edge.target_role }}</h3>
+        <h3>{{ role_title(edge.source_role) }} → {{ role_title(edge.target_role) }}</h3>
         {% if edge.notes %}<p class="defense-notes">{{ edge.notes }}</p>{% endif %}
         <p class="verdict verdict-break">разрыв
             <span class="evidence-meta">вердикт от {{ fmt_dt(edge.computed_at) }} ·
@@ -46,7 +46,7 @@
     <h2>Связные рёбра</h2>
     <ul>
         {% for edge in card.ok_edges %}
-        <li>{{ edge.source_role }} → {{ edge.target_role }} — связно
+        <li>{{ role_title(edge.source_role) }} → {{ role_title(edge.target_role) }} — связно
             <span class="evidence-meta">({{ fmt_dt(edge.computed_at) }},
                 @{{ (edge.source_sha or "—")[:8] }} → @{{ (edge.target_sha or "—")[:8] }})</span></li>
         {% endfor %}
@@ -78,7 +78,7 @@
     <summary>Погашенные разрывы ({{ card.muted_breaks|length }})</summary>
     <ul>
         {% for edge in card.muted_breaks %}
-        <li>разрыв {{ edge.source_role }} → {{ edge.target_role }} снят преподавателем {{ edge.override_at.strftime("%d.%m") if edge.override_at else "—" }}</li>
+        <li>разрыв {{ role_title(edge.source_role) }} → {{ role_title(edge.target_role) }} снят преподавателем {{ edge.override_at.strftime("%d.%m") if edge.override_at else "—" }}</li>
         {% endfor %}
     </ul>
 </details>
@@ -108,7 +108,7 @@
             {% else %}
             <tr>
                 <td>{{ fmt_dt(ev.when) }}{% if ev.by_observation %} <span class="obs-note">зафиксировано обходом</span>{% endif %}</td>
-                <td>{{ ev.role }} — {{ ev.label }}{% if ev.label == "статус изменился" %}:
+                <td>{{ role_title(ev.role) }} — {{ ev.label }}{% if ev.label == "статус изменился" %}:
                     {{ STATUS_LABELS.get(ev.from_status, ev.from_status) }} → {{ STATUS_LABELS.get(ev.to_status, ev.to_status) }}{% endif %}{% if ev.label == "перемещён" and ev.from_path %}: {{ ev.from_path }} → {{ ev.file_path }}{% endif %}</td>
                 <td>{{ ev.file_path or "—" }}</td>
                 <td class="sha">{{ (ev.sha or "—")[:8] }}</td>
@@ -125,7 +125,7 @@
                 {% for entry in card.timeline %}
                 <tr>
                     <td>{{ fmt_dt(entry.observed_at) }}</td>
-                    <td>{{ entry.role }}</td>
+                    <td>{{ role_title(entry.role) }}</td>
                     <td class="cell-{{ entry.status }}">{{ STATUS_LABELS.get(entry.status, entry.status) }}</td>
                     <td>{{ entry.file_path or "—" }}</td>
                     <td class="sha">{{ (entry.source_commit_sha or "—")[:8] }}</td>

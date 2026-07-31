@@ -16,7 +16,7 @@ from app.config import settings
 from app.models import SNAPSHOT_STATUS_RANK, ArtifactRole, SnapshotStatus, VerdictValue
 from app.services import evidence_chain
 from app.services.evidence_chain import merged_no_review_count
-from app.services.labels import PARTIAL_LABELS, repo_short_name
+from app.services.labels import PARTIAL_LABELS, ROLE_TITLES, repo_short_name
 from app.services.matrix_builder import blind_spots_and_signals
 
 # D10 (#54), US-A3: обход старше этого срока — явный флаг устаревания на стикере
@@ -25,25 +25,7 @@ STALE_AFTER = timedelta(hours=48)
 # D13 (#57): ранжирование уверенности FR-5; неизвестное значение деградирует до «низкой»
 CONFIDENCE_RANK = {"high": 0, "medium": 1, "low": 2}
 
-ROLE_TITLES: dict[ArtifactRole, str] = {
-    ArtifactRole.interview: "Интервью",
-    ArtifactRole.persona: "Персоны",
-    ArtifactRole.user_story: "User stories",
-    ArtifactRole.prd: "PRD",
-    ArtifactRole.data_model: "Схема данных",
-    ArtifactRole.architecture: "Архитектура",
-    ArtifactRole.plan: "План",
-    ArtifactRole.code: "Код",
-    ArtifactRole.tests: "Тесты",
-    ArtifactRole.jtbd: "JTBD",
-    ArtifactRole.readme: "README",
-    ArtifactRole.changelog: "CHANGELOG",
-    ArtifactRole.adr: "ADR",
-    ArtifactRole.claude_md: "CLAUDE.md",
-    ArtifactRole.roles_roster: "Ростер ролей",
-}
-
-# PARTIAL_LABELS переехали в labels.py (D8) — общие для обеих матриц и модалки
+# PARTIAL_LABELS и ROLE_TITLES живут в labels.py (D8/D37) — общие для всех экранов
 
 
 def _best_snapshot(session: Session, repository_id: str, defs: list):

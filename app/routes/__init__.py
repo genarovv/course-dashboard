@@ -3,7 +3,13 @@
 from fastapi.templating import Jinja2Templates
 
 from app.config import settings
-from app.services.labels import CONFIDENCE_LABELS, PARTIAL_LABELS, STATUS_LABELS, repo_short_name
+from app.services.labels import (
+    CONFIDENCE_LABELS,
+    PARTIAL_LABELS,
+    STATUS_LABELS,
+    repo_short_name,
+    role_title,
+)
 from app.store import SessionLocal
 from app.timeutil import fmt_dt
 
@@ -15,6 +21,7 @@ templates.env.globals.update(
     PARTIAL_LABELS=PARTIAL_LABELS,
     CONFIDENCE_LABELS=CONFIDENCE_LABELS,
     repo_short_name=repo_short_name,
+    role_title=role_title,
     fmt_dt=fmt_dt,
 )
 

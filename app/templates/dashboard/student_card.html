@@ -15,7 +15,7 @@
     {% for edge in card.edges %}
     <article id="edge-{{ edge.source_role }}-{{ edge.target_role }}"
              class="edge edge-{{ edge.state }}{% if edge.override_active %} edge-overridden{% endif %}">
-        <h3>{{ edge.source_role }} → {{ edge.target_role }}</h3>
+        <h3>{{ role_title(edge.source_role) }} → {{ role_title(edge.target_role) }}</h3>
         {% if edge.state == "no_data" %}
         <p class="state">нет данных: не наблюдались обе стороны ребра</p>
         {% elif edge.state == "pending" %}
@@ -91,7 +91,7 @@
             {% for entry in card.timeline %}
             <tr>
                 <td>{{ fmt_dt(entry.observed_at) }}</td>
-                <td>{{ entry.role }}</td>
+                <td>{{ role_title(entry.role) }}</td>
                 <td class="cell-{{ entry.status }}">{{ STATUS_LABELS.get(entry.status, entry.status) }}
                     {% if entry.partial_reason %}({% for r in entry.partial_reason %}{{ PARTIAL_LABELS.get(r, r) }}{% if not loop.last %}, {% endif %}{% endfor %}){% endif %}</td>
                 <td>{{ entry.file_path or "—" }}</td>
