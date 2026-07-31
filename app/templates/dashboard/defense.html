@@ -93,11 +93,18 @@
                 <td>{{ ev.when.strftime("%d.%m") }}</td>
                 <td colspan="3">занятие {{ ev.number }} — {{ ev.title }}</td>
             </tr>
+            {% elif ev.kind == "mr" %}
+            <tr class="mr-event">
+                <td>{{ fmt_dt(ev.when) }} <span class="obs-note">дата хостинга</span></td>
+                <td>MR !{{ ev.number }} — {{ ev.state }}</td>
+                <td><code>{{ ev.source_branch }}</code></td>
+                <td>—</td>
+            </tr>
             {% else %}
             <tr>
                 <td>{{ fmt_dt(ev.when) }}{% if ev.by_observation %} <span class="obs-note">зафиксировано обходом</span>{% endif %}</td>
                 <td>{{ ev.role }} — {{ ev.label }}{% if ev.label == "статус изменился" %}:
-                    {{ STATUS_LABELS.get(ev.from_status, ev.from_status) }} → {{ STATUS_LABELS.get(ev.to_status, ev.to_status) }}{% endif %}</td>
+                    {{ STATUS_LABELS.get(ev.from_status, ev.from_status) }} → {{ STATUS_LABELS.get(ev.to_status, ev.to_status) }}{% endif %}{% if ev.label == "перемещён" and ev.from_path %}: {{ ev.from_path }} → {{ ev.file_path }}{% endif %}</td>
                 <td>{{ ev.file_path or "—" }}</td>
                 <td class="sha">{{ (ev.sha or "—")[:8] }}</td>
             </tr>

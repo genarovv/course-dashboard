@@ -186,6 +186,9 @@ def _defense_events(session: Session, repository_id: str) -> list[dict]:
     Дата перехода — дата коммита; без неё — дата наблюдения с пометкой
     «зафиксировано обходом». Поток ведётся по artifact_def (альтернативные
     пути роли не смешиваются), подпись — роль.
+    D24 (итерация 5): пара «исчез»+«появился» одной роли в одном обходе —
+    перенос файла, схлопывается в «перемещён: старый → новый»; MR-события
+    с датами хостинга встроены в общую ленту (независимые даты).
     """
     role_by_adef = {
         adef.id: adef.role
@@ -202,9 +205,14 @@ def _defense_events(session: Session, repository_id: str) -> list[dict]:
         for lesson in store.find_all_lessons(session)
     ]
     last_status: dict[str, SnapshotStatus] = {}
+    last_path: dict[str, str | None] = {}
+    transitions: list[dict] = []
     for snap in store.find_snapshots_by_repository(session, repository_id):
         prev = last_status.get(snap.artifact_def_id)
+        prev_path = last_path.get(snap.artifact_def_id)
         last_status[snap.artifact_def_id] = snap.status
+        if snap.file_path:
+            last_path[snap.artifact_def_id] = snap.file_path
         if prev == snap.status:
             continue  # смена контента без смены статуса — не переход
         if prev is None and snap.status == SnapshotStatus.not_found:
@@ -215,7 +223,7 @@ def _defense_events(session: Session, repository_id: str) -> list[dict]:
             label = "появился"
         else:
             label = "статус изменился"
-        events.append({
+        transitions.append({
             "kind": "transition",
             "role": role_by_adef.get(snap.artifact_def_id, "?"),
             "label": label,
@@ -226,8 +234,41 @@ def _defense_events(session: Session, repository_id: str) -> list[dict]:
             "when": to_display(snap.source_commit_date or snap.observed_at),
             "by_observation": snap.source_commit_date is None,
             "file_path": snap.file_path,
+            "from_path": prev_path,
             "sha": snap.source_commit_sha,
+            "sync_run_id": snap.sync_run_id,
         })
+
+    # D24: «исчез» + «появился» одной роли в одном обходе = перенос файла
+    collapsed: list[dict] = []
+    for tr in transitions:
+        if tr["label"] == "появился":
+            gone = next(
+                (
+                    c for c in collapsed
+                    if c["label"] == "исчез" and c["role"] == tr["role"]
+                    and c["sync_run_id"] == tr["sync_run_id"]
+                ),
+                None,
+            )
+            if gone is not None:
+                collapsed.remove(gone)
+                tr = {**tr, "label": "перемещён", "from_path": gone["from_path"]}
+        collapsed.append(tr)
+    events.extend(collapsed)
+
+    # D24: независимые даты хостинга — MR-события в общей ленте (без даты — не рисуем)
+    events.extend(
+        {
+            "kind": "mr",
+            "number": row.mr_number,
+            "source_branch": row.source_branch,
+            "state": row.state,
+            "when": to_display(row.updated_at),
+        }
+        for row in store.find_latest_mr_observations(session, repository_id)
+        if row.updated_at is not None
+    )
     events.sort(key=lambda e: e["when"])
     return events
 
