@@ -60,15 +60,6 @@ def blind_spots_and_signals(session: Session, repos: list, today: date) -> dict:
     }
 
 
-def merged_no_review_count(rows) -> int:
-    """FR-12 (порядок 2026-07-29): merged без вердикта ревьюера = «мимо ревью».
-
-    Один факт — в одном месте (ревью итерации 4, находка 3): правило используют
-    процесс матрицы занятий и сводка строки артефактной матрицы (D20).
-    """
-    return sum(1 for r in rows if r.state == "merged" and not r.reviewer_approved)
-
-
 def _aggregate_cell(session: Session, repository_id: str, artifact_defs: list) -> dict:
     """Статус ячейки по последним снапшотам всех артефактов занятия (FR-4).
 
@@ -166,7 +157,8 @@ def build_matrix(session: Session, llm_model: str | None = None, today: date | N
             "merged": sum(1 for r in rows if r.state == "merged"),
             # порядок 2026-07-29 (мержат сами): merged+вердикт = сдан; без вердикта — мимо ревью
             "accepted": sum(1 for r in rows if r.state == "merged" and r.reviewer_approved),
-            "merged_no_review": merged_no_review_count(rows),
+            # правило «мимо ревью» — evidence_chain.merged_no_review_count (D36)
+            "merged_no_review": evidence_chain.merged_no_review_count(rows),
         }
 
     # Время последнего обхода

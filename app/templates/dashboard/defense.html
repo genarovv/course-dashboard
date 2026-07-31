@@ -5,6 +5,8 @@
     <h1>Защита: {{ repo_short_name(card.repository.repo_url) }}</h1>
     <p class="repo-url-small">{{ card.repository.repo_url }}</p>
     <p class="defense-opened">режим открыт {{ fmt_dt(card.opened_at) }}</p>
+    {% set cs = card.case_summary %}
+    <p class="case-summary">сдано {{ cs.submitted.x }}/{{ cs.submitted.m }} · разрывов: {{ cs.breaks }} · MR: {{ cs.mrs_total }}, мимо ревью: {{ cs.no_review }}{% if cs.work_from %} · работа {{ cs.work_from.strftime("%d.%m") }} — {{ cs.work_to.strftime("%d.%m") }}{% endif %}</p>
     <a href="/students/{{ card.repository.id }}">← выйти из режима защиты</a>
 </header>
 
@@ -80,6 +82,9 @@
         {% endfor %}
     </ul>
 </details>
+{% else %}
+{# D36 (решение CEO №3): явный ноль — комиссия видит, что курирование работает #}
+<p class="defense-muted-zero">погашенных разрывов: 0</p>
 {% endif %}
 
 <section class="timeline">

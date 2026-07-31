@@ -1,0 +1,18 @@
+{% extends "base.html" %}
+{% block title %}Защита проектов — Course Dashboard{% endblock %}
+{% block content %}
+<header class="card-header">
+    <h1>Защита проектов</h1>
+    <p class="repo-url-small">нейтральный список — без статусов и сравнений (для проектора)</p>
+    <nav class="matrix-nav"><a href="/">← к матрице</a></nav>
+</header>
+{% if repos %}
+<ul class="defense-index">
+    {% for repo in repos %}
+    <li><a href="/students/{{ repo.id }}/defense">{{ repo.name }}</a></li>
+    {% endfor %}
+</ul>
+{% else %}
+<p class="state">Реестр пуст — обходить нечего.</p>
+{% endif %}
+{% endblock %}

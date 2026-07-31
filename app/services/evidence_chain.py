@@ -177,6 +177,52 @@ def build_student_card(
     }
 
 
+def merged_no_review_count(rows) -> int:
+    """FR-12 (порядок 2026-07-29): merged без вердикта ревьюера = «мимо ревью».
+
+    Один факт — в одном месте: правило используют процесс матрицы занятий,
+    сводка строки артефактной матрицы (D20) и шапка-резюме дела (D36).
+    Переехало из matrix_builder (итерация 5) — evidence_chain ниже по слою.
+    """
+    return sum(1 for r in rows if r.state == "merged" and not r.reviewer_approved)
+
+
+def repo_progress(session: Session, repository_id: str) -> dict:
+    """D20/D36: «X/M» — сдано ролей из ожидаемых файлами (found+partial = сдано,
+    BR-3); роли, ожидаемые через MR и не найденные файлами, — вне знаменателя."""
+    mr_lessons = {
+        lesson.id
+        for lesson in store.find_all_lessons(session)
+        if lesson.submission_channel == "mr"
+    }
+    defs_by_role: dict = {}
+    for lesson in store.find_all_lessons(session):
+        for adef in store.find_artifact_defs_by_lesson(session, lesson.id):
+            defs_by_role.setdefault(adef.role, []).append(adef)
+    x = m = 0
+    for defs in defs_by_role.values():
+        candidates = [
+            snap
+            for adef in defs
+            if (snap := store.find_last_snapshot(session, repository_id, adef.id)) is not None
+        ]
+        best = min(
+            candidates,
+            key=lambda snap: (SNAPSHOT_STATUS_RANK[snap.status], -snap.observed_at.timestamp()),
+            default=None,
+        )
+        mr_channel = (
+            (best is None or best.status == SnapshotStatus.not_found)
+            and any(adef.lesson_id in mr_lessons for adef in defs)
+        )
+        if mr_channel:
+            continue
+        m += 1
+        if best is not None and best.status in (SnapshotStatus.found, SnapshotStatus.partial):
+            x += 1
+    return {"x": x, "m": m}
+
+
 def _defense_events(session: Session, repository_id: str) -> list[dict]:
     """D19 (#65): хронология защиты — переходы состояний + вехи занятий.
 
@@ -304,11 +350,34 @@ def build_defense_card(
     ]
     last = store.find_last_outcome_row(session, repository_id)
     blind = last is not None and last.outcome == SyncOutcome.repo_unavailable
+
+    # D36: шапка-резюме — комиссия за 10 секунд; период работы по независимым
+    # датам хостинга, без MR — по датам коммитов/наблюдений, без данных — None
+    mr_rows = store.find_latest_mr_observations(session, repository_id)
+    dates = sorted(row.updated_at for row in mr_rows if row.updated_at is not None)
+    if not dates:
+        dates = sorted(
+            snap.source_commit_date or snap.observed_at
+            for snap in store.find_snapshots_by_repository(session, repository_id)
+        )
+    case_summary = {
+        "submitted": repo_progress(session, repository_id),
+        "breaks": sum(
+            1 for e in edges
+            if e["state"] == "done" and e["verdict"] == VerdictValue.break_
+            and not e["override_active"]
+        ),
+        "mrs_total": len(card["mrs"]),
+        "no_review": merged_no_review_count(mr_rows),
+        "work_from": dates[0] if dates else None,
+        "work_to": dates[-1] if dates else None,
+    }
     return {
         **card,
         "sure_breaks": sure_breaks,
         "ok_edges": ok_edges,
         "muted_breaks": muted_breaks,
+        "case_summary": case_summary,
         "events": _defense_events(session, repository_id),
         "opened_at": to_display(utcnow()),
         "blind": blind,

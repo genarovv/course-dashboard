@@ -8,6 +8,7 @@
                 onclick="if (confirm('Запустить обход сейчас? Займёт до пары минут.')) { this.disabled = true; this.textContent = 'обход идёт…'; fetch('/sync', {method: 'POST'}).then(function () { location.reload(); }, function () { location.reload(); }); }">обновить сейчас</button></p>
     <nav class="matrix-nav">
         <a href="/lessons">матрица занятий</a>
+        <a href="/defense" title="Нейтральный список дел — для проектора">режим защиты</a>
         <a href="/logout">Выйти</a>
     </nav>
 </header>
