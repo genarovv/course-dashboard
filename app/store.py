@@ -12,9 +12,10 @@
 Здесь же живут engine и фабрика сессий (файла database.py в структуре §3.1 нет).
 """
 
+import logging
 from datetime import datetime
 
-from sqlalchemy import create_engine, distinct, event, select
+from sqlalchemy import create_engine, distinct, event, func, select
 from sqlalchemy.orm import Session, sessionmaker
 
 from app.config import settings
@@ -193,6 +194,51 @@ def config_upsert_lesson(
         lesson.submission_channel = submission_channel
         return lesson, "updated"
     return lesson, "unchanged"
+
+
+_logger = logging.getLogger(__name__)
+
+
+def config_dedupe_artifact_defs(session: Session) -> int:
+    """D23 (итерация 5): guard от дублей artifact_def по ключу (занятие, роль, паттерн).
+
+    Runtime удаляет только дубли БЕЗ наблюдений (свежий артефакт бага — журнал
+    не затронут). Исторические дубли со снапшотами чистит миграция e9d23a5c1f04
+    (решение CEO 2026-07-31: ремонт журнала — только версионированной миграцией,
+    append-only триггеры И5 в runtime не снимаются); такие группы — warning.
+    Возвращает число удалённых определений; повторный вызов — 0 (идемпотентно).
+    """
+    dup_keys = session.execute(
+        select(ArtifactDef.lesson_id, ArtifactDef.role, ArtifactDef.expected_pattern)
+        .group_by(ArtifactDef.lesson_id, ArtifactDef.role, ArtifactDef.expected_pattern)
+        .having(func.count() > 1)
+    ).all()
+    deduped = 0
+    for lesson_id, role, pattern in dup_keys:
+        defs = list(session.scalars(select(ArtifactDef).where(
+            ArtifactDef.lesson_id == lesson_id,
+            ArtifactDef.role == role,
+            ArtifactDef.expected_pattern == pattern,
+        )))
+        observed = [
+            d for d in defs
+            if session.scalar(select(func.count()).where(
+                ArtifactSnapshot.artifact_def_id == d.id
+            ))
+        ]
+        keep_observed = observed or defs[:1]
+        for dup in defs:
+            if dup in keep_observed:
+                continue
+            session.delete(dup)  # наблюдений нет — журнал не затронут
+            deduped += 1
+        if len(keep_observed) > 1:
+            _logger.warning(
+                "Дубли artifact_def %s/%s с наблюдениями — чистит миграция e9d23a5c1f04",
+                role, pattern,
+            )
+    session.flush()
+    return deduped
 
 
 def config_upsert_artifact_def(
