@@ -259,7 +259,7 @@ def build_artifact_matrix(
 
     return {
         "stale": stale,
-        # D41: кнопка «обновить сейчас» гаснет, пока обход идёт (решение CEO)
+        # D42: кнопка «обновить сейчас» гаснет, пока обход идёт (решение CEO)
         "sync_running": is_sync_running(session, resolved_now),
         # D10 (#54): те же сигналы FR-6/FR-7/FR-3, что в матрице занятий
         **blind_spots_and_signals(session, active_repos, today or resolved_now.date()),

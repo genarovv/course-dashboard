@@ -58,7 +58,7 @@ async def sync(
     token_ok = bool(settings.sync_token) and secrets.compare_digest(token, settings.sync_token)
     if "user_id" not in request.session and not token_ok:  # BR-4: teacher-only
         return JSONResponse({"error": "не аутентифицирован"}, status_code=401)
-    # D41: обход уже идёт — честный отказ вместо 500 `database is locked`
+    # D42: обход уже идёт — честный отказ вместо 500 `database is locked`
     # (транзакция обхода держит единственного писателя SQLite). Кнопка в UI
     # погашена, но вторая вкладка и cron до этой проверки доходят.
     if sync_orchestrator.is_sync_running(session):

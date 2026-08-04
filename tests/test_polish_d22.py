@@ -97,7 +97,7 @@ def _seed(s, *, mr_lessons=(), mr_files=False):
     store.register_sync_outcome(
         s, sync_run_id=run.id, repository_id=repo.id, outcome=SyncOutcome.ok_changed
     )
-    # D41: обход фикстуры завершён — иначе кнопка «обновить сейчас» честно
+    # D42: обход фикстуры завершён — иначе кнопка «обновить сейчас» честно
     # погашена как «обход идёт», и AC 5 проверял бы несуществующее состояние
     store.update_sync_run_status(s, run.id, SyncStatus.completed)
     s.flush()

@@ -4,7 +4,7 @@
 <header class="matrix-header">
     <h1>Матрица «репозиторий × занятие»</h1>
     <p class="as-of as-of-note">Актуально на {{ matrix.as_of }}
-        {% if matrix.sync_running %}{# D41: обход идёт — повторный запуск ронял бы обход в «database is locked» #}
+        {% if matrix.sync_running %}{# D42: обход идёт — повторный запуск ронял бы обход в «database is locked» #}
         <button type="button" class="sync-now" disabled title="Обход уже идёт — дождитесь завершения">обход идёт…</button>
         {% else %}
         <button type="button" class="sync-now"

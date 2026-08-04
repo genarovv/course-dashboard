@@ -1,6 +1,6 @@
 # MAP — Тесты и покрытие course-dashboard
 
-**Дата:** 2026-08-04 (обновлено в MR D41: кнопка гаснет на время обхода)
+**Дата:** 2026-08-04 (обновлено в MR D42: кнопка гаснет на время обхода)
 **Стек:** Python 3.13 · FastAPI · SQLAlchemy 2.x (Mapped) · SQLite (WAL) · Alembic · Jinja2+HTMX · bcrypt
 **Тестов:** 424, все ✅ · **Покрытие общее:** 98% (`pytest-cov`, гейт `fail_under = 90` в hooks/pre-push)
 
@@ -46,7 +46,7 @@
 | `test_mr_ui.py` | модульный + интеграционный (TestClient) | FR-12 (#41): MR в карточке (ready_for_merge, closed не ready, дата, маркер «не найден»), колонка «Процесс» в матрице, рендер |
 | `test_reconcile.py` | модульный (session fixture + фейк-воркер) | FR-5/FR-8 (G4 #11): идентификация пар без валидного вердикта, create_task через инжектированный воркер (ядро FR-5 — за гейтом Фазы 0), D25 «не мигаем», deferred-ретрай, идемпотентность свода, свод в конце run_sync |
 | `test_sync_commit_before_reconcile.py` | интеграционный (файловая БД, две сессии) | FIX-I2: обход коммитит наблюдения до свода — чужая сессия видит снапшоты обхода, вердикт считается в том же обходе, в котором артефакт впервые наблюдён (репро боевого дефекта 2026-08-04: completed без вердиктов) |
-| `test_sync_busy_button.py` | модульный + интеграционный (TestClient) | D41: серверная истина `is_sync_running` (идёт / завершён / протухший in_progress), повторный POST /sync → 409 без второго SyncRun, кнопка погашена в обеих матрицах и активна при отсутствии обхода |
+| `test_sync_busy_button.py` | модульный + интеграционный (TestClient) | D42: серверная истина `is_sync_running` (идёт / завершён / протухший in_progress), повторный POST /sync → 409 без второго SyncRun, кнопка погашена в обеих матрицах и активна при отсутствии обхода |
 | `test_store.py` | модульный (session fixture) | Контракт store.py: ровно 5 `update_*` (#50), нет `delete_*`, все `register_*` на месте, ограничитель «сервисы не присваивают default_branch напрямую», `normalize_url()`, CRUD-флоу репозиториев/runs/credentials/overrides, `find_verdict_by_quadruple` |
 
 ---

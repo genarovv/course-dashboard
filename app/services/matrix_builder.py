@@ -229,7 +229,7 @@ def build_matrix(session: Session, llm_model: str | None = None, today: date | N
         "process": process,
         "extras": extras,
         "as_of": as_of,
-        # D41: кнопка «обновить сейчас» гаснет, пока обход идёт (решение CEO)
+        # D42: кнопка «обновить сейчас» гаснет, пока обход идёт (решение CEO)
         "sync_running": is_sync_running(session),
         # #31: пустой реестр — видимое состояние, не молчаливо пустая матрица
         "registry_count": len(active_repos),
