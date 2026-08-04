@@ -510,7 +510,12 @@ async def run_sync(
             await _observe_mrs(session, git_client, run.id, repo, process_markers)
 
     store.update_sync_run_status(session, run.id, _final_status(outcomes))
-    session.flush()
+    # Коммит ДО свода, а не flush: воркеры ядра FR-5 работают в собственных
+    # сессиях (coherence_analyzer.make_verdict_worker — «сессия на пару»), и
+    # незакоммиченные снапшоты обхода им не видны. Без этого каждая пара со
+    # свежим снапшотом падает в И2 «снапшоты пары не найдены» — обход рапортует
+    # completed, а вердиктов ноль (боевой случай 2026-08-04, обход 731b4991).
+    session.commit()
 
     # §5.1: свод-реконсиляция LLM-пар — в конце каждого обхода (G4, #11)
     await reconcile_llm_pairs(
