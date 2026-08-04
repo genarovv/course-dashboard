@@ -33,11 +33,11 @@ logger = logging.getLogger(__name__)
 _OK_OUTCOMES = {SyncOutcome.ok_changed, SyncOutcome.ok_unchanged}
 _pending_tasks: set[asyncio.Task] = set()  # GC-guard для fire-and-forget задач свода
 
-# D41: обход длится ~1,5 минуты на 9 репозиториев. Всё, что висит in_progress
-# дольше этого срока, — не идущий обход, а след упавшего процесса: статус в БД
-# некому было закрыть. Без срока давности кнопка «обновить сейчас» залипла бы
-# до ручной правки БД.
-ASSUME_DEAD_AFTER = timedelta(minutes=15)
+# D41 (порог выбран CEO 2026-08-04): обход длится ~1,5 минуты на 9 репозиториев.
+# Всё, что висит in_progress дольше 5 минут, — не идущий обход, а след упавшего
+# процесса: статус в БД некому было закрыть. Без срока давности кнопка
+# «обновить сейчас» залипла бы до ручной правки БД.
+ASSUME_DEAD_AFTER = timedelta(minutes=5)
 
 
 def is_sync_running(session: Session, now: datetime | None = None) -> bool:
