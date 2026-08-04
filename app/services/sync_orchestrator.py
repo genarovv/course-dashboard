@@ -11,11 +11,11 @@ import hashlib
 import logging
 import re
 from dataclasses import dataclass
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 
 from sqlalchemy.orm import Session
 
-from app import store
+from app import store, timeutil
 from app.clients.git_client import (
     GitAuthFailedError,
     GitClientError,
@@ -32,6 +32,25 @@ logger = logging.getLogger(__name__)
 
 _OK_OUTCOMES = {SyncOutcome.ok_changed, SyncOutcome.ok_unchanged}
 _pending_tasks: set[asyncio.Task] = set()  # GC-guard для fire-and-forget задач свода
+
+# D42 (порог выбран CEO 2026-08-04): обход длится ~1,5 минуты на 9 репозиториев.
+# Всё, что висит in_progress дольше 5 минут, — не идущий обход, а след упавшего
+# процесса: статус в БД некому было закрыть. Без срока давности кнопка
+# «обновить сейчас» залипла бы до ручной правки БД.
+ASSUME_DEAD_AFTER = timedelta(minutes=5)
+
+
+def is_sync_running(session: Session, now: datetime | None = None) -> bool:
+    """Идёт ли обход прямо сейчас (D42, решение CEO 2026-08-04).
+
+    Истина серверная, а не браузерная: погашенная кнопка в одной вкладке не
+    мешает ни второй вкладке, ни cron. Повторный запуск даёт 500 `database is
+    locked` — транзакция обхода держит единственного писателя SQLite.
+    """
+    last_run = store.find_last_sync_run(session)
+    if last_run is None or last_run.status != SyncStatus.in_progress:
+        return False
+    return (now or timeutil.utcnow()) - last_run.started_at < ASSUME_DEAD_AFTER
 
 
 def _content_hash(content: str) -> str:
@@ -510,7 +529,12 @@ async def run_sync(
             await _observe_mrs(session, git_client, run.id, repo, process_markers)
 
     store.update_sync_run_status(session, run.id, _final_status(outcomes))
-    session.flush()
+    # Коммит ДО свода, а не flush: воркеры ядра FR-5 работают в собственных
+    # сессиях (coherence_analyzer.make_verdict_worker — «сессия на пару»), и
+    # незакоммиченные снапшоты обхода им не видны. Без этого каждая пара со
+    # свежим снапшотом падает в И2 «снапшоты пары не найдены» — обход рапортует
+    # completed, а вердиктов ноль (боевой случай 2026-08-04, обход 731b4991).
+    session.commit()
 
     # §5.1: свод-реконсиляция LLM-пар — в конце каждого обхода (G4, #11)
     await reconcile_llm_pairs(
