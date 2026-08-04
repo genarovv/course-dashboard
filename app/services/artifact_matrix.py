@@ -18,6 +18,7 @@ from app.services import evidence_chain
 from app.services.evidence_chain import merged_no_review_count
 from app.services.labels import PARTIAL_LABELS, ROLE_HINTS, ROLE_TITLES, repo_short_name
 from app.services.matrix_builder import blind_spots_and_signals
+from app.services.sync_orchestrator import is_sync_running
 
 # D10 (#54), US-A3: обход старше этого срока — явный флаг устаревания на стикере
 STALE_AFTER = timedelta(hours=48)
@@ -258,6 +259,8 @@ def build_artifact_matrix(
 
     return {
         "stale": stale,
+        # D41: кнопка «обновить сейчас» гаснет, пока обход идёт (решение CEO)
+        "sync_running": is_sync_running(session, resolved_now),
         # D10 (#54): те же сигналы FR-6/FR-7/FR-3, что в матрице занятий
         **blind_spots_and_signals(session, active_repos, today or resolved_now.date()),
         "roles": [

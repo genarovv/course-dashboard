@@ -11,11 +11,11 @@ import hashlib
 import logging
 import re
 from dataclasses import dataclass
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 
 from sqlalchemy.orm import Session
 
-from app import store
+from app import store, timeutil
 from app.clients.git_client import (
     GitAuthFailedError,
     GitClientError,
@@ -32,6 +32,25 @@ logger = logging.getLogger(__name__)
 
 _OK_OUTCOMES = {SyncOutcome.ok_changed, SyncOutcome.ok_unchanged}
 _pending_tasks: set[asyncio.Task] = set()  # GC-guard для fire-and-forget задач свода
+
+# D41: обход длится ~1,5 минуты на 9 репозиториев. Всё, что висит in_progress
+# дольше этого срока, — не идущий обход, а след упавшего процесса: статус в БД
+# некому было закрыть. Без срока давности кнопка «обновить сейчас» залипла бы
+# до ручной правки БД.
+ASSUME_DEAD_AFTER = timedelta(minutes=15)
+
+
+def is_sync_running(session: Session, now: datetime | None = None) -> bool:
+    """Идёт ли обход прямо сейчас (D41, решение CEO 2026-08-04).
+
+    Истина серверная, а не браузерная: погашенная кнопка в одной вкладке не
+    мешает ни второй вкладке, ни cron. Повторный запуск даёт 500 `database is
+    locked` — транзакция обхода держит единственного писателя SQLite.
+    """
+    last_run = store.find_last_sync_run(session)
+    if last_run is None or last_run.status != SyncStatus.in_progress:
+        return False
+    return (now or timeutil.utcnow()) - last_run.started_at < ASSUME_DEAD_AFTER
 
 
 def _content_hash(content: str) -> str:

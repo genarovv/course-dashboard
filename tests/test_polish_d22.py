@@ -26,7 +26,7 @@ from sqlalchemy.orm import Session
 from alembic import command
 from app import store
 from app.main import app
-from app.models import GitHost, SnapshotStatus, SyncOutcome, SyncTrigger
+from app.models import GitHost, SnapshotStatus, SyncOutcome, SyncStatus, SyncTrigger
 from app.models.artifact_def import ArtifactDef
 from app.models.lesson import Lesson
 from app.routes import get_session
@@ -97,6 +97,9 @@ def _seed(s, *, mr_lessons=(), mr_files=False):
     store.register_sync_outcome(
         s, sync_run_id=run.id, repository_id=repo.id, outcome=SyncOutcome.ok_changed
     )
+    # D41: обход фикстуры завершён — иначе кнопка «обновить сейчас» честно
+    # погашена как «обход идёт», и AC 5 проверял бы несуществующее состояние
+    store.update_sync_run_status(s, run.id, SyncStatus.completed)
     s.flush()
     return repo
 

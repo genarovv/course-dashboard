@@ -13,6 +13,7 @@ from app.config import settings
 from app.models import SNAPSHOT_STATUS_RANK, SnapshotStatus, SyncOutcome, VerdictValue
 from app.services import evidence_chain
 from app.services.labels import PARTIAL_LABELS, STATUS_LABELS, repo_short_name
+from app.services.sync_orchestrator import is_sync_running
 
 
 def blind_spots_and_signals(session: Session, repos: list, today: date) -> dict:
@@ -228,6 +229,8 @@ def build_matrix(session: Session, llm_model: str | None = None, today: date | N
         "process": process,
         "extras": extras,
         "as_of": as_of,
+        # D41: кнопка «обновить сейчас» гаснет, пока обход идёт (решение CEO)
+        "sync_running": is_sync_running(session),
         # #31: пустой реестр — видимое состояние, не молчаливо пустая матрица
         "registry_count": len(active_repos),
         # #18 (v1.1): слепая зона FR-6, хроники FR-7, auth-баннер, «не проверялось»

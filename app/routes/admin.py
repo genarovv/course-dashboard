@@ -58,6 +58,11 @@ async def sync(
     token_ok = bool(settings.sync_token) and secrets.compare_digest(token, settings.sync_token)
     if "user_id" not in request.session and not token_ok:  # BR-4: teacher-only
         return JSONResponse({"error": "не аутентифицирован"}, status_code=401)
+    # D41: обход уже идёт — честный отказ вместо 500 `database is locked`
+    # (транзакция обхода держит единственного писателя SQLite). Кнопка в UI
+    # погашена, но вторая вкладка и cron до этой проверки доходят.
+    if sync_orchestrator.is_sync_running(session):
+        return JSONResponse({"error": "обход уже идёт — дождитесь завершения"}, status_code=409)
     triggered_by = SyncTrigger.schedule if token_ok else SyncTrigger.manual
     # шаблон (PRD FR-4, D35) и маркеры недели (FR-12) — из config.yaml
     config = config_manager.load_config()
