@@ -22,6 +22,7 @@ from app.config import settings
 from app.models import GitHost, SyncOutcome, SyncStatus, SyncTrigger, VerdictValue
 from app.models.artifact_def import ArtifactDef
 from app.models.artifact_snapshot import ArtifactSnapshot
+from app.models.branch_hint import BranchHint
 from app.models.coherence_verdict import CoherenceVerdict
 from app.models.edge_def import EdgeDef
 from app.models.git_credential import GitCredential
@@ -110,6 +111,43 @@ def register_snapshot(session: Session, **fields) -> ArtifactSnapshot:
     snapshot = ArtifactSnapshot(**fields)
     session.add(snapshot)
     return snapshot
+
+
+def register_branch_hint(session: Session, **fields) -> BranchHint:
+    """D43 (#69): подсказка «работа вне дефолтной ветки» (append-only, журнал)."""
+    hint = BranchHint(**fields)
+    session.add(hint)
+    return hint
+
+
+def find_branch_hints(session: Session, sync_run_id: str) -> list[BranchHint]:
+    """D43: подсказки конкретного обхода — ближайшие к корню и свежие первыми."""
+    return list(session.scalars(
+        select(BranchHint)
+        .where(BranchHint.sync_run_id == sync_run_id)
+        .order_by(BranchHint.artifacts_found.desc(), BranchHint.branch_name)
+    ))
+
+
+def find_latest_branch_hints(session: Session, repository_id: str) -> list[BranchHint]:
+    """D43: подсказки последнего обхода, в котором репозиторий вообще осматривался.
+
+    Матрице нужно текущее состояние, а таблица — журнал: берём срез самого
+    свежего обхода по этому репозиторию, а не объединение всех.
+    """
+    latest = session.scalar(
+        select(BranchHint.sync_run_id)
+        .where(BranchHint.repository_id == repository_id)
+        .order_by(BranchHint.observed_at.desc())
+        .limit(1)
+    )
+    if latest is None:
+        return []
+    return list(session.scalars(
+        select(BranchHint)
+        .where(BranchHint.repository_id == repository_id, BranchHint.sync_run_id == latest)
+        .order_by(BranchHint.artifacts_found.desc(), BranchHint.branch_name)
+    ))
 
 
 def register_verdict(session: Session, **fields) -> CoherenceVerdict:

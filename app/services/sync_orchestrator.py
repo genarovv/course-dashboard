@@ -267,6 +267,114 @@ async def _observe_artifact(
     return True
 
 
+_MAX_CANDIDATE_BRANCHES = 5
+
+
+def _parse_branch_date(raw):
+    """Дата головы ветки: сырая ISO-строка хостинга → datetime, сбой → None."""
+    if not raw:
+        return None
+    return _parse_host_datetime(raw)
+
+
+async def _branch_head_date(git_client, repo: Repository, branch):
+    """Дата головы ветки; GitHub в списке веток её не отдаёт — дочитываем точечно."""
+    known = _parse_branch_date(branch.committed_date)
+    if known is not None:
+        return known
+    getter = getattr(git_client, "get_head_commit_date", None)
+    if getter is None:
+        return None
+    try:
+        return _parse_branch_date(await getter(repo.repo_url, repo.git_host, ref=branch.name))
+    except GitClientError:
+        return None
+
+
+def _count_artifacts(artifact_defs: list[ArtifactDef], tree: list[str]) -> int:
+    """Сколько ролей курса представлено в дереве — грубая мера «здесь есть работа».
+
+    Считаются роли, не файлы: несколько дефов одной роли — альтернативные пути
+    одного артефакта (DM §1.4), иначе ветка со всеми альтернативами выглядела бы
+    богаче, чем есть.
+    """
+    return len({adef.role for adef in artifact_defs if _match_artifact(adef, tree)})
+
+
+async def _scan_branches(
+    session: Session,
+    git_client,
+    sync_run_id: str,
+    repo: Repository,
+    artifact_defs: list[ArtifactDef],
+    default_tree: list[str],
+) -> None:
+    """D43 (#69): найти работу, лежащую вне дефолтной ветки.
+
+    Вердикты по этим веткам не считаются — канон связности остаётся за дефолтной
+    веткой, и свод честно отвечает «в основной ветке пусто». Смысл шага в другом:
+    у студентов в форках ЦУ `main` защищена (merge только Maintainer), слить туда
+    работу они не могут физически, и пустая строка матрицы читалась как «не сделал».
+
+    Любая ошибка здесь — предупреждение, а не исход репозитория: подсказка это
+    удобство, она не вправе портить наблюдение артефактов (NFR-2).
+    """
+    lister = getattr(git_client, "list_branches", None)
+    if lister is None:
+        return
+    try:
+        branches = await lister(repo.repo_url, repo.git_host)
+    except GitClientError as exc:
+        logger.warning("Список веток %s недоступен (%s) — подсказки пропущены", repo.repo_url, exc)
+        return
+
+    in_default = _count_artifacts(artifact_defs, default_tree)
+    default_date = None
+    others = []
+    for branch in branches:
+        if branch.name == repo.default_branch:
+            default_date = await _branch_head_date(git_client, repo, branch)
+        else:
+            others.append(branch)
+
+    dated = []
+    for branch in others:
+        head_date = await _branch_head_date(git_client, repo, branch)
+        # ветка старше дефолтной — это её прошлое, а не спрятанная работа
+        if default_date is not None and head_date is not None and head_date <= default_date:
+            continue
+        dated.append((branch, head_date))
+
+    dated.sort(key=lambda pair: (pair[1] is None, -(pair[1].timestamp() if pair[1] else 0)))
+    if len(dated) > _MAX_CANDIDATE_BRANCHES:
+        dropped = [b.name for b, _ in dated[_MAX_CANDIDATE_BRANCHES:]]
+        logger.warning(
+            "%s: веток-кандидатов %d, осмотрены %d самых свежих; не осмотрены: %s",
+            repo.repo_url, len(dated), _MAX_CANDIDATE_BRANCHES, ", ".join(dropped),
+        )
+        dated = dated[:_MAX_CANDIDATE_BRANCHES]
+
+    for branch, head_date in dated:
+        try:
+            tree = await git_client.get_tree(repo.repo_url, repo.git_host, ref=branch.name)
+        except GitClientError as exc:
+            logger.warning("Ветка %s (%s) не прочитана: %s", branch.name, repo.repo_url, exc)
+            continue
+        found = _count_artifacts(artifact_defs, tree)
+        if found <= in_default:
+            continue  # прироста нет — сигналить не о чем (AC 6, защита от шума)
+        store.register_branch_hint(
+            session,
+            sync_run_id=sync_run_id,
+            repository_id=repo.id,
+            branch_name=branch.name,
+            head_sha=branch.head_sha,
+            head_date=head_date,
+            artifacts_found=found,
+            artifacts_in_default=in_default,
+        )
+
+
 async def _sync_one_repo(
     session: Session,
     git_client,
@@ -287,6 +395,9 @@ async def _sync_one_repo(
                 session, git_client, sync_run_id, repo, artifact_def, tree, head_sha,
                 head_date, template_hashes,
             )
+        # D43 (#69): подсказки по веткам — после наблюдения, отдельным шагом:
+        # они не влияют ни на снапшоты, ни на исход репозитория
+        await _scan_branches(session, git_client, sync_run_id, repo, artifact_defs, tree)
         return SyncOutcome.ok_changed if changed else SyncOutcome.ok_unchanged, None
     except GitClientError as exc:  # NFR-2: ошибка репозитория — исход, не крах обхода
         # Ошибка посреди цикла артефактов: уже записанные наблюдения остаются —

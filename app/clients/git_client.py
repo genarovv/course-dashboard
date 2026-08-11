@@ -51,6 +51,15 @@ class NoteInfo:
 
 
 @dataclass(frozen=True)
+class BranchInfo:
+    """Ветка репозитория: имя и голова (D43, #69). Дата — сырая ISO-строка хостинга."""
+
+    name: str
+    head_sha: str
+    committed_date: str | None
+
+
+@dataclass(frozen=True)
 class MrInfo:
     """Нормализованный MR/PR (FR-12, #38). Клиент не знает о моделях данных (§3.2)."""
 
@@ -164,6 +173,44 @@ class GitClient:
             headers = self._gitlab_headers()
         response = await self._request(url, headers)
         return response.text
+
+    async def list_branches(self, repo_url: str, git_host: str) -> list[BranchInfo]:
+        """D43 (#69): все ветки репозитория с датой головного коммита.
+
+        Нужно, чтобы отличать «студент ничего не сделал» от «сделал не в той
+        ветке»: в форках ЦУ `main` защищена, слить туда работу студент не может.
+        """
+        host, path = _parse_repo(repo_url)
+        if git_host == "GitHub":
+            data = await self._request_json(
+                f"https://api.github.com/repos/{path}/branches?per_page=100",
+                self._github_headers(),
+            )
+            # GitHub в списке веток даёт только sha — дата коммита тянется отдельно
+            # там, где она нужна (кандидатов немного, см. бюджет запросов D43)
+            return [
+                BranchInfo(name=b["name"], head_sha=(b.get("commit") or {}).get("sha") or "",
+                           committed_date=None)
+                for b in data
+            ]
+        branches: list[BranchInfo] = []
+        page = "1"
+        while page:
+            response = await self._request(
+                f"https://{host}/api/v4/projects/{quote(path, safe='')}/repository/branches"
+                f"?per_page=100&page={page}",
+                self._gitlab_headers(),
+            )
+            branches += [
+                BranchInfo(
+                    name=b["name"],
+                    head_sha=(b.get("commit") or {}).get("id") or "",
+                    committed_date=(b.get("commit") or {}).get("committed_date"),
+                )
+                for b in response.json()
+            ]
+            page = response.headers.get("x-next-page", "")
+        return branches
 
     async def list_merge_requests(self, repo_url: str, git_host: str) -> list[MrInfo]:
         """FR-12 (#38): все MR/PR репозитория (открытые, смерженные, закрытые)."""

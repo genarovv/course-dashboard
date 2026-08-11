@@ -23,6 +23,7 @@ from app.clients.git_client import BranchInfo, GitRepoUnavailableError
 from app.models import GitHost, SyncStatus, SyncTrigger
 from app.models.artifact_def import ArtifactDef
 from app.models.lesson import Lesson
+from app.services import sync_orchestrator
 from app.services.sync_orchestrator import run_sync
 
 REPO_URL = "https://github.com/s1/r"
@@ -203,8 +204,13 @@ async def test_request_budget_is_one_tree_per_candidate_branch(session):
 
 
 @pytest.mark.anyio
-async def test_many_candidate_branches_are_capped_and_logged(session, caplog):
-    """Репозиторий с 17 ветками не должен стоить 17 запросов — и урезание не молчит."""
+async def test_many_candidate_branches_are_capped_and_logged(session, monkeypatch):
+    """Репозиторий с 17 ветками не должен стоить 17 запросов — и урезание не молчит.
+
+    Логгер перехватывается напрямую, а не через caplog: фикстура прогоняет
+    миграции, `fileConfig` алембика заменяет обработчики корневого логгера, и
+    записи до caplog не доходят.
+    """
     _seed(session)
     names = [f"feat/{i}" for i in range(12)]
     trees = {"main": {"README.md": "x"}}
@@ -216,10 +222,14 @@ async def test_many_candidate_branches_are_capped_and_logged(session, caplog):
         for i, n in enumerate(names)
     ]
     client = FakeGitClient(trees=trees, branches=branches)
+    warnings: list[str] = []
+    monkeypatch.setattr(
+        sync_orchestrator.logger, "warning",
+        lambda msg, *args, **kw: warnings.append(msg % args if args else msg),
+    )
 
-    with caplog.at_level("WARNING"):
-        run = await _sync(session, client)
+    run = await _sync(session, client)
 
-    assert len(client.tree_calls) <= 1 + 5  # дефолтная + не больше пяти кандидатов
-    assert len(store.find_branch_hints(session, run.id)) <= 5
-    assert any("ветк" in r.getMessage().lower() for r in caplog.records)  # след урезания
+    assert len(client.tree_calls) == 1 + 5  # дефолтная + ровно пять самых свежих
+    assert len(store.find_branch_hints(session, run.id)) == 5
+    assert any("не осмотрены" in w for w in warnings)  # урезание названо поимённо

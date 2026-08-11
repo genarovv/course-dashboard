@@ -7,6 +7,7 @@ from app.models import (  # noqa: F401 — ensure models are registered
     Base,
     artifact_def,
     artifact_snapshot,
+    branch_hint,
     coherence_verdict,
     edge_def,
     git_credential,
