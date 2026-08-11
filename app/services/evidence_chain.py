@@ -374,8 +374,21 @@ def build_defense_card(
         "work_from": to_display(dates[0]) if dates else None,
         "work_to": to_display(dates[-1]) if dates else None,
     }
+    # D43 (#69): работа вне основной ветки. На защите это обязано быть видно:
+    # иначе комиссия читает пустое дело как «студент ничего не сделал», хотя
+    # работа есть, а слить её в основную ветку он не может (main защищена).
+    branch_hints = [
+        {
+            "branch_name": h.branch_name,
+            "artifacts_found": h.artifacts_found,
+            "artifacts_in_default": h.artifacts_in_default,
+            "head_date": to_display(h.head_date) if h.head_date else None,
+        }
+        for h in store.find_latest_branch_hints(session, repository_id)
+    ]
     return {
         **card,
+        "branch_hints": branch_hints,
         "sure_breaks": sure_breaks,
         "ok_edges": ok_edges,
         "muted_breaks": muted_breaks,

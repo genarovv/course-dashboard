@@ -14,6 +14,18 @@
 <div class="auth-banner">Репозиторий в слепой зоне{% if card.blind_detail %} ({{ card.blind_detail }}){% endif %} — показанные данные могли устареть.</div>
 {% endif %}
 
+{% if card.branch_hints %}
+<section class="defense-branches">
+    <h2>Работа вне основной ветки</h2>
+    <p class="branch-note">Вердикты ниже считаются только по основной ветке. Эти файлы в неё не влиты, поэтому в разрывах и в счёте сданного они не участвуют.</p>
+    <ul>
+        {% for hint in card.branch_hints %}
+        <li><span class="branch-name">{{ hint.branch_name }}</span> — артефактов курса {{ hint.artifacts_found }} против {{ hint.artifacts_in_default }} в основной ветке{% if hint.head_date %}, последний коммит {{ fmt_dt(hint.head_date) }}{% endif %}</li>
+        {% endfor %}
+    </ul>
+</section>
+{% endif %}
+
 <section class="defense-breaks">
     <h2>Разрывы связности (уверенность высокая, не погашены)</h2>
     {% for edge in card.sure_breaks %}

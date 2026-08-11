@@ -49,7 +49,9 @@ def _seed_with_hint(session, branch="dev", found=7):
     store.update_sync_run_status(session, run.id, SyncStatus.completed)
     store.register_branch_hint(
         session, sync_run_id=run.id, repository_id=repo.id, branch_name=branch,
-        head_sha="a" * 40, head_date=datetime(2026, 7, 15, 20, 8),
+        # время хранится в UTC, показывается местное (#32): 10:00 UTC не переваливает
+        # за полночь ни при одном разумном смещении, поэтому дата в метке — 15.07
+        head_sha="a" * 40, head_date=datetime(2026, 7, 15, 10, 0),
         artifacts_found=found, artifacts_in_default=1,
     )
     session.flush()

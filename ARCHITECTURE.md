@@ -318,6 +318,11 @@ POST /sync  →  sync_orchestrator.run_sync()
           # partial_reason=template_copy — сравнение с content_hash файлов шаблона (D35)
       → if content_hash != last_snapshot.content_hash:
           → register_snapshot(…)                  # INSERT ArtifactSnapshot (новое наблюдение)
+      → _scan_branches(…)                         # D43 (#69): работа вне основной ветки
+          # list_branches → кандидаты свежее головы основной → дерево каждой →
+          # число ролей курса; подсказка только при приросте; ≤5 кандидатов,
+          # урезание в лог; ошибка шага — warning, не исход репозитория.
+          # Вердикты по этим веткам НЕ считаются: канон связности за основной веткой.
       → record_sync_outcome(…)                    # INSERT SyncRunRepository (append-only)
 
   → update_sync_run_status(completed|partial)     # единственная мутация SyncRun (§3.5)

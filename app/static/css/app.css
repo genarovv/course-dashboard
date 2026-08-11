@@ -74,6 +74,19 @@ a { color: #2b4c7e; }
 .row-summary > span { margin-right: 0.5rem; }
 .row-breaks-chip { color: #8f0f0f; font-weight: 700; }
 .row-progress { color: #445; }
+/* D43 (#69): работа вне основной ветки — сообщение, а не тревога: это не разрыв
+   и не провал студента, а граница наблюдения. Отсюда спокойный синий, не красный. */
+.branch-hint {
+    display: block;
+    margin-top: 0.15rem;
+    font-size: 0.78rem;
+    color: #2f5d8a;
+    border-left: 2px solid #9dbcd8;
+    padding-left: 0.4rem;
+}
+.defense-branches { margin: 1rem 0; }
+.defense-branches .branch-note { font-size: 0.85rem; color: #555; margin: 0.2rem 0 0.5rem; }
+.defense-branches .branch-name { font-family: Consolas, 'Cascadia Mono', 'Courier New', monospace; }
 .sort-links { display: block; font-weight: 400; font-size: 0.75rem; margin-top: 0.15rem; }
 .sort-links a { color: inherit; text-decoration: none; border-bottom: 1px dashed #99a; margin-right: 0.5rem; }
 table.matrix { border-collapse: collapse; width: 100%; margin-top: 1rem; }

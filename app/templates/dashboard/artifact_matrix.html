@@ -91,7 +91,10 @@
                 <a class="defense-link" href="/students/{{ repo.id }}/defense" title="Режим защиты: дело одного студента, только уверенные разрывы">защита проекта</a>
                 <span class="row-summary">
                     {% if matrix.row_breaks[repo.id] %}<span class="row-breaks-chip" title="уникальные рёбра-разрывы репозитория">⚠ {{ matrix.row_breaks[repo.id] }}</span> {% endif %}<span class="row-progress" title="сдано ролей из ожидаемых (частично — тоже сдано)">{{ matrix.row_submitted[repo.id].x }}/{{ matrix.row_submitted[repo.id].m }}</span>{% if matrix.row_no_review[repo.id] %} <span class="no-review" title="merge request смержен без вердикта ревьюера">мимо ревью: {{ matrix.row_no_review[repo.id] }}</span>{% endif %}
-                </span></td>
+                </span>
+                {% for hint in matrix.row_branch_hints[repo.id] %}
+                <span class="branch-hint" title="В основной ветке этих файлов нет. Вердикты считаются только по основной ветке, поэтому строка выглядит пустой.">работа вне основной ветки: {{ hint.branch_name }} — артефактов {{ hint.artifacts_found }} против {{ hint.artifacts_in_default }}, коммит {{ hint.head_date_label }}</span>
+                {% endfor %}</td>
             {% for role in matrix.roles %}
             {% set cell = matrix.cells[repo.id][role.key] %}
             <td class="acell acell-{{ 'mr' if cell.mr_channel else (cell.status or 'none') }}{% if cell.break %} acell-break{% endif %}"

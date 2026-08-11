@@ -207,6 +207,7 @@ def build_artifact_matrix(
     )
 
     cells: dict[str, dict[str, dict]] = {}
+    row_branch_hints: dict[str, list[dict]] = {}
     row_breaks: dict[str, int] = {}
     row_submitted: dict[str, dict] = {}
     row_no_review: dict[str, int] = {}
@@ -236,6 +237,20 @@ def build_artifact_matrix(
         row_no_review[repo.id] = merged_no_review_count(
             store.find_latest_mr_observations(session, repo.id)
         )
+        # D43 (#69): работа вне основной ветки — сигнал, не вердикт. Пустая строка
+        # матрицы не должна читаться как «студент ничего не сделал», когда работа
+        # лежит в ветке, слить которую он не может (main защищена в форках ЦУ).
+        row_branch_hints[repo.id] = [
+            {
+                "branch_name": h.branch_name,
+                "artifacts_found": h.artifacts_found,
+                "artifacts_in_default": h.artifacts_in_default,
+                "head_date_label": (
+                    f"{timeutil.to_display(h.head_date):%d.%m}" if h.head_date else "дата неизвестна"
+                ),
+            }
+            for h in store.find_latest_branch_hints(session, repo.id)
+        ]
     if sort == "breaks":
         repos = sorted(repos, key=lambda r: -row_breaks[r.id])  # sorted стабилен — реестр внутри
     elif sort == "lag":
@@ -278,6 +293,7 @@ def build_artifact_matrix(
         ],
         "cells": cells,
         "row_breaks": row_breaks,
+        "row_branch_hints": row_branch_hints,
         "row_submitted": row_submitted,
         "row_no_review": row_no_review,
         "sort": sort,
