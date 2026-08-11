@@ -112,22 +112,26 @@ def _displaced_candidates(pattern: str, tree: list[str], exclude: set[str]) -> l
     """
     segments = pattern.split("/")
     basename = segments[-1]
+    # Якорь «весь контрактный путь под произвольным префиксом»: структура
+    # совпадает целиком, отличается только вложенность. Работает и там, где
+    # остальные якоря бессильны — у паттернов вида `src/**/*.py` предпоследний
+    # сегмент это `**`, привязаться не к чему (случай С-02: код в target/src/…).
+    prefixed = re.compile("^(?:[^/]+/)+" + _glob_regex(pattern).pattern.lstrip("^"))
+    found = [p for p in tree if prefixed.match(p)]
     if any(ch in basename for ch in "*?"):
-        if len(segments) < 2:
-            return []
-        anchor = segments[-2].lower()
-        if any(ch in anchor for ch in "*?"):
-            return []
-        name_regex = _glob_regex(basename)
-        found = [
-            p for p in tree
-            if _parent_dir(p).lower() == anchor and name_regex.match(p.rsplit("/", 1)[-1])
-        ]
+        if len(segments) >= 2:
+            anchor = segments[-2].lower()
+            if not any(ch in anchor for ch in "*?"):
+                name_regex = _glob_regex(basename)
+                found += [
+                    p for p in tree
+                    if _parent_dir(p).lower() == anchor and name_regex.match(p.rsplit("/", 1)[-1])
+                ]
     else:
         target = basename.lower()
-        found = [p for p in tree if p.rsplit("/", 1)[-1].lower() == target]
+        found += [p for p in tree if p.rsplit("/", 1)[-1].lower() == target]
     return sorted(
-        (p for p in found if p not in exclude and not _is_noise(p)),
+        {p for p in found if p not in exclude and not _is_noise(p)},
         key=lambda p: (p.count("/"), p),
     )
 
