@@ -118,7 +118,7 @@
 | repository_id | UUID | → Repository.id — строка матрицы (FR-4) |
 | artifact_def_id | UUID | → ArtifactDef.id — столбец матрицы (FR-4) |
 | status | enum(found, partial, not_found) | FR-4 |
-| partial_reason | json, null | JSON-массив причин «частично»: `["inexact_name", "wrong_place", "template_copy"]`. Пустой массив `[]` = нет причин (не partial). Несколько причин не теряются (C3, ARCHITECTURE v2 §6). |
+| partial_reason | json, null | JSON-массив причин «частично»: `["inexact_name", "wrong_place", "template_copy"]`. Пустой массив `[]` = нет причин (не partial). Несколько причин не теряются (C3, ARCHITECTURE v2 §6). **D44 (#70):** если по контрактному пути лежит заготовка, а рядом есть настоящий файл, наблюдается настоящий с причиной `wrong_place` — заготовка не вытесняет реальную работу. Обе копии заготовки → `template_copy` по контрактному пути (прежнее поведение). |
 | file_path | string, null | Фактический путь в репозитории |
 | source_commit_sha | string, null | SHA коммита — устойчивость хронологии к `force-push` (FR-9) |
 | source_commit_date | datetime, null | D19 (#65): дата головного коммита из Git API — «когда сделано» против «когда увидели» (хронология защиты). NULL у снапшотов до миграции и при сбое даты — UI показывает дату наблюдения с пометкой «зафиксировано обходом» |

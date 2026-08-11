@@ -81,17 +81,93 @@ def _match_artifact(artifact_def: ArtifactDef, tree: list[str]) -> list[str]:
     return sorted(path for path in tree if regex.match(path))
 
 
-def _find_displaced(pattern: str, tree: list[str]) -> str | None:
-    """BR-3: файл с ожидаемым именем, но не в ожидаемой папке («частично/не там»).
+_NOISE_SEGMENTS = frozenset({
+    "archive", "node_modules", ".git", "build", "dist", "vendor", ".venv",
+    "__pycache__", "site-packages", ".next",
+})
+# «target» намеренно НЕ в списке: у одного из репозиториев потока это рабочий
+# каталог проекта, а не каталог сборки. Шумным считается только то, что шумно
+# во всех наблюдаемых репозиториях.
 
-    Только для конкретных имён (без глоб-символов в basename): для «*.md»
-    поиск по имени вырождался бы в «любой md где угодно».
+
+def _is_noise(path: str) -> bool:
+    """Каталоги, где копия артефакта ничего не значит: архив, сборка, зависимости."""
+    return any(segment in _NOISE_SEGMENTS for segment in path.split("/")[:-1])
+
+
+def _parent_dir(path: str) -> str:
+    return path.rsplit("/", 1)[0].rsplit("/", 1)[-1] if "/" in path else ""
+
+
+def _displaced_candidates(pattern: str, tree: list[str], exclude: set[str]) -> list[str]:
+    """D44 (#70): пути, похожие на артефакт, но лежащие не по контрактному пути.
+
+    Два якоря, в зависимости от паттерна:
+      * конкретное имя файла — сравнение basename без учёта регистра
+        (`ARCHITECTURE.md` против `architecture/architecture.md`);
+      * паттерн с глобом (`product/user-stories/*.md`) — якорь по имени
+        последнего каталога, иначе «*.md» выродился бы в «любой md где угодно».
+
+    Порядок — ближайший к корню, затем по алфавиту: выбор кандидата детерминирован.
     """
-    basename = pattern.rsplit("/", 1)[-1]
+    segments = pattern.split("/")
+    basename = segments[-1]
     if any(ch in basename for ch in "*?"):
-        return None
-    candidates = sorted(p for p in tree if p.rsplit("/", 1)[-1] == basename)
+        if len(segments) < 2:
+            return []
+        anchor = segments[-2].lower()
+        if any(ch in anchor for ch in "*?"):
+            return []
+        name_regex = _glob_regex(basename)
+        found = [
+            p for p in tree
+            if _parent_dir(p).lower() == anchor and name_regex.match(p.rsplit("/", 1)[-1])
+        ]
+    else:
+        target = basename.lower()
+        found = [p for p in tree if p.rsplit("/", 1)[-1].lower() == target]
+    return sorted(
+        (p for p in found if p not in exclude and not _is_noise(p)),
+        key=lambda p: (p.count("/"), p),
+    )
+
+
+def _find_displaced(pattern: str, tree: list[str], exclude: set[str] | None = None) -> str | None:
+    """BR-3: файл с ожидаемым именем, но не в ожидаемой папке («частично/не там»)."""
+    candidates = _displaced_candidates(pattern, tree, exclude or set())
     return candidates[0] if candidates else None
+
+
+_MAX_CANDIDATES_READ = 3
+
+
+async def _find_real_displaced(
+    git_client,
+    repo: Repository,
+    pattern: str,
+    tree: list[str],
+    template_hashes: frozenset[str],
+    exclude: set[str],
+) -> tuple[str, str, str] | None:
+    """D44: первый кандидат «не там», который не является заготовкой.
+
+    Нужен, когда по контрактному пути лежит заготовка: иначе она маскирует
+    настоящую работу и репозиторий читается как «не сделано ничего». Читаем не
+    больше `_MAX_CANDIDATES_READ` кандидатов — цена детекта ограничена сверху.
+    Возвращает (путь, содержимое, хеш) или None, если настоящего файла рядом нет.
+    """
+    for path in _displaced_candidates(pattern, tree, exclude)[:_MAX_CANDIDATES_READ]:
+        try:
+            content = await git_client.get_file_content(
+                repo.repo_url, repo.git_host, path, ref=repo.default_branch
+            )
+        except GitClientError as exc:  # NFR-2: недочитанный кандидат не валит наблюдение
+            logger.warning("Кандидат «не там» %s не прочитан (%s) — пропущен", path, exc)
+            continue
+        content_hash = _content_hash(content)
+        if content.strip() and content_hash not in template_hashes:
+            return path, content, content_hash
+    return None
 
 
 async def _fetch_template_hashes(git_client, template_repo) -> frozenset[str]:
@@ -208,7 +284,18 @@ async def _observe_artifact(
         content_hash = _content_hash(content)
         # BR-3: заготовка = пустой файл ИЛИ не изменён относительно шаблона (D35)
         if not content.strip() or content_hash in template_hashes:
-            status, partial_reason = SnapshotStatus.partial, ["template_copy"]
+            # D44 (#70): заготовка по контрактному пути не маскирует настоящий файл рядом.
+            # Без этой ветки репозиторий, где вся работа лежит уровнем ниже, читается
+            # как «не сделано ничего» — заготовка вытесняет реальный артефакт.
+            real = await _find_real_displaced(
+                git_client, repo, artifact_def.expected_pattern, tree,
+                template_hashes, exclude=set(matches),
+            )
+            if real is not None:
+                file_path, content, content_hash = real
+                status, partial_reason = SnapshotStatus.partial, ["wrong_place"]
+            else:
+                status, partial_reason = SnapshotStatus.partial, ["template_copy"]
         else:
             status, partial_reason = SnapshotStatus.found, None
         probe_findings = _run_probes(artifact_def.content_probes, content) or None
