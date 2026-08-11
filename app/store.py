@@ -326,6 +326,20 @@ def find_repository_by_normalized_url(session: Session, repo_url: str) -> Reposi
     )
 
 
+def archive_repository(session: Session, repository_id: str) -> None:
+    """D45 (#71): убрать репозиторий из обходов и матрицы, сохранив историю (C2, FR-9)."""
+    repo = session.get(Repository, repository_id)
+    if repo is not None and repo.archived_at is None:
+        repo.archived_at = utcnow()
+
+
+def restore_repository(session: Session, repository_id: str) -> None:
+    """D45: вернуть репозиторий в реестр — история наблюдений при этом цела."""
+    repo = session.get(Repository, repository_id)
+    if repo is not None:
+        repo.archived_at = None
+
+
 def find_active_repositories(session: Session) -> list[Repository]:
     """FR-8: репозитории для обхода (archived_at IS NULL)."""
     return list(session.scalars(select(Repository).where(Repository.archived_at.is_(None))))

@@ -66,7 +66,10 @@ def test_import_creates_repositories_and_summary(client_and_engine):
     client, engine = client_and_engine
     response = client.post("/import-csv", content=CSV_1.encode())
     assert response.status_code == 200
-    assert response.json() == {"available": 1, "unavailable": 1, "duplicates": 1}
+    # D45 (#71): сводка получила два новых числа — реконсиляция реестра
+    assert response.json() == {
+        "available": 1, "unavailable": 1, "duplicates": 1, "archived": 0, "restored": 0,
+    }
     with Session(engine) as s:
         repos = s.scalars(select(Repository)).all()
         assert len(repos) == 2  # дубликат не создан
@@ -79,7 +82,9 @@ def test_reimport_adds_new_without_losing_old(client_and_engine):
     client.post("/import-csv", content=CSV_1.encode())
     csv_2 = CSV_1 + "Новикова Анна,https://gitlab.com/novikova/repo\n"
     response = client.post("/import-csv", content=csv_2.encode())
-    assert response.json() == {"available": 1, "unavailable": 0, "duplicates": 3}
+    assert response.json() == {
+        "available": 1, "unavailable": 0, "duplicates": 3, "archived": 0, "restored": 0,
+    }
     with Session(engine) as s:
         urls = set(s.scalars(select(Repository.normalized_repo_url)))
         assert urls == {
