@@ -316,6 +316,11 @@ POST /sync  →  sync_orchestrator.run_sync()
       → content_hash = sha256(content)
       → классификация: found | partial | not_found
           # partial_reason=template_copy — сравнение с content_hash файлов шаблона (D35)
+          # D44 (#70): заготовка по контрактному пути не маскирует настоящий файл —
+          #   при template_copy/пустом файле ищется кандидат «не там» (до 3 чтений,
+          #   шумные каталоги отброшены); настоящий кандидат наблюдается как
+          #   partial/wrong_place. Сопоставление имени регистронезависимо; для
+          #   глоб-паттернов якорь — имя последнего каталога, не имя файла.
       → if content_hash != last_snapshot.content_hash:
           → register_snapshot(…)                  # INSERT ArtifactSnapshot (новое наблюдение)
       → _scan_branches(…)                         # D43 (#69): работа вне основной ветки

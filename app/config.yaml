@@ -128,6 +128,13 @@ lessons:
         expected_pattern: "src/**/*.js"
       - role: code
         expected_pattern: "functions/**/*.js"
+      # Стек студент выбирает сам (ADR-002 к нему не относится) — контракт обязан
+      # покрывать нативные стеки потока. Без этих строк приложение на Swift не
+      # засчитывалось как код ни в одной ветке: найдено живым прогоном 2026-08-11.
+      - role: code
+        expected_pattern: "**/*.swift"
+      - role: code
+        expected_pattern: "**/*.kt"
   - number: 10
     title: "Управление документацией"
     date: 2026-07-16
