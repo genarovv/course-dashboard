@@ -1,8 +1,8 @@
 # MAP — Тесты и покрытие course-dashboard
 
-**Дата:** 2026-08-04 (обновлено в MR D42: кнопка гаснет на время обхода)
+**Дата:** 2026-08-14 (обновлено в MR #73: хвосты ревью ADR-006)
 **Стек:** Python 3.13 · FastAPI · SQLAlchemy 2.x (Mapped) · SQLite (WAL) · Alembic · Jinja2+HTMX · bcrypt
-**Тестов:** 424, все ✅ · **Покрытие общее:** 98% (`pytest-cov`, гейт `fail_under = 90` в hooks/pre-push)
+**Тестов:** 475, все ✅ · **Покрытие общее:** 96,5% (последний замер — MR #75; гейт `fail_under = 90` в hooks/pre-push)
 
 ---
 
@@ -48,6 +48,7 @@
 | `test_sync_commit_before_reconcile.py` | интеграционный (файловая БД, две сессии) | FIX-I2: обход коммитит наблюдения до свода — чужая сессия видит снапшоты обхода, вердикт считается в том же обходе, в котором артефакт впервые наблюдён (репро боевого дефекта 2026-08-04: completed без вердиктов) |
 | `test_sync_busy_button.py` | модульный + интеграционный (TestClient) | D42: серверная истина `is_sync_running` (идёт / завершён / протухший in_progress), повторный POST /sync → 409 без второго SyncRun, кнопка погашена в обеих матрицах и активна при отсутствии обхода |
 | `test_store.py` | модульный (session fixture) | Контракт store.py: ровно 5 `update_*` (#50), нет `delete_*`, все `register_*` на месте, ограничитель «сервисы не присваивают default_branch напрямую», `normalize_url()`, CRUD-флоу репозиториев/runs/credentials/overrides, `find_verdict_by_quadruple` |
+| `test_t73_adr006_tails.py` | модульный (MockTransport, без сети) + doc-code sync | #73 (хвосты ревью ADR-006): слэш-ветки (`feature/T-005`) кодируются в путевых сегментах GitHub (`git/trees/{ref}`, `commits/{ref}`) и доходят неискажёнными в query-`?ref=`; ARCHITECTURE §3.5 называет всю поверхность мутаций состояния (5 `update_*` + archive/restore), поверхность закрыта, `archived_at` присваивается только внутри store |
 
 ---
 

@@ -85,8 +85,10 @@ class GitClient:
         """Список путей файлов репозитория (рекурсивно)."""
         host, path = _parse_repo(repo_url)
         if git_host == "GitHub":
+            # #73: правило #51 действует и здесь — слэши веток вида feature/T-005
+            # в путевом сегменте кодируются (%2F), иначе GitHub отвечает 404
             data = await self._request_json(
-                f"https://api.github.com/repos/{path}/git/trees/{quote(ref)}?recursive=1",
+                f"https://api.github.com/repos/{path}/git/trees/{quote(ref, safe='')}?recursive=1",
                 self._github_headers(),
             )
             return [e["path"] for e in data.get("tree", []) if e.get("type") == "blob"]
@@ -107,7 +109,7 @@ class GitClient:
         host, path = _parse_repo(repo_url)
         if git_host == "GitHub":
             data = await self._request_json(
-                f"https://api.github.com/repos/{path}/commits/{quote(ref)}",
+                f"https://api.github.com/repos/{path}/commits/{quote(ref, safe='')}",  # #73: см. get_tree
                 self._github_headers(),
             )
             return data["sha"]
@@ -132,7 +134,7 @@ class GitClient:
         host, path = _parse_repo(repo_url)
         if git_host == "GitHub":
             data = await self._request_json(
-                f"https://api.github.com/repos/{path}/commits/{quote(ref)}",
+                f"https://api.github.com/repos/{path}/commits/{quote(ref, safe='')}",  # #73: см. get_tree
                 self._github_headers(),
             )
             # "committer": null у коммитов без учётки GitHub — None, не AttributeError
