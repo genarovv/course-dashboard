@@ -111,6 +111,14 @@ else
     PY="python"
 fi
 
+# Хук запускается git с экспортированным GIT_DIR (для linked worktree — на
+# .git/worktrees/<name>). Утечка в тесты ломает изолированные git-репозитории
+# (tests/test_hooks.py): их git-команды начинают работать с репозиторием worktree.
+# Очищаем git-переменные окружения перед тестами.
+unset GIT_DIR GIT_WORK_TREE GIT_INDEX_FILE GIT_OBJECT_DIRECTORY \
+      GIT_ALTERNATE_OBJECT_DIRECTORIES GIT_CEILING_DIRECTORIES \
+      GIT_PREFIX GIT_ASKPASS
+
 echo "pre-push: ruff…" >&2
 "$PY" -m ruff check . || exit 1
 
