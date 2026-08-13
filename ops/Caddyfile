@@ -8,6 +8,18 @@
 
 coursedashboard.edunit.org {
 	encode gzip
+
+	# Сканерный мусор режется на прокси, до приложения не доходит.
+	# Повод — аудит журнала 2026-08-14: боты ищут .env, WordPress,
+	# профайлер Symfony и чужие логи; FastAPI отвечал теми же 404,
+	# но тратил на это ресурсы и засорял свой журнал.
+	# Фильтр консервативный: только классы, которых в приложении нет
+	# и не будет; экзотику пусть по-прежнему ловит FastAPI.
+	# Классы: .env* в любом месте пути, любой *.php, /wp-* и /wordpress*,
+	# профайлер, xmlrpc, .git* в любом месте пути, /var/log/ в пути.
+	@scanner path /.env* */.env* *.php /wp-* /wordpress* /_profiler* /xmlrpc* /.git* */.git* /var/log/* */var/log/*
+	respond @scanner 404
+
 	reverse_proxy 127.0.0.1:8000
 
 	log {
