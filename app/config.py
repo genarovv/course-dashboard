@@ -1,3 +1,4 @@
+import os
 from pathlib import Path
 
 from pydantic import AliasChoices, Field
@@ -35,9 +36,33 @@ class Settings(BaseSettings):
     # None — взять смещение сервера. Хранение в БД всегда в UTC.
     tz_offset_minutes: int | None = None
 
+    # S76 (#76): сколько веток-кандидатов осматривает обход (D43). Потолок был
+    # зашит константой 5 — у С-03 кандидатов 13, восемь не осматривались никогда
+    # (постоянная слепая зона). Цена ветки — один запрос дерева (D43 AC).
+    branch_scan_limit: int = 5
+
     # extra="ignore" (#33): лишние CD_-переменные в .env (например CD_ADMIN_PASSWORD,
     # который читает только миграция) не должны ронять старт приложения
     model_config = {"env_prefix": "CD_", "env_file": ".env", "extra": "ignore"}
 
 
 settings = Settings()
+
+#: Значение sqlalchemy.url, записанное в alembic.ini репозитория.
+_ALEMBIC_INI_DEFAULT_URL = "sqlite:///./course_dashboard.db"
+
+
+def alembic_database_url(ini_url: str | None) -> str:
+    """Адрес базы для миграций — тот же файл, который читает приложение.
+
+    Инцидент 31.07: alembic берёт адрес из alembic.ini, приложение — из
+    CD_DATABASE_URL; расхождение = миграция пустого файла молча. После переноса
+    боевой базы в data/ (2026-08-14) CD_DATABASE_URL перекрывает дефолт ini.
+
+    Перекрывается ТОЛЬКО дефолт: явно заданный URL (тестовые фикстуры через
+    set_main_option, сознательно правленый ini) остаётся в силе — иначе
+    экспортированный CD_DATABASE_URL увёл бы тестовые миграции в боевую базу.
+    """
+    if ini_url and ini_url != _ALEMBIC_INI_DEFAULT_URL:
+        return ini_url
+    return os.environ.get("CD_DATABASE_URL") or ini_url or _ALEMBIC_INI_DEFAULT_URL

@@ -3,6 +3,7 @@ from logging.config import fileConfig
 from sqlalchemy import engine_from_config, pool
 
 from alembic import context
+from app.config import alembic_database_url
 from app.models import (  # noqa: F401 — ensure models are registered
     Base,
     artifact_def,
@@ -21,6 +22,12 @@ from app.models import (  # noqa: F401 — ensure models are registered
 )
 
 config = context.config
+# S76 (#76): миграция и приложение обязаны смотреть в один файл — CD_DATABASE_URL
+# перекрывает дефолт alembic.ini (инцидент 31.07 «мигрировали пустой файл»;
+# явный set_main_option тестовых фикстур остаётся сильнее, см. app.config)
+config.set_main_option(
+    "sqlalchemy.url", alembic_database_url(config.get_main_option("sqlalchemy.url"))
+)
 if config.config_file_name is not None:
     # disable_existing_loggers=False: иначе fileConfig глушит логгеры приложения,
     # уже созданные к моменту миграции (в тестах alembic и app живут в одном процессе)

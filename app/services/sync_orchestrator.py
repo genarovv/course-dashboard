@@ -365,7 +365,8 @@ async def _observe_artifact(
     return True
 
 
-_MAX_CANDIDATE_BRANCHES = 5
+# S76 (#76): потолок настраивается (CD_BRANCH_SCAN_LIMIT) — читается на месте,
+# чтобы прод мог поднять его без правки кода (слепая зона С-03: 13 кандидатов)
 
 
 def _parse_branch_date(raw):
@@ -462,13 +463,14 @@ async def _scan_branches(
         dated.append((branch, head_date))
 
     dated.sort(key=lambda pair: (pair[1] is None, -(pair[1].timestamp() if pair[1] else 0)))
-    if len(dated) > _MAX_CANDIDATE_BRANCHES:
-        dropped = [b.name for b, _ in dated[_MAX_CANDIDATE_BRANCHES:]]
+    limit = settings.branch_scan_limit
+    if len(dated) > limit:
+        dropped = [b.name for b, _ in dated[limit:]]
         logger.warning(
             "%s: веток-кандидатов %d, осмотрены %d самых свежих; не осмотрены: %s",
-            repo.repo_url, len(dated), _MAX_CANDIDATE_BRANCHES, ", ".join(dropped),
+            repo.repo_url, len(dated), limit, ", ".join(dropped),
         )
-        dated = dated[:_MAX_CANDIDATE_BRANCHES]
+        dated = dated[:limit]
 
     for branch, head_date in dated:
         try:
@@ -589,6 +591,12 @@ async def reconcile_llm_pairs(
                 "Свод: %d пар без вердикта; ядро FR-5 не подключено (гейт Фазы 0)", len(pairs)
             )
         return pairs, []
+    # S76 (#76): свод называет объём работы ядра явно — тихий успех при
+    # подключённом воркере был неотличим от тихого отказа (класс FIX-I2)
+    if pairs:
+        logger.info("Свод: %d пар без вердикта поставлено ядру", len(pairs))
+    else:
+        logger.info("Свод: пар без вердикта нет")
     tasks = [asyncio.create_task(verdict_worker(pair)) for pair in pairs]
     for task in tasks:
         # event loop держит task слабой ссылкой — без guard задача может быть
