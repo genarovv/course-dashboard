@@ -1,8 +1,8 @@
 # MAP — Тесты и покрытие course-dashboard
 
-**Дата:** 2026-08-14 (после слияния #73 + D46 + S76 + D47)
+**Дата:** 2026-08-14 (обновлено в MR D48: лок зависимостей)
 **Стек:** Python 3.12 · FastAPI · SQLAlchemy 2.x (Mapped) · SQLite (WAL) · Alembic · Jinja2+HTMX · bcrypt
-**Тестов:** 489, все ✅ · **Покрытие общее:** 96,7% (`pytest-cov`, гейт `fail_under = 90` в hooks/pre-push)
+**Тестов:** 493, все ✅ · **Покрытие общее:** 96,7% (`pytest-cov`, гейт `fail_under = 90` в hooks/pre-push)
 
 ---
 
@@ -15,6 +15,7 @@
 | `test_config_manager.py` | модульный + интеграционный (session fixture, TestClient) | FR-2 (S4 #6, ADR-005): создание Lesson/ArtifactDef/EdgeDef/Rubric из YAML, идемпотентность reload, repoint рубрики со старыми вердиктами нетронутыми, флаг golden set, ограничитель «config_* вызывает только config_manager», роут /admin/reload-config, чтение конфига на старте |
 | `test_csv_import.py` | интеграционный (TestClient + MockTransport) | FR-1: CSV-импорт создаёт репозитории, дубликаты (И6) отсеиваются, reimport не теряет старые, без авторизации → 401 |
 | `test_health.py` | интеграционный (TestClient + реальная БД) | FR-8 (I2 #13): /health без аутентификации — время последнего обхода, пары без вердикта, deferred по причинам, нули на пустой БД |
+| `test_d48_deps_lock.py` | модульный (файлы pyproject/lock) | D48 (#79): requirements.lock существует и полностью пиновая (`==`), все прямые зависимости покрыты, uvicorn без extras, websockets/httptools/watchfiles не в lock |
 | `test_d47_uvicorn_format.py` | модульный (глобальные логгеры, без сервера) | D47: логи uvicorn в формате #75 — configure_logging снимает хендлеры `uvicorn`/`uvicorn.error`/`uvicorn.access` и включает propagate к root (UtcFormatter: UTC-время, уровень, источник); текст access-строки не переделан; повторный вызов снова снимает хендлеры и не дублирует root-хендлер |
 | `test_s76_observability.py` | интеграционный (TestClient + реальная БД) + модульный | S76 (#76): вход/неудача/блокировка логируются без сырых имён (user_marker, NFR-3); свод называет число пар при подключённом ядре; httpx ограничен WARNING (ПД-URL); `alembic_database_url` — CD_DATABASE_URL перекрывает только дефолт ini; потолок веток-кандидатов настраивается (CD_BRANCH_SCAN_LIMIT) |
 | `test_evidence_chain.py` | модульный (session fixture) + интеграционный (TestClient) | FR-9 (D4 #14): хронология по observed_at (force-push), рёбра done/pending/no_data, вердикт+уверенность+≤5 точек, override-флаг, GET /students/{id} (200/303/404) |
