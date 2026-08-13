@@ -5,7 +5,10 @@
 CD_TZ_OFFSET_MINUTES; по умолчанию берётся смещение сервера.
 """
 
+import logging
 from datetime import UTC, datetime, timedelta
+
+logger = logging.getLogger(__name__)
 
 
 def utcnow() -> datetime:
@@ -39,6 +42,7 @@ def fmt_dt(value: datetime | str | None) -> str:
         try:
             value = datetime.fromisoformat(value)
         except ValueError:
+            logger.debug("Непарсибельная дата %r отдана как есть", value)
             return value
     return value.strftime("%d.%m %H:%M")
 

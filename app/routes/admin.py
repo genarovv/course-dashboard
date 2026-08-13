@@ -10,6 +10,7 @@ from app import store
 from app.clients.git_client import GitClient
 from app.clients.llm_client import LLMClient
 from app.config import settings
+from app.logging_config import user_marker
 from app.models import SyncTrigger
 from app.routes import get_session
 from app.services import config_manager, csv_importer, sync_orchestrator
@@ -64,6 +65,9 @@ async def sync(
     if sync_orchestrator.is_sync_running(session):
         return JSONResponse({"error": "обход уже идёт — дождитесь завершения"}, status_code=409)
     triggered_by = SyncTrigger.schedule if token_ok else SyncTrigger.manual
+    # #75: в лог идёт короткий хеш оператора, а не идентификатор (ПД — вне журнала);
+    # cron — без оператора, его метка — сам триггер schedule.
+    actor = user_marker(request.session.get("user_id")) if not token_ok else None
     # шаблон (PRD FR-4, D35) и маркеры недели (FR-12) — из config.yaml
     config = config_manager.load_config()
     # C2 (#36): ядро FR-5 подключено к своду — воркер в собственных сессиях (fire-and-forget)
@@ -72,7 +76,7 @@ async def sync(
         if llm_client_factory is not None else None
     )
     run = await sync_orchestrator.run_sync(
-        session, git_client, triggered_by=triggered_by,
+        session, git_client, triggered_by=triggered_by, actor=actor,
         template_repo=config.template_repo,
         process_markers=config.process_markers,
         verdict_worker=verdict_worker,

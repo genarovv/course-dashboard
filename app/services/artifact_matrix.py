@@ -7,6 +7,7 @@
 заметки, FR-10) отдаёт build_cell_details — модальное окно в UI.
 """
 
+import logging
 from datetime import date, datetime, timedelta
 
 from sqlalchemy.orm import Session
@@ -19,6 +20,8 @@ from app.services.evidence_chain import merged_no_review_count
 from app.services.labels import PARTIAL_LABELS, ROLE_HINTS, ROLE_TITLES, repo_short_name
 from app.services.matrix_builder import blind_spots_and_signals
 from app.services.sync_orchestrator import is_sync_running
+
+logger = logging.getLogger(__name__)
 
 # D10 (#54), US-A3: обход старше этого срока — явный флаг устаревания на стикере
 STALE_AFTER = timedelta(hours=48)
@@ -312,6 +315,7 @@ def build_cell_details(
     try:
         role_enum = ArtifactRole(role)
     except ValueError:
+        logger.warning("Запрошены детали ячейки с неизвестной ролью %r", role)
         return None
     repo = store.find_repository_by_id(session, repository_id)
     defs = store.find_artifact_defs_by_role(session, role_enum)

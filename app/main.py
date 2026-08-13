@@ -8,8 +8,13 @@ from starlette.middleware.sessions import SessionMiddleware
 
 from app import store
 from app.config import settings
+from app.logging_config import configure_logging
 from app.routes import admin, auth, dashboard, health
 from app.services import config_manager
+
+# #75: логгер приложения настраивается при старте процесса, а не лениво —
+# иначе первый же logger.info сценария уходит в lastResort без времени/уровня.
+configure_logging()
 
 
 @asynccontextmanager

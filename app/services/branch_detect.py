@@ -18,12 +18,15 @@ logger = logging.getLogger(__name__)
 async def refresh_default_branch(session: Session, git_client, repo: Repository) -> None:
     """Сверить default_branch репозитория с API хостинга.
 
-    Ошибка API — молча пропускаем (репозиторий уйдёт в свой исход при чтении дерева);
+    Ошибка API — warning (репозиторий уйдёт в свой исход при чтении дерева);
     None у пустого проекта (#48) в NOT NULL не пишем. Мутация — только через store (§3.5).
     """
     try:
         actual = await git_client.fetch_default_branch(repo.repo_url, repo.git_host)
-    except GitClientError:
+    except GitClientError as exc:
+        logger.warning(
+            "Не удалось сверить default-ветку %s (%s) — остаёмся на прежней", repo.repo_url, exc
+        )
         return
     if actual and actual != repo.default_branch:
         store.update_repository_default_branch(session, repo.id, actual)

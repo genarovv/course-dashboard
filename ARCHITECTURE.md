@@ -126,6 +126,7 @@
 app/
 ├── main.py                  # App factory, lifespan, middleware
 ├── config.py                # Pydantic-settings (пути, ключи из env, DeepSeek endpoint)
+├── logging_config.py        # Единый логгер: формат «время UTC, уровень, модуль»; user_marker (#75)
 │
 ├── models/                  # SQLAlchemy ORM (11 сущностей в v1-коде, DM §1)
 │   ├── __init__.py          #   enums (StrEnum) + TypeDecorator — единственное место определения доменов
@@ -203,6 +204,7 @@ routes → services → store.py → models
 - **store.py** — единая точка доступа к данным. Экспортирует `register_*` / `find_*`, ровно 5 узких `update_*` и функции конфиг-реконсиляции (вызывает только config_manager) — §3.5. Для журнальных сущностей update/delete физически не экспортируются. Внутри — прямые SQLAlchemy-запросы.
 - **clients** не знают о модели данных — работают с сырыми текстами и Pydantic-схемами.
 - **models** — pure SQLAlchemy declarative, без бизнес-методов. Enums — в `models/__init__.py` (StrEnum), единое место определений.
+- **Логирование (#75)** — единая конфигурация в `logging_config.py`, подключается при старте `main.py`. Каждая запись: UTC-время, уровень, модуль-источник. Ошибки — с контекстом и трассировкой; ПД/пароли/токены не пишутся (NFR-3), оператор в логе — короткий хеш `user_marker`.
 
 ### 3.3 Управление enum-доменами (одно определение)
 

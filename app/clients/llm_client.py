@@ -11,11 +11,14 @@ LLMUnavailableError → deferred(llm_unavailable). Клиент не знает 
 """
 
 import json
+import logging
 import re
 
 import httpx
 
 from app.config import settings
+
+logger = logging.getLogger(__name__)
 
 
 class LLMUnavailableError(Exception):
@@ -86,7 +89,11 @@ def validate_llm_response(raw: str) -> dict | None:
         text = fence.group(1)
     try:
         data = json.loads(text)
-    except (json.JSONDecodeError, ValueError):
+    except (json.JSONDecodeError, ValueError) as exc:
+        # Невалидный JSON — не сбой конвейера, а вход валидации: решение о ретрае
+        # у клиента, судьба пары — deferred(parse_error) у вызывающего. След на
+        # DEBUG, чтобы диагностировать стабильно-невалидные ответы без шума.
+        logger.debug("Невалидный JSON ответа LLM (%s): %s", exc.__class__.__name__, text[:200])
         return None
     if not isinstance(data, dict):
         return None
