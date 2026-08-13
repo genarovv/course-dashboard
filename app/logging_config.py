@@ -58,6 +58,11 @@ def configure_logging(level: int = logging.INFO) -> None:
     управляется самим uvicorn; прикладные логгеры наследуют уровень и хендлер
     от root через propagate.
     """
+    # S76 (#76): httpx на INFO пишет строку с полным URL на каждый запрос к
+    # хостингу — сотни строк на обход и адреса репозиториев с именами студентов
+    # (ПД, NFR-3) в журнале. Ошибки httpx остаются видимыми (WARNING+).
+    # До идемпотентного guard: уровень не хендлер, повторная установка безвредна.
+    logging.getLogger("httpx").setLevel(logging.WARNING)
     root = logging.getLogger()
     if any(getattr(h, "_cd_logging_configured", False) for h in root.handlers):
         return
