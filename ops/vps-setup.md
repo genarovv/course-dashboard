@@ -30,7 +30,8 @@ sudo ufw status
 sudo -u cd git clone <адрес репозитория> /srv/course-dashboard/app-src
 cd /srv/course-dashboard/app-src
 sudo -u cd python3.12 -m venv /srv/course-dashboard/.venv
-sudo -u cd /srv/course-dashboard/.venv/bin/pip install -r requirements.txt   # или pip install -e .
+sudo -u cd /srv/course-dashboard/.venv/bin/pip install -r requirements.lock  # точные версии (D48)
+sudo -u cd /srv/course-dashboard/.venv/bin/pip install --no-deps -e .        # сам проект, без пересбора дерева
 sudo -u cd mkdir -p /srv/course-dashboard/data
 ```
 
