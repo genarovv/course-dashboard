@@ -25,6 +25,11 @@ _DATEFMT = "%Y-%m-%dT%H:%M:%S%z"
 #: чтобы отличать операторов в журнале, не раскрывая идентификатор).
 _MARKER_LEN = 8
 
+#: Логгеры, которые uvicorn настраивает своим LOGGING_CONFIG до импорта
+#: приложения: uvicorn и uvicorn.access — со своими хендлерами и propagate=False,
+#: uvicorn.error — пишет через родителя uvicorn.
+_UVICORN_LOGGERS = ("uvicorn", "uvicorn.error", "uvicorn.access")
+
 
 class UtcFormatter(logging.Formatter):
     """Время записи всегда в UTC — хранение и логи живут в одном часовом поясе (#32)."""
@@ -54,15 +59,30 @@ def configure_logging(level: int = logging.INFO) -> None:
     """Настроить root-логгер: stderr, формат «время UTC, уровень, модуль: сообщение».
 
     Идемпотентно: повторные вызовы (перезагрузка uvicorn, несколько импортов
-    main в тестах) не плодят хендлеры. Логгеры uvicorn не трогаем — их формат
-    управляется самим uvicorn; прикладные логгеры наследуют уровень и хендлер
-    от root через propagate.
+    main в тестах) не плодят хендлеры. Прикладные логгеры наследуют уровень и
+    хендлер от root через propagate.
+
+    D47: логгеры uvicorn переводятся на тот же формат — их собственные хендлеры
+    снимаются, включается propagate к root. Раньше их не трогали, и в journald
+    жили вперемешку два вида таймстампов и записей (аудит 2026-08-14). Текст
+    access-сообщения самого uvicorn не переделывается — единая только обёртка
+    «время, уровень, источник».
     """
     # S76 (#76): httpx на INFO пишет строку с полным URL на каждый запрос к
     # хостингу — сотни строк на обход и адреса репозиториев с именами студентов
     # (ПД, NFR-3) в журнале. Ошибки httpx остаются видимыми (WARNING+).
     # До идемпотентного guard: уровень не хендлер, повторная установка безвредна.
     logging.getLogger("httpx").setLevel(logging.WARNING)
+    # D47: uvicorn настраивает свои логгеры ДО импорта приложения, а этот код
+    # выполняется при импорте app.main — момент валиден для перенастройки.
+    # Снимаем их хендлеры и включаем propagate: запись поднимается к root и
+    # получает UTC-время, уровень и источник от UtcFormatter. Тоже до guard:
+    # операция повторно безвредна, а хендлеры uvicorn могли появиться уже после
+    # первого вызова (например, переустановка конфигурации логирования).
+    for name in _UVICORN_LOGGERS:
+        uv_logger = logging.getLogger(name)
+        uv_logger.handlers.clear()
+        uv_logger.propagate = True
     root = logging.getLogger()
     if any(getattr(h, "_cd_logging_configured", False) for h in root.handlers):
         return
