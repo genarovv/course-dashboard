@@ -3,7 +3,8 @@
 Контракт «журнал vs состояние vs конфиг» — три категории (§3.5, ADR-005):
 - журнальные сущности (Rubric, ArtifactSnapshot, CoherenceVerdict, SyncRunRepository,
   создание Override) — только register_* (INSERT) и find_* (SELECT);
-- рабочее состояние — ровно 5 узких update_* (см. §3.5; 5-й — тикет #50); delete_* нет вообще;
+- рабочее состояние — ровно 5 узких update_* плюс пара archive_/restore_repository
+  (см. §3.5; 5-й — тикет #50, пара — #71); delete_* нет вообще;
 - конфиг-реконсиляция из config.yaml (config_*: Lesson, ArtifactDef, EdgeDef.rubric_id) —
   единственный вызывающий config_manager, закреплено тестом на импорт;
 - system_user не создаётся через store — И10: сид одной строки при миграции,
@@ -171,11 +172,11 @@ def register_override(session: Session, *, coherence_verdict_id: str, reason: st
     return override
 
 
-# ── СОСТОЯНИЕ: ровно 5 узких update_* (ARCHITECTURE §3.5; 5-й — тикет #50) ───
+# ── СОСТОЯНИЕ: 5 узких update_* + archive/restore (ARCHITECTURE §3.5) ────────
 
 
 def update_repository_default_branch(session: Session, repository_id: str, branch: str) -> None:
-    """ADR-006 (#50): смена наблюдаемой ветки — единственная легальная мутация Repository.
+    """ADR-006 (#50): смена наблюдаемой ветки — единственная легальная мутация default_branch.
 
     5-й узкий update_* (§3.5): детект default-ветки при импорте и обходе менял поле
     напрямую в сервисах мимо store — узаконено здесь, прямые присваивания запрещены
@@ -211,6 +212,24 @@ def update_credential_validity(session: Session, credential_id: str, *, is_valid
     credential = session.get(GitCredential, credential_id)
     credential.is_valid = is_valid
     credential.checked_at = utcnow()
+
+
+# Пара archive/restore (#71) — тоже мутации состояния (§3.5): жили в секции
+# find_*, перенесены сюда тикетом #73, чтобы код и контракт читались одинаково.
+
+
+def archive_repository(session: Session, repository_id: str) -> None:
+    """D45 (#71): убрать репозиторий из обходов и матрицы, сохранив историю (C2, FR-9)."""
+    repo = session.get(Repository, repository_id)
+    if repo is not None and repo.archived_at is None:
+        repo.archived_at = utcnow()
+
+
+def restore_repository(session: Session, repository_id: str) -> None:
+    """D45: вернуть репозиторий в реестр — история наблюдений при этом цела."""
+    repo = session.get(Repository, repository_id)
+    if repo is not None:
+        repo.archived_at = None
 
 
 # ── КОНФИГ-РЕКОНСИЛЯЦИЯ из config.yaml (категория 3 §3.5, ADR-005) ──────────
@@ -362,20 +381,6 @@ def find_repository_by_normalized_url(session: Session, repo_url: str) -> Reposi
     return session.scalar(
         select(Repository).where(Repository.normalized_repo_url == normalize_url(repo_url))
     )
-
-
-def archive_repository(session: Session, repository_id: str) -> None:
-    """D45 (#71): убрать репозиторий из обходов и матрицы, сохранив историю (C2, FR-9)."""
-    repo = session.get(Repository, repository_id)
-    if repo is not None and repo.archived_at is None:
-        repo.archived_at = utcnow()
-
-
-def restore_repository(session: Session, repository_id: str) -> None:
-    """D45: вернуть репозиторий в реестр — история наблюдений при этом цела."""
-    repo = session.get(Repository, repository_id)
-    if repo is not None:
-        repo.archived_at = None
 
 
 def find_active_repositories(session: Session) -> list[Repository]:
