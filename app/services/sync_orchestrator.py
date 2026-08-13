@@ -262,6 +262,13 @@ async def _head_commit_date(git_client, repo: Repository):
     try:
         raw = await getter(repo.repo_url, repo.git_host, ref=repo.default_branch)
     except GitClientError:
+        # D19: дата — свидетельство «в плюс», не обязательное условие наблюдения.
+        # Не молчим: след на DEBUG, чтобы отличать «даты нет от API» от «забыли»
+        # при расследовании обхода без дат на матрице.
+        logger.debug(
+            "Дата головного коммита %s недоступна — наблюдение без даты",
+            repo.repo_url, exc_info=True,
+        )
         return None
     return _parse_host_datetime(raw) if raw else None
 
@@ -379,6 +386,10 @@ async def _branch_head_date(git_client, repo: Repository, branch):
     try:
         return _parse_branch_date(await getter(repo.repo_url, repo.git_host, ref=branch.name))
     except GitClientError:
+        logger.debug(
+            "Дата головы ветки %s/%s недоступна — ветка без даты",
+            repo.repo_url, branch.name, exc_info=True,
+        )
         return None
 
 
@@ -614,6 +625,7 @@ def _parse_host_datetime(value: str):
     try:
         parsed = datetime.fromisoformat(value.replace("Z", "+00:00"))
     except ValueError:
+        logger.debug("Нераспознанная дата хостинга: %r", value)
         return None
     if parsed.tzinfo is not None:
         parsed = parsed.astimezone(UTC).replace(tzinfo=None)
@@ -714,48 +726,70 @@ async def run_sync(
     llm_model: str | None = None,  # модель четвёрки И3; по умолчанию — settings.deepseek_model
     verdict_worker=None,  # ядро FR-5; None до прохождения Фазы 0 (PRD §13)
     process_markers=None,  # FR-12 (#40): маркеры недели из config.yaml; None — MR-шаг выключен
+    actor=None,  # #75: метка оператора (user_marker); None — cron
 ) -> SyncRun:
-    """Полный обход активных репозиториев (§5.1). Возвращает SyncRun с финальным статусом."""
+    """Полный обход активных репозиториев (§5.1). Возвращает SyncRun с финальным статусом.
+
+    #75: главный сценарий логируется тремя INFO-записями — «начат» (с триггером
+    и оператором), «завершён» (статус, число репозиториев) и «не завершился»
+    (неожиданное исключение: контекст + трассировка, проброс наверх).
+    """
     run = store.register_sync_run(session, triggered_by=triggered_by)
     session.flush()
+    actor_suffix = f" оператор={actor}" if actor else ""
+    logger.info(
+        "Обход начат: run=%s триггер=%s%s", run.id, triggered_by.value, actor_suffix
+    )
+    try:
+        artifact_defs = [
+            adef
+            for lesson in store.find_all_lessons(session)
+            for adef in store.find_artifact_defs_by_lesson(session, lesson.id)
+        ]
+        template_hashes = await _fetch_template_hashes(git_client, template_repo)  # D35: раз за обход
 
-    artifact_defs = [
-        adef
-        for lesson in store.find_all_lessons(session)
-        for adef in store.find_artifact_defs_by_lesson(session, lesson.id)
-    ]
-    template_hashes = await _fetch_template_hashes(git_client, template_repo)  # D35: раз за обход
+        # ADR-006: сверка default_branch для репо, созданных до фикса (#48/#50 — общий шаг)
+        for repo in store.find_active_repositories(session):
+            await refresh_default_branch(session, git_client, repo)
+        session.flush()
 
-    # ADR-006: сверка default_branch для репо, созданных до фикса (#48/#50 — общий шаг)
-    for repo in store.find_active_repositories(session):
-        await refresh_default_branch(session, git_client, repo)
-    session.flush()
+        outcomes: list[SyncOutcome] = []
+        for repo in store.find_active_repositories(session):
+            outcome, detail = await _sync_one_repo(
+                session, git_client, run.id, repo, artifact_defs, template_hashes
+            )
+            store.register_sync_outcome(
+                session, sync_run_id=run.id, repository_id=repo.id, outcome=outcome, detail=detail
+            )
+            outcomes.append(outcome)
+            # FR-12 (#40): наблюдение MR — после артефактов, деградация независимая (NFR-2)
+            if process_markers is not None:
+                await _observe_mrs(session, git_client, run.id, repo, process_markers)
 
-    outcomes: list[SyncOutcome] = []
-    for repo in store.find_active_repositories(session):
-        outcome, detail = await _sync_one_repo(
-            session, git_client, run.id, repo, artifact_defs, template_hashes
+        store.update_sync_run_status(session, run.id, _final_status(outcomes))
+        # Коммит ДО свода, а не flush: воркеры ядра FR-5 работают в собственных
+        # сессиях (coherence_analyzer.make_verdict_worker — «сессия на пару»), и
+        # незакоммиченные снапшоты обхода им не видны. Без этого каждая пара со
+        # свежим снапшотом падает в И2 «снапшоты пары не найдены» — обход рапортует
+        # completed, а вердиктов ноль (боевой случай 2026-08-04, обход 731b4991).
+        session.commit()
+
+        # §5.1: свод-реконсиляция LLM-пар — в конце каждого обхода (G4, #11)
+        await reconcile_llm_pairs(
+            session,
+            llm_model=llm_model or settings.deepseek_model,
+            verdict_worker=verdict_worker,
         )
-        store.register_sync_outcome(
-            session, sync_run_id=run.id, repository_id=repo.id, outcome=outcome, detail=detail
+    except Exception:
+        # #75: «не смог» — незапланированное исключение срединного обхода.
+        # Контекст + трассировка; повторный бросок, чтобы вызывающий (роут /sync)
+        # отдал 500, а SyncRun остался in_progress до самопогашения по D42.
+        logger.exception(
+            "Обход не завершился: run=%s триггер=%s", run.id, triggered_by.value
         )
-        outcomes.append(outcome)
-        # FR-12 (#40): наблюдение MR — после артефактов, деградация независимая (NFR-2)
-        if process_markers is not None:
-            await _observe_mrs(session, git_client, run.id, repo, process_markers)
-
-    store.update_sync_run_status(session, run.id, _final_status(outcomes))
-    # Коммит ДО свода, а не flush: воркеры ядра FR-5 работают в собственных
-    # сессиях (coherence_analyzer.make_verdict_worker — «сессия на пару»), и
-    # незакоммиченные снапшоты обхода им не видны. Без этого каждая пара со
-    # свежим снапшотом падает в И2 «снапшоты пары не найдены» — обход рапортует
-    # completed, а вердиктов ноль (боевой случай 2026-08-04, обход 731b4991).
-    session.commit()
-
-    # §5.1: свод-реконсиляция LLM-пар — в конце каждого обхода (G4, #11)
-    await reconcile_llm_pairs(
-        session,
-        llm_model=llm_model or settings.deepseek_model,
-        verdict_worker=verdict_worker,
+        raise
+    logger.info(
+        "Обход завершён: run=%s статус=%s репозиториев=%d",
+        run.id, run.status, len(outcomes),
     )
     return run
