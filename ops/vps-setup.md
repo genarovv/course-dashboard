@@ -83,6 +83,30 @@ sudo journalctl -u caddy -n 30 --no-pager     # видно выпуск серт
 Предусловие: запись A домена уже указывает на этот сервер (проверить `nslookup coursedashboard.edunit.org 8.8.8.8`), порты 80 и 443 открыты.
 Проверка шага — из браузера, не из терминала: `https://coursedashboard.edunit.org` открывается, замок в адресной строке есть, страница входа отдаётся.
 
+### Обновление Caddyfile (в том числе фильтр сканерного мусора, D46)
+
+`ops/Caddyfile` в репозитории — источник правды; на сервере лежит его копия. Любое изменение доставляется так: скопировать, проверить синтаксис, перечитать без простоя.
+
+```bash
+cd /srv/course-dashboard/app-src
+sudo cp ops/Caddyfile /etc/caddy/Caddyfile
+caddy validate --config /etc/caddy/Caddyfile
+sudo systemctl reload caddy
+```
+
+Контрольная проверка фильтра: мусорные пути получают 404 от прокси, живые работают как раньше.
+
+```bash
+# Мусор — 404 от Caddy, в журнале приложения этих запросов нет
+curl -s -o /dev/null -w "%{http_code}\n" https://coursedashboard.edunit.org/.env
+curl -s -o /dev/null -w "%{http_code}\n" https://coursedashboard.edunit.org/wp-login.php
+# Живые пути — как раньше: /health отвечает 200, /login отдаёт страницу входа
+curl -s -o /dev/null -w "%{http_code}\n" https://coursedashboard.edunit.org/health
+curl -s -o /dev/null -w "%{http_code}\n" https://coursedashboard.edunit.org/login
+```
+
+Как убедиться, что фильтр работает по назначению: запрос `/.env` виден в `/var/log/caddy/course-dashboard.log`, но НЕ появляется в `journalctl -u course-dashboard` — значит, до uvicorn он не дошёл.
+
 ## Шаг 6. Расписание обхода
 
 ```bash
