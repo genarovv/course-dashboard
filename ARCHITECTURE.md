@@ -128,7 +128,7 @@ app/
 ├── config.py                # Pydantic-settings (пути, ключи из env, DeepSeek endpoint)
 ├── logging_config.py        # Единый логгер: формат «время UTC, уровень, модуль»; user_marker (#75)
 │
-├── models/                  # SQLAlchemy ORM (11 сущностей в v1-коде, DM §1)
+├── models/                  # SQLAlchemy ORM (15 сущностей в v1-коде, DM §1)
 │   ├── __init__.py          #   enums (StrEnum) + TypeDecorator — единственное место определения доменов
 │   ├── system_user.py       #   SystemUser — FR-0
 │   ├── repository.py        #   Repository — FR-1, FR-6; содержит archived_at (C2); БЕЗ кеш-колонок (§3.5)
@@ -140,6 +140,8 @@ app/
 │   ├── sync_run.py          #   SyncRun — FR-8
 │   ├── sync_run_repository.py  # SyncRunRepository — FR-6/7/8
 │   ├── mr_observation.py    #   MrObservation — FR-12 (ADR-007, И12); журнал наблюдений MR
+│   ├── branch_hint.py       #   BranchHint — D43 (#69); журнал «работа вне основной ветки»
+│   ├── practice_observation.py # PracticeObservation — FR-14 этап 1 (#80); журнал проверок приёмов
 │   ├── artifact_snapshot.py #   ArtifactSnapshot — FR-4; partial_reason — JSON-массив (C3)
 │   ├── coherence_verdict.py #   CoherenceVerdict — FR-5
 │   └── override.py          #   Override — FR-10
@@ -152,6 +154,7 @@ app/
 │   ├── matrix_builder.py    #   Проекция матрицы занятий FR-4/6/7
 │   ├── artifact_matrix.py   #   Матрица «репозиторий × артефакт» + модалка деталей (D7, макет CEO 2026-07-30)
 │   ├── evidence_chain.py    #   Хронология FR-9
+│   ├── practice_checker.py  #   Проверки приёмов курса FR-14 этап 1 (#80): история/текст, без LLM
 │   ├── csv_importer.py      #   Импорт CSV → Repository (FR-1)
 │   ├── branch_detect.py     #   Детект default-ветки — общий шаг импорта и обхода (ADR-006, #50)
 │   └── config_manager.py    #   config.yaml → синк в БД (FR-2)
@@ -162,7 +165,7 @@ app/
 │
 ├── routes/                  # FastAPI HTML-роуты (Jinja2)
 │   ├── auth.py              #   GET/POST /login, GET /logout (FR-0)
-│   ├── dashboard.py         #   GET / — матрица занятий; GET /artifacts — матрица артефактов (D7, макет CEO) + модалка; GET /students/{id} — карточка (FR-9); POST /verdicts/{id}/override-toggle (FR-10)
+│   ├── dashboard.py         #   GET / — матрица занятий; GET /artifacts — матрица артефактов (D7, макет CEO) + модалка; GET /practices — свод приёмов курса (FR-14); GET /students/{id} — карточка (FR-9); POST /verdicts/{id}/override-toggle (FR-10)
 │   ├── health.py            #   GET /health — счётчики из БД (вычислимый запрос, без in-memory состояния)
 │   └── admin.py             #   POST /sync, POST /import-csv, POST /credential (FR-1,3,8)
 │
@@ -243,7 +246,7 @@ class EnumColumn(types.TypeDecorator):
 
 Контракт v2 «store.py — только insert/select» был фактически неверен: UPDATE нужен пяти местам (находка 2 ревью). Двухчастный контракт v3 «журнал + ровно 4 `update_*`» тоже оказался неполон: он противоречил data-model §3.2 (`EdgeDef.rubric_id` перенаправляется на новую версию рубрики) и AC тикета S4 — reload `config.yaml` обязан реконсилировать `Lesson`, `ArtifactDef` и `EdgeDef.rubric_id` (решение CEO 2026-07-16, ADR-005; протокол `decisions/meetings/2026-07-16-S4-rubric-repoint.md`). Вместо того чтобы прятать мутации, разделяем явно — **три категории**:
 
-**1. Журнал (иммутабельно, только `register_*`):** `Rubric`, `ArtifactSnapshot`, `CoherenceVerdict`, `SyncRunRepository`, создание `Override`. Для них store.py не экспортирует update/delete — это и есть основной механизм И5 (плюс триггеры на 2 доказательных таблицах, §4).
+**1. Журнал (иммутабельно, только `register_*`):** `Rubric`, `ArtifactSnapshot`, `CoherenceVerdict`, `SyncRunRepository`, `MrObservation` (FR-12), `BranchHint` (D43), `PracticeObservation` (FR-14, `register_practice_observation` — #80), создание `Override`. Для них store.py не экспортирует update/delete — это и есть основной механизм И5 (плюс триггеры на 2 доказательных таблицах, §4).
 
 **2. Рабочее состояние (ровно 5 узких `update_*` + пара `archive_repository`/`restore_repository`; 5-й `update_*` добавлен тикетом #50, пара — #71):**
 
@@ -341,6 +344,16 @@ POST /sync  →  sync_orchestrator.run_sync()
       → маркеры process_markers из config.yaml (regex по описанию)
       → register_mr_observation(…)               # INSERT MrObservation (append-only, И12)
       # ошибка чтения MR — исход, не крах обхода (NFR-2); выводы из порядка коммитов не делаются
+
+  → ПРОВЕРКИ ПРИЁМОВ КУРСА (FR-14 этап 1, #80; после MR-шага, по его журналу):
+      → practice_checker.run_practice_checks(): по конфигу practice_checks —
+        коммиты MR (tests-first / bug-repro), изменённые файлы MR (код и доки одним MR),
+        доля коммитов с ID тикета, круг ревью, адрес прототипа в README, файлы-паттерны дерева
+      → register_practice_observation(…)         # INSERT PracticeObservation (append-only)
+      # бюджет: ≤3 смерженных MR на репозиторий, урезание — warning поимённо (образец D43);
+      # MR без изменений с прошлой проверки не перечитываются (кэш по updated_at);
+      # ошибка проверки → status=no_data + warning, обход не валится (NFR-2);
+      # дерево переиспользуется из шага наблюдения, репозиторий без дерева — шаг пропущен
 
   → session.commit()                              # ОБЯЗАТЕЛЬНО до свода (FIX-I2):
       # воркеры ядра работают в собственных сессиях — незакоммиченные наблюдения

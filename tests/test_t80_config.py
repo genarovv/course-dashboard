@@ -94,6 +94,45 @@ def test_process_markers_docs_waiver(config):
 
 
 # ── content_probes: jtbd / data_model / prd (существующий механизм T2 #44) ──
+# В боевой config.yaml пробы НЕ включены: контрактный тест test_content_probes
+# (узкая редакция T2) разрешает пробы только claude_md и architecture; включение =
+# изменение того теста = изменение требования, утверждает CEO при merge. Здесь
+# проверяется сам механизм: пробы спеки парсятся конфиг-схемой и ловят то,
+# ради чего написаны (в config.yaml они лежат подготовленным комментарием).
+
+SPEC_PROBES_YAML = """
+lessons:
+  - number: 4
+    title: "JTBD"
+    date: 2026-06-25
+    artifacts:
+      - role: jtbd
+        expected_pattern: "product/jtbd.md"
+        content_probes:
+          - key: jtbd_three_part
+            label: "трёхчастная формула JTBD"
+            contains: "Когда.*(хочу|нужно).*чтобы"
+  - number: 6
+    title: "Схема данных"
+    date: 2026-07-02
+    artifacts:
+      - role: data_model
+        expected_pattern: "data-model.md"
+        content_probes:
+          - key: erdiagram
+            label: "ER-диаграмма mermaid"
+            contains: "erDiagram"
+  - number: 5
+    title: "PRD"
+    date: 2026-06-30
+    artifacts:
+      - role: prd
+        expected_pattern: "product/prd.md"
+        content_probes:
+          - key: acceptance_criteria
+            label: "критерии приёмки"
+            contains: "Given|Когда.*Тогда|- \\\\[ \\\\]"
+"""
 
 
 def _probes_by_role(config):
@@ -105,22 +144,28 @@ def _probes_by_role(config):
     return probes
 
 
-def test_probe_jtbd_three_part(config):
-    (probe,) = [p for p in _probes_by_role(config)["jtbd"] if p.contains]
+@pytest.fixture(scope="module")
+def spec_probes():
+    from app.services.config_manager import parse_config
+
+    return _probes_by_role(parse_config(SPEC_PROBES_YAML))
+
+
+def test_probe_jtbd_three_part(spec_probes):
+    (probe,) = [p for p in spec_probes["jtbd"] if p.contains]
     three_part = "Когда я готовлюсь к занятию, я хочу видеть матрицу, чтобы не листать репозитории"
     assert re.search(probe.contains, three_part, re.I | re.M)
     assert not re.search(probe.contains, "Просто список пожеланий", re.I | re.M)
 
 
-def test_probe_data_model_erdiagram(config):
-    probes = _probes_by_role(config)["data_model"]
+def test_probe_data_model_erdiagram(spec_probes):
+    probes = spec_probes["data_model"]
     assert probes, "у роли data_model обязана быть проба erDiagram"
     assert any(p.contains and re.search(p.contains, "```mermaid\nerDiagram\n```") for p in probes)
 
 
-def test_probe_prd_acceptance_criteria(config):
-    probes = _probes_by_role(config)["prd"]
-    matching = [p for p in probes if p.contains]
+def test_probe_prd_acceptance_criteria(spec_probes):
+    matching = [p for p in spec_probes["prd"] if p.contains]
     assert matching, "у роли prd обязана быть проба критериев приёмки"
     pattern = matching[0].contains
     for sample in ("Given пустой реестр", "Когда обход завершён, Тогда метка обновится", "- [ ] критерий"):

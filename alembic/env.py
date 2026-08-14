@@ -13,7 +13,9 @@ from app.models import (  # noqa: F401 — ensure models are registered
     edge_def,
     git_credential,
     lesson,
+    mr_observation,  # отсутствовал с 9e51c07d2af4 — autogenerate предлагал drop (найдено T80)
     override,
+    practice_observation,
     repository,
     rubric,
     sync_run,

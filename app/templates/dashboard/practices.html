@@ -1,0 +1,55 @@
+{% extends "base.html" %}
+{% block title %}Приёмы курса — Course Dashboard{% endblock %}
+{% block content %}
+<header class="matrix-header">
+    <h1>Приёмы курса</h1>
+    <p class="as-of-note">Наблюдения по истории коммитов, MR и дереву основной ветки — без оценок:
+        доказательства смотрит и трактует преподаватель.
+        Порядок коммитов (tests-first, bug repro) — след, не доказательство: историю можно переписать задним числом.</p>
+    <nav class="matrix-nav">
+        <a href="/">матрица артефактов</a>
+        <a href="/lessons">матрица занятий</a>
+        <a href="/logout">Выйти</a>
+    </nav>
+</header>
+
+{% if not view.checks %}
+<p class="state">Проверки приёмов не настроены — секция practice_checks в config.yaml пуста.</p>
+{% else %}
+<table class="practice-table">
+    <thead>
+        <tr>
+            <th>Репозиторий</th>
+            {% for check in view.checks %}
+            <th title="{{ check.label }} (занятие {{ check.lesson }})">{{ check.label }}</th>
+            {% endfor %}
+        </tr>
+    </thead>
+    <tbody>
+        {% for row in view.rows %}
+        {# клик по строке раскрывает доказательства; title дублирует их в ячейке #}
+        <tr class="practice-row" title="{{ row.repo_url }}"
+            onclick="var n = this.nextElementSibling; n.hidden = !n.hidden;">
+            <td>{{ row.name }}</td>
+            {% for cell in row.cells %}
+            <td class="cell-{{ cell.status }}" title="{{ cell.title }}">{{ cell.symbol }}</td>
+            {% endfor %}
+        </tr>
+        <tr class="practice-evidence" hidden>
+            <td colspan="{{ view.checks|length + 1 }}">
+                <ul>
+                    {% for cell in row.cells %}
+                    <li><b>{{ view.checks[loop.index0].label }}</b> — {{ cell.title }}
+                        {% if cell.observed_at %} (проверено {{ fmt_dt(cell.observed_at) }}){% endif %}</li>
+                    {% endfor %}
+                </ul>
+            </td>
+        </tr>
+        {% else %}
+        <tr><td colspan="{{ view.checks|length + 1 }}">Реестр пуст — репозиториев нет.</td></tr>
+        {% endfor %}
+    </tbody>
+</table>
+<p class="legend-note">✓ — приём применён · ✗ — не применён · — — нет данных. Подробности — кликом по строке.</p>
+{% endif %}
+{% endblock %}

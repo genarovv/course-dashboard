@@ -500,7 +500,10 @@ async def _sync_one_repo(
     repo: Repository,
     artifact_defs: list[ArtifactDef],
     template_hashes: frozenset[str],
-) -> tuple[SyncOutcome, str | None]:
+) -> tuple[SyncOutcome, str | None, list[str] | None]:
+    """Обход одного репозитория. Третий элемент — дерево основной ветки: его
+    переиспользует шаг проверок приёмов (FR-14), чтобы не читать дерево дважды;
+    при ошибке дерева нет (None) — проверки честно пропускаются."""
     try:
         tree = await git_client.get_tree(repo.repo_url, repo.git_host, ref=repo.default_branch)
         head_sha = await git_client.get_head_sha(
@@ -516,11 +519,11 @@ async def _sync_one_repo(
         # D43 (#69): подсказки по веткам — после наблюдения, отдельным шагом:
         # они не влияют ни на снапшоты, ни на исход репозитория
         await _scan_branches(session, git_client, sync_run_id, repo, artifact_defs, tree)
-        return SyncOutcome.ok_changed if changed else SyncOutcome.ok_unchanged, None
+        return SyncOutcome.ok_changed if changed else SyncOutcome.ok_unchanged, None, tree
     except GitClientError as exc:  # NFR-2: ошибка репозитория — исход, не крах обхода
         # Ошибка посреди цикла артефактов: уже записанные наблюдения остаются —
         # append-only журнал истинен, исход честно говорит «не дочитано» (§5.3)
-        return _outcome_for_error(exc), str(exc)[:500]
+        return _outcome_for_error(exc), str(exc)[:500], None
 
 
 @dataclass(frozen=True)
@@ -734,6 +737,7 @@ async def run_sync(
     llm_model: str | None = None,  # модель четвёрки И3; по умолчанию — settings.deepseek_model
     verdict_worker=None,  # ядро FR-5; None до прохождения Фазы 0 (PRD §13)
     process_markers=None,  # FR-12 (#40): маркеры недели из config.yaml; None — MR-шаг выключен
+    practice_checks=None,  # FR-14 (#80): проверки приёмов из config.yaml; None — шаг выключен
     actor=None,  # #75: метка оператора (user_marker); None — cron
 ) -> SyncRun:
     """Полный обход активных репозиториев (§5.1). Возвращает SyncRun с финальным статусом.
@@ -763,7 +767,7 @@ async def run_sync(
 
         outcomes: list[SyncOutcome] = []
         for repo in store.find_active_repositories(session):
-            outcome, detail = await _sync_one_repo(
+            outcome, detail, tree = await _sync_one_repo(
                 session, git_client, run.id, repo, artifact_defs, template_hashes
             )
             store.register_sync_outcome(
@@ -773,6 +777,17 @@ async def run_sync(
             # FR-12 (#40): наблюдение MR — после артефактов, деградация независимая (NFR-2)
             if process_markers is not None:
                 await _observe_mrs(session, git_client, run.id, repo, process_markers)
+            # FR-14 (#80): проверки приёмов — после MR-шага, по его журналу; без
+            # дерева (репозиторий не дочитан) шаг пропускается — деградация независимая
+            if practice_checks is not None and tree is not None:
+                # локальный импорт: practice_checker переиспользует _glob_regex
+                # отсюда — импорт наверху дал бы цикл модулей
+                from app.services import practice_checker
+
+                await practice_checker.run_practice_checks(
+                    session, git_client, run.id, repo, practice_checks,
+                    store.find_latest_mr_observations(session, repo.id), tree,
+                )
 
         store.update_sync_run_status(session, run.id, _final_status(outcomes))
         # Коммит ДО свода, а не flush: воркеры ядра FR-5 работают в собственных

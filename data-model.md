@@ -225,6 +225,22 @@
 
 Инвариант **И12**: не более одной строки на `(sync_run_id, repository_id, mr_number)` — одно наблюдение MR за обход (DDL UNIQUE). Выводы из порядка коммитов не делаются — история ветки MR переписываема squash/rebase/force-push (негативные сценарии — ADR-007).
 
+### 1.15 PracticeObservation — проверка применения приёма курса (добавлена 2026-08-14: FR-14 этап 1, #80)
+
+Append-only журнал (как `MrObservation`): каждая проверка каждый обход — новая строка; текущее состояние = последняя строка по `(repository, check_key)`. История коммитов и MR переписываемы — строка фиксирует «как было на момент обхода».
+
+| Атрибут | Тип | Описание |
+|---------|-----|----------|
+| id | UUID | Первичный ключ |
+| sync_run_id | UUID | → SyncRun.id — проверка существует только как результат обхода |
+| repository_id | UUID | → Repository.id |
+| check_key | string | Ключ проверки из config.yaml (`practice_checks`); проверки — конфиг, не сущности БД (реконсиляция не нужна, как у `process_markers`), поэтому строка, не FK |
+| status | enum(passed, failed, no_data) | Исход проверки — наблюдение с доказательствами, не оценка (BR-2) |
+| evidence | json, null | Список `{kind, mr_number?, sha?, quote?, path?}` — цитаты и адреса доказательств |
+| observed_at | datetime | Момент проверки |
+
+Уникальность: `(sync_run_id, repository_id, check_key)` — одна проверка одного приёма за обход (DDL UNIQUE, аналог И12). Ограничение честно названо: порядок коммитов («красная фаза раньше кода») — след приёма, не доказательство, историю можно переписать задним числом — подпись есть в UI.
+
 ### Чего в модели сознательно нет
 
 - **Student / ФИО** — сопоставление «репозиторий ↔ студент» вне инструмента (решение CEO 2026-07-02); следствия — оговорки в трассировке FR-6 и FR-9 (§4) и вопрос В9.
@@ -250,6 +266,8 @@ erDiagram
     repository ||--o{ sync_run_repository : "R15 исход проверки (FR-6/7/8)"
     sync_run ||--o{ mr_observation : "R16 наблюдение MR за обход (FR-12)"
     repository ||--o{ mr_observation : "R17 MR репозитория (FR-12)"
+    sync_run ||--o{ practice_observation : "R18 проверка приёма за обход (FR-14)"
+    repository ||--o{ practice_observation : "R19 приёмы репозитория (FR-14)"
     repository ||--o{ artifact_snapshot : "R4 строка матрицы (FR-4)"
     artifact_def ||--o{ artifact_snapshot : "R5 столбец матрицы (FR-4)"
     edge_def ||--o{ coherence_verdict : "R6 проверка ребра (FR-5)"

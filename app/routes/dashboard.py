@@ -11,6 +11,7 @@ from app.routes import get_session, templates
 from app.services.artifact_matrix import build_artifact_matrix, build_cell_details
 from app.services.evidence_chain import build_defense_card, build_student_card
 from app.services.matrix_builder import build_matrix
+from app.services.practice_checker import build_practice_matrix
 
 router = APIRouter()
 
@@ -53,6 +54,16 @@ async def artifact_cell_modal(
     return templates.TemplateResponse(
         request, "dashboard/artifact_cell_modal.html", {"details": details}
     )
+
+
+@router.get("/practices")
+async def practices_page(request: Request, session: Session = Depends(get_session)):
+    """FR-14 этап 1 (#80): свод «репозиторий × проверка приёма» — наблюдения
+    с доказательствами, без вердиктов (оценивает человек, BR-2)."""
+    if "user_id" not in request.session:  # BR-4: teacher-only
+        return RedirectResponse("/login", status_code=303)
+    view = build_practice_matrix(session)
+    return templates.TemplateResponse(request, "dashboard/practices.html", {"view": view})
 
 
 @router.post("/verdicts/{verdict_id}/override-toggle")
