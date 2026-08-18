@@ -3,14 +3,73 @@
 # Смена текста/версии рубрики = новая append-only строка Rubric + прогон golden set (CLAUDE.md).
 # Паттерны артефактов — по структуре project-context-template (контракт артефактов, курсовой ADR-003).
 
-# FR-12 (ADR-007): маркеры недель — строки-шаблоны в описаниях MR студентов
+# FR-12 (ADR-007): маркеры недель — строки-шаблоны в описаниях MR студентов.
+# Усилены в FR-14 этап 1 (#80): мутация зачитывается только вместе с пойманным
+# тестом, причина и доказательство обязаны быть непустыми (прежние prichina /
+# dokazatelstvo заменены — устаревшее заменяется, не дополняется).
 process_markers:
-  - key: mutation        # неделя «Тесты» (занятия 11–12)
-    pattern: "(?im)^мутация:"
-  - key: prichina        # неделя «Отладка» (занятие 13) — единственный контрольный маркер
-    pattern: "(?im)^причина:"
-  - key: dokazatelstvo
-    pattern: "(?im)^доказательство:"
+  - key: mutation        # неделя «Тесты» (занятия 11–12): мутация + кто её поймал
+    pattern: "(?im)^мутация:.*поймал:"
+  - key: cause           # неделя «Отладка» (занятие 13): причина названа, не пустая
+    pattern: "(?im)^причина:\\s*\\S"
+  - key: evidence
+    pattern: "(?im)^доказательство:\\s*\\S"
+  - key: docs_waiver     # FR-14 (#80): явный отказ от правки доков — читает проверка docs_sync
+    pattern: "(?i)докам обновление не требуется"
+
+# FR-14 этап 1 (#80): проверки применения приёмов курса — механизмы [История] и
+# [Текст], без LLM. Проверяется логика приёма, не контрактные имена файлов;
+# результат — журнал practice_observation (passed / failed / no_data + доказательства).
+practice_checks:
+  - key: tests_first
+    lesson: 11
+    label: "tests-first: красная фаза отдельным коммитом раньше кода"
+    kind: mr_commit_pattern
+    pattern: "tests?[ -]first"
+  - key: bug_repro
+    lesson: 13
+    label: "bug repro: тест-воспроизведение до фикса"
+    kind: mr_commit_pattern
+    pattern: "bug[ -]repro"
+  - key: docs_sync
+    lesson: 10
+    label: "код и доки одним MR (или явный отказ с «потому что»)"
+    kind: mr_docs_sync
+    waiver_pattern: "докам обновление не требуется"
+  - key: ticket_id_share
+    lesson: 8
+    label: "ID тикета в коммитах (трассировка код→задача)"
+    kind: commit_id_share
+    pattern: "(#\\d+|[A-Z]{1,6}-\\d+|T-?\\d{1,4})"
+    threshold: 0.5
+  - key: review_round
+    lesson: 9
+    label: "круг ревью в MR: обсуждение + вердикт «принято»"
+    kind: review_round
+  - key: public_url
+    lesson: 15
+    label: "публичный адрес прототипа в README открывается"
+    kind: readme_url
+  - key: env_example
+    lesson: 15
+    label: "образец переменных без значений (.env.example)"
+    kind: tree_probe
+    tree_patterns: ["**/*.env.example", "**/env.example", ".env.example"]
+  - key: reviewer_config
+    lesson: 9
+    label: "агент-ревьюер: конфиг с контрольным списком"
+    kind: tree_probe
+    tree_patterns: [".claude/agents/*.md", ".opencode/agent/**", "agents/*.md"]
+  - key: machine_lock
+    lesson: 14
+    label: "машинный замок: хуки или permission-конфиг"
+    kind: tree_probe
+    tree_patterns: ["hooks/*", ".husky/*", ".claude/settings.json", "opencode.json"]
+  - key: deps_pinned
+    lesson: 12
+    label: "версии зависимостей запинены"
+    kind: tree_probe
+    tree_patterns: ["**/*.lock", "**/package-lock.json", "**/requirements*.txt", "**/pubspec.lock", "**/uv.lock"]
 
 # PRD FR-4 / D35: эталон для детекта заготовок — публичный репозиторий шаблона
 template_repo:
@@ -67,9 +126,24 @@ lessons:
         expected_pattern: "USER_JOURNEY.md"
       - role: jtbd
         expected_pattern: "product/jtbd.md"
+        # FR-14 этап 1 (#80): проба «трёхчастная формула JTBD» подготовлена, но
+        # ВЫКЛЮЧЕНА: контрактный тест test_content_probes (узкая редакция T2)
+        # разрешает пробы только claude_md и architecture; включение = изменение
+        # теста = изменение требования, утверждает CEO при merge (стандарт п.3).
+        # content_probes:
+        #   - key: jtbd_three_part
+        #     label: "трёхчастная формула JTBD («Когда… хочу/нужно… чтобы…»)"
+        #     contains: "Когда.*(хочу|нужно).*чтобы"
   - number: 5
     title: "Документация требований (PRD)"
     date: 2026-06-30
+    # FR-14 этап 1 (#80): проба «критерии приёмки» подготовлена, но выключена —
+    # см. примечание у product/jtbd.md (контрактный тест test_content_probes).
+    # При включении добавить обоим путям роли:
+    #   content_probes:
+    #     - key: acceptance_criteria
+    #       label: "критерии приёмки (Given/Когда…Тогда или чек-лист)"
+    #       contains: "Given|Когда.*Тогда|- \\[ \\]"
     artifacts:
       - role: prd
         expected_pattern: "product/prd.md"
@@ -79,6 +153,13 @@ lessons:
   - number: 6
     title: "Проектирование структуры данных"
     date: 2026-07-02
+    # FR-14 этап 1 (#80): проба «erDiagram» подготовлена, но выключена — см.
+    # примечание у product/jtbd.md (контрактный тест test_content_probes).
+    # При включении добавить каждому альтернативному пути роли:
+    #   content_probes:
+    #     - key: erdiagram
+    #       label: "ER-диаграмма mermaid (erDiagram) в схеме данных"
+    #       contains: "erDiagram"
     artifacts:
       - role: data_model
         expected_pattern: "data-model.md"

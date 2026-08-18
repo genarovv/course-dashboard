@@ -60,6 +60,20 @@ class BranchInfo:
 
 
 @dataclass(frozen=True)
+class MrCommit:
+    """Коммит в выдаче хостинга (FR-14 этап 1, #80).
+
+    position — хронологический индекс внутри MR (0 — самый ранний): проверке
+    tests-first важен именно порядок «красная фаза раньше кода». Для головы
+    ветки (list_commits) порядок хостинга — свежие первыми, position следует ему.
+    """
+
+    sha: str
+    message: str
+    position: int
+
+
+@dataclass(frozen=True)
 class MrInfo:
     """Нормализованный MR/PR (FR-12, #38). Клиент не знает о моделях данных (§3.2)."""
 
@@ -257,6 +271,75 @@ class GitClient:
             ]
             page = response.headers.get("x-next-page", "")
         return mrs
+
+    async def list_mr_commits(self, repo_url: str, git_host: str, mr_number: int) -> list[MrCommit]:
+        """FR-14 (#80): коммиты MR в хронологическом порядке (проверка tests-first).
+
+        GitHub отдаёт хронологию как есть; GitLab — новейший первым, поэтому
+        разворачиваем: position обязан значить одно и то же на обоих хостах.
+        """
+        host, path = _parse_repo(repo_url)
+        if git_host == "GitHub":
+            data = await self._request_json(
+                f"https://api.github.com/repos/{path}/pulls/{mr_number}/commits?per_page=100",
+                self._github_headers(),
+            )
+            raw = [((c.get("commit") or {}).get("message") or "", c.get("sha") or "") for c in data]
+        else:
+            data = await self._request_json(
+                f"https://{host}/api/v4/projects/{quote(path, safe='')}"
+                f"/merge_requests/{mr_number}/commits?per_page=100",
+                self._gitlab_headers(),
+            )
+            raw = [
+                (c.get("message") or c.get("title") or "", c.get("id") or "")
+                for c in reversed(data)
+            ]
+        return [MrCommit(sha=sha, message=message, position=i) for i, (message, sha) in enumerate(raw)]
+
+    async def list_commits(
+        self, repo_url: str, git_host: str, ref: str = "main", limit: int = 100
+    ) -> list[MrCommit]:
+        """FR-14 (#80): коммиты головы ветки (доля сообщений с ID тикета).
+
+        ref уходит в query-параметр — слэш там легален, кодирование путевого
+        сегмента (правило #73) не требуется. Порядок хостинга: свежие первыми.
+        """
+        host, path = _parse_repo(repo_url)
+        if git_host == "GitHub":
+            data = await self._request_json(
+                f"https://api.github.com/repos/{path}/commits"
+                f"?sha={quote(ref)}&per_page={limit}",
+                self._github_headers(),
+            )
+            raw = [((c.get("commit") or {}).get("message") or "", c.get("sha") or "") for c in data]
+        else:
+            data = await self._request_json(
+                f"https://{host}/api/v4/projects/{quote(path, safe='')}/repository/commits"
+                f"?ref_name={quote(ref)}&per_page={limit}",
+                self._gitlab_headers(),
+            )
+            raw = [(c.get("message") or c.get("title") or "", c.get("id") or "") for c in data]
+        return [MrCommit(sha=sha, message=message, position=i) for i, (message, sha) in enumerate(raw)]
+
+    async def list_mr_changes(self, repo_url: str, git_host: str, mr_number: int) -> list[str]:
+        """FR-14 (#80): пути изменённых файлов MR (проверка «код и доки одним MR»).
+
+        GitLab — эндпоинт diffs (API v4); `changes` устарел и не используется.
+        """
+        host, path = _parse_repo(repo_url)
+        if git_host == "GitHub":
+            data = await self._request_json(
+                f"https://api.github.com/repos/{path}/pulls/{mr_number}/files?per_page=100",
+                self._github_headers(),
+            )
+            return [f.get("filename") or "" for f in data]
+        data = await self._request_json(
+            f"https://{host}/api/v4/projects/{quote(path, safe='')}"
+            f"/merge_requests/{mr_number}/diffs?per_page=100",
+            self._gitlab_headers(),
+        )
+        return [d.get("new_path") or d.get("old_path") or "" for d in data]
 
     async def list_mr_notes(self, repo_url: str, git_host: str, number: int) -> list[NoteInfo]:
         """FR-12 (#38): обсуждение MR/PR — тексты с временем (вердикт ревьюера + устаревание)."""

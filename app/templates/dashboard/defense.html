@@ -26,6 +26,21 @@
 </section>
 {% endif %}
 
+{% if card.practices.total %}
+<section class="defense-practices">
+    <h2>Приёмы курса</h2>
+    {% if card.practices.passed %}
+    <p class="practice-passed">применены: {{ card.practices.passed | map(attribute="label") | join(" · ") }}</p>
+    {% endif %}
+    {% for item in card.practices.failed %}
+    <p class="practice-failed">✗ {{ item.label }} — {{ item.lines | join("; ") if item.lines else "доказательств нет" }}</p>
+    {% endfor %}
+    {% for item in card.practices.no_data %}
+    <p class="practice-no-data">— {{ item.label }} — нет данных: {{ item.lines | join("; ") }}</p>
+    {% endfor %}
+</section>
+{% endif %}
+
 <section class="defense-breaks">
     <h2>Разрывы связности (уверенность высокая, не погашены)</h2>
     {% for edge in card.sure_breaks %}

@@ -72,6 +72,14 @@ class SyncOutcome(StrEnum):
     skipped_rate_limit = "skipped_rate_limit"
 
 
+class PracticeStatus(StrEnum):
+    """FR-14 этап 1 (#80): исход проверки приёма курса — наблюдение, не оценка (BR-2)."""
+
+    passed = "passed"
+    failed = "failed"
+    no_data = "no_data"
+
+
 class RubricType(StrEnum):
     edge = "edge"
     step = "step"

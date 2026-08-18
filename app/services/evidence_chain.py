@@ -386,8 +386,14 @@ def build_defense_card(
         }
         for h in store.find_latest_branch_hints(session, repository_id)
     ]
+    # FR-14 этап 1 (#80): приёмы курса — наблюдения с доказательствами, не оценки
+    # (BR-2). Импорт локальный: practice_checker тянет sync_orchestrator, и цепочка
+    # наверху утяжеляла бы импорт карточки ради одного блока защиты.
+    from app.services.practice_checker import practice_summary
+
     return {
         **card,
+        "practices": practice_summary(session, repository_id),
         "branch_hints": branch_hints,
         "sure_breaks": sure_breaks,
         "ok_edges": ok_edges,

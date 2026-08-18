@@ -2,7 +2,8 @@
 
 Контракт «журнал vs состояние vs конфиг» — три категории (§3.5, ADR-005):
 - журнальные сущности (Rubric, ArtifactSnapshot, CoherenceVerdict, SyncRunRepository,
-  создание Override) — только register_* (INSERT) и find_* (SELECT);
+  MrObservation, BranchHint, PracticeObservation, создание Override) —
+  только register_* (INSERT) и find_* (SELECT);
 - рабочее состояние — ровно 5 узких update_* плюс пара archive_/restore_repository
   (см. §3.5; 5-й — тикет #50, пара — #71); delete_* нет вообще;
 - конфиг-реконсиляция из config.yaml (config_*: Lesson, ArtifactDef, EdgeDef.rubric_id) —
@@ -30,6 +31,7 @@ from app.models.git_credential import GitCredential
 from app.models.lesson import Lesson
 from app.models.mr_observation import MrObservation
 from app.models.override import Override
+from app.models.practice_observation import PracticeObservation
 from app.models.repository import Repository
 from app.models.rubric import Rubric
 from app.models.sync_run import SyncRun
@@ -163,6 +165,45 @@ def register_mr_observation(session: Session, **fields) -> "MrObservation":
     row = MrObservation(**fields)
     session.add(row)
     return row
+
+
+def register_practice_observation(session: Session, **fields) -> "PracticeObservation":
+    """FR-14 этап 1 (#80): проверка приёма курса за обход (append-only журнал)."""
+    row = PracticeObservation(**fields)
+    session.add(row)
+    return row
+
+
+def find_last_practice_observation(
+    session: Session, repository_id: str, check_key: str
+) -> "PracticeObservation | None":
+    """FR-14: текущее состояние проверки = последняя строка по (repository, check_key)."""
+    return session.scalar(
+        select(PracticeObservation)
+        .where(
+            PracticeObservation.repository_id == repository_id,
+            PracticeObservation.check_key == check_key,
+        )
+        .order_by(PracticeObservation.observed_at.desc())
+        .limit(1)
+    )
+
+
+def find_last_practice_observations(session: Session, repository_id: str) -> list["PracticeObservation"]:
+    """FR-14: последнее наблюдение каждой проверки репозитория (свод для /practices).
+
+    Обход, в котором проверка деградировала (NFR-2), не затирает картину прошлых
+    обходов — как у find_latest_mr_observations: берётся свежая строка на ключ.
+    """
+    rows = session.scalars(
+        select(PracticeObservation)
+        .where(PracticeObservation.repository_id == repository_id)
+        .order_by(PracticeObservation.observed_at.desc())
+    )
+    latest: dict[str, PracticeObservation] = {}
+    for row in rows:
+        latest.setdefault(row.check_key, row)
+    return list(latest.values())
 
 
 def register_override(session: Session, *, coherence_verdict_id: str, reason: str) -> Override:

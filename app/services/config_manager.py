@@ -77,6 +77,39 @@ class ProcessMarkerConfig(BaseModel):
     # привязка маркера к занятию отложена: у MR нет связи с занятием в v1 (ADR-007)
 
 
+class PracticeCheckConfig(BaseModel):
+    """FR-14 этап 1 (#80): проверка применения приёма курса — без LLM.
+
+    Проверки — конфиг, не сущности БД (реконсиляция не нужна): читаются на лету,
+    как process_markers. Итог проверки — журнал practice_observation.
+    """
+
+    key: str
+    lesson: int  # занятие, на котором приём давался (для подписи в UI)
+    label: str
+    kind: Literal[
+        "mr_commit_pattern",  # коммит по паттерну в смерженном MR, не последний
+        "mr_docs_sync",       # код и .md одним MR (или явный отказ с «потому что»)
+        "commit_id_share",    # доля сообщений головы ветки с ID тикета
+        "review_round",       # обсуждение + вердикт «принято» в MR
+        "readme_url",         # публичный адрес прототипа в README открывается
+        "tree_probe",         # файлы-паттерны в дереве основной ветки
+    ]
+    pattern: str | None = None
+    waiver_pattern: str | None = None
+    threshold: float = 0.5
+    tree_patterns: list[str] | None = None
+
+    @model_validator(mode="after")
+    def _kind_requirements(self):
+        """Fail-fast конфига: недостающее поле обнаруживается на старте, не в обходе."""
+        if self.kind in ("mr_commit_pattern", "commit_id_share") and not self.pattern:
+            raise ValueError(f"проверка {self.key}: kind {self.kind} требует pattern")
+        if self.kind == "tree_probe" and not self.tree_patterns:
+            raise ValueError(f"проверка {self.key}: tree_probe требует tree_patterns")
+        return self
+
+
 class TemplateRepoConfig(BaseModel):
     """PRD FR-4: адрес репозитория-шаблона задаётся в конфиге FR-2 (D35, детект заготовок)."""
 
@@ -91,6 +124,8 @@ class ConfigYAML(BaseModel):
     template_repo: TemplateRepoConfig | None = None
     # FR-12: None — MR-шаг обхода выключен; список (даже пустой) — включён
     process_markers: list[ProcessMarkerConfig] | None = None
+    # FR-14 этап 1 (#80): None — шаг проверок приёмов выключен (та же семантика)
+    practice_checks: list[PracticeCheckConfig] | None = None
 
 
 class ReloadSummary(BaseModel):

@@ -79,6 +79,7 @@ async def sync(
         session, git_client, triggered_by=triggered_by, actor=actor,
         template_repo=config.template_repo,
         process_markers=config.process_markers,
+        practice_checks=config.practice_checks,
         verdict_worker=verdict_worker,
     )
     # #31: обход нуля репозиториев — не успех, а сигнал «реестр пуст»

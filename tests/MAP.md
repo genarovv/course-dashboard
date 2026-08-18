@@ -1,8 +1,8 @@
 # MAP — Тесты и покрытие course-dashboard
 
-**Дата:** 2026-08-14 (обновлено в MR D48: лок зависимостей)
+**Дата:** 2026-08-14 (обновлено в MR T80: проверки приёмов курса)
 **Стек:** Python 3.12 · FastAPI · SQLAlchemy 2.x (Mapped) · SQLite (WAL) · Alembic · Jinja2+HTMX · bcrypt
-**Тестов:** 493, все ✅ · **Покрытие общее:** 96,7% (`pytest-cov`, гейт `fail_under = 90` в hooks/pre-push)
+**Тестов:** 549, все ✅ · **Покрытие общее:** 96%+ (`pytest-cov`, гейт `fail_under = 90` в hooks/pre-push)
 
 ---
 
@@ -52,6 +52,11 @@
 | `test_sync_busy_button.py` | модульный + интеграционный (TestClient) | D42: серверная истина `is_sync_running` (идёт / завершён / протухший in_progress), повторный POST /sync → 409 без второго SyncRun, кнопка погашена в обеих матрицах и активна при отсутствии обхода |
 | `test_store.py` | модульный (session fixture) | Контракт store.py: ровно 5 `update_*` (#50), нет `delete_*`, все `register_*` на месте, ограничитель «сервисы не присваивают default_branch напрямую», `normalize_url()`, CRUD-флоу репозиториев/runs/credentials/overrides, `find_verdict_by_quadruple` |
 | `test_t73_adr006_tails.py` | модульный (MockTransport, без сети) + doc-code sync | #73 (хвосты ревью ADR-006): слэш-ветки (`feature/T-005`) кодируются в путевых сегментах GitHub (`git/trees/{ref}`, `commits/{ref}`) и доходят неискажёнными в query-`?ref=`; ARCHITECTURE §3.5 называет всю поверхность мутаций состояния (5 `update_*` + archive/restore), поверхность закрыта, `archived_at` присваивается только внутри store |
+| `test_t80_git_client.py` | модульный (MockTransport, без сети) | FR-14 (#80): `list_mr_commits` (GitHub хронология / GitLab разворот), `list_commits` (ref в query, per_page), `list_mr_changes` (GitHub files / GitLab diffs, не deprecated changes), ошибки остаются GitClientError |
+| `test_t80_model.py` | модульный (alembic + session fixture) | FR-14 (#80): миграция practice_observation с downgrade, уникальность `(sync_run, repository, check_key)`, `register_practice_observation`, последняя строка по ключу (`find_last_practice_observation[s]`) |
+| `test_t80_practice_checker.py` | модульный (FakeGit со счётчиками, alembic) | FR-14 (#80), АС 1–8: tests-first (паттерн не последним коммитом / один коммит / паттерн последним), docs_sync (код без .md / waiver в markers / только .md не считается), доля ID тикета (0.6 passed / 0.3 failed / нет коммитов), круг ревью (нота до вердикта / вердикт без обсуждения / нет принятых), README-URL (200 passed / нет URL no_data / 503 failed, хостинги пропускаются), .env.example (имена passed / значение ≥8 симв. failed без утечки), tree_probe, деградация NFR-2 (GitClientError → no_data + warning, соседи живы), кэш (неизменные MR не перечитываются, обновлённые — перечитываются), бюджет ≤3 MR с warning поимённо, проводка в run_sync (пишет журнал / выключен без конфига / ошибка проверки не валит обход) |
+| `test_t80_practices_ui.py` | интеграционный (TestClient + реальная БД) | FR-14 (#80), АС 9: GET /practices — 200 залогиненному, 303 гостю, все репо реестра × все проверки config.yaml, evidence в HTML, подпись «след, не доказательство», ссылка из матрицы; блок «Приёмы курса» в деле защиты (passed списком, failed с доказательством, no_data с причиной) |
+| `test_t80_config.py` | модульный (реальный config.yaml + inline parse) | FR-14 (#80), АС 10: 10 ключей practice_checks, regex-паттерны компилируются, kind-валидатор fail-fast, паттерн ID тикета ловит конвенции потока; усиленные маркеры mutation/cause/evidence + docs_waiver; пробы jtbd/erDiagram/критерии приёмки — через inline-конфиг (в боевом config.yaml выключены до решения CEO — контракт test_content_probes) |
 
 ---
 

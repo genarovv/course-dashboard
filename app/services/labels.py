@@ -81,6 +81,13 @@ CONFIDENCE_LABELS: dict[str, str] = {
     "low": "низкая",
 }
 
+# FR-14 этап 1 (#80): исход проверки приёма — наблюдение, не оценка (BR-2)
+PRACTICE_STATUS_LABELS: dict[str, str] = {
+    "passed": "применён",
+    "failed": "не применён",
+    "no_data": "нет данных",
+}
+
 
 def repo_short_name(repo_url: str) -> str:
     """Хвост адреса репозитория для строки матрицы; полный URL — в title."""
